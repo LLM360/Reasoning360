@@ -7,7 +7,15 @@ It's initialized from [verl](https://github.com/volcengine/verl). verl's README 
 ## Setup
 Check the guide of verl to setup the environment.
 
-## Usage (conda)
+## Data preparation
+Deepscaler has 40K high-quality math (Q, A) pairs from previous AIME, AMC, etc. Prepare this by running:
+```bash
+python examples/data_preprocess/deepscaler_preview.py --local_dir data/deepscaler_preview
+```
+
+Adding new dataset is similar.
+
+## Usage (conda+fsdp)
 First export the conda binary path (can check with `which python` and `which ray`):
 ```
 export CONDA_BIN_PATH=/path/to/conda/bin/
@@ -15,20 +23,30 @@ export CONDA_BIN_PATH=/path/to/conda/bin/
 
 Single node, 8-H100 GPUs:
 ```bash
-bash scripts/template-singlenode-mathgsm8k-qwen2.5_math_3b.sh
+bash scripts/template-fsdp-singlenode-qwen2.5_math_3b.sh
 ```
 
 Multi-node using slurm:
 ```bash
-sbatch scripts/template-multinode-math-dsr1_distill_qwen_14b.sh
+sbatch scripts/template-fsdp-multinode-dsr1_distill_qwen_14b.sh
 ```
 
 The single-node script directly prints log in the terminal; the multi-node script prints log in the slurm log (`.out` and `.err`) files. Check wandb for the experiment logs.
 
 Adjust the template script to fit your needs.
 
-## Usage (docker)
+## Usage (docker+megatron)
 TODO
+
+## Trouble shooting
+1. Gloo socket issue:
+```bash
+export GLOO_SOCKET_IFNAME=ens10f0np0
+```
+already added in the template scripts.
+
+2. Ray failed before finished:
+TO SOLVE
 
 ---
 <h1 style="text-align: center;">verl: Volcano Engine Reinforcement Learning for LLM</h1>

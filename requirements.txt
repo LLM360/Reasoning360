@@ -16,3 +16,6 @@ vllm
 wandb
 liger-kernel
 pylatexenc
+pyext
+math_verify
+antlr4-python3-runtime=4.9.3

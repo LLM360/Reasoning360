@@ -13,7 +13,10 @@ test_files="['$gsm8k_test_path', '$math_test_path']"
 BASE_MODEL=Qwen/Qwen2.5-Math-7B
 
 WANDB_PROJECT=Reasoning360
-WANDB_EXPERIMENT_NAME=math-${BASE_MODEL##*/}
+WANDB_EXPERIMENT_NAME=math-${BASE_MODEL##*/}-${SLURM_JOB_ID}
+
+export VLLM_ATTENTION_BACKEND=XFORMERS
+export GLOO_SOCKET_IFNAME=ens10f0np0
 
 "${CONDA_BIN_PATH}python" -m verl.trainer.main_ppo \
     data.train_files="$train_files" \
