@@ -176,11 +176,29 @@ class vLLMRollout(BaseRollout):
                 'n': 1  # if greedy, only 1 response
             }
 
+        # NOTE: partial rollout: set a threshold for partial rollout length
+        enable_partial_rollout = False
+        if getattr(self.config.rollout, "partial_rollout", False):
+            partial_rollout_len = self.config.rollout.partial_rollout_len
+            kwargs["max_tokens"] = partial_rollout_len
+            enable_partial_rollout = True
+        # NOTE: partial rollout should not sample multiple responses
+        if enable_partial_rollout:
+            prompt_is_partial = prompts.batch['is_partial'].to('cpu')
+            partial_sampling_params = self.sampling_params.clone()
+            partial_sampling_params.n = 1
+            sampling_params = [
+                partial_sampling_params if is_partial else self.sampling_params
+                for is_partial in prompt_is_partial
+            ]
+        else:
+            sampling_params = self.sampling_params
+
         # users can customize different sampling_params at different run
         with self.update_sampling_params(**kwargs):
             outputs = self.inference_engine.generate(
                 prompts=None,  # because we have already convert it to prompt token id
-                sampling_params=self.sampling_params,
+                sampling_params=sampling_params,
                 prompt_token_ids=idx_list,
                 use_tqdm=False)
 
@@ -188,9 +206,14 @@ class vLLMRollout(BaseRollout):
         # if n = 1: (bs, response_length) ; if n > 1: (bs * n, response_length)
 
         response = []
+        response_is_partial = []
         for output in outputs:
             for sample_id in range(len(output.outputs)):
+                # NOTE: partial rollout: parse the response.
+                is_partial = output.outputs[sample_id].stop_reason != "stop"
+                response_is_partial.append(is_partial)
                 response.append(output.outputs[sample_id].token_ids)
+        response_is_partial = torch.tensor(response_is_partial, dtype=torch.bool, device=idx.device)
 
         response = pad_2d_list_to_length(response, self.pad_token_id,
                                          max_length=self.config.response_length).to(idx.device)
@@ -218,6 +241,7 @@ class vLLMRollout(BaseRollout):
         # all the tp ranks should contain the same data here. data in all ranks are valid
         batch = TensorDict(
             {
+                'is_partial': response_is_partial,
                 'prompts': idx,
                 'responses': response,
                 'input_ids': seq,  # here input_ids become the whole sentences
