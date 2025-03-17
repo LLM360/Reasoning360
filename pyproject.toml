@@ -35,6 +35,7 @@ dependencies = [
     "datasets",
     "dill",
     "hydra-core",
+    "math-verify",
     "numpy",
     "pandas",
     "peft",
@@ -43,6 +44,7 @@ dependencies = [
     "pylatexenc",
     "ray[default]>=2.10",
     "tensordict<0.6",
+    "torchdata",
     "transformers==4.47.0",
     "vllm==0.6.3",
     'wandb',
@@ -58,6 +60,7 @@ test = [
 ]
 prime = ["pyext"]
 gpu = ["liger-kernel", "flash-attn"]
+sglang = ["sglang[all]==0.4.3.post3"]
 
 # URLs
 [project.urls]
