@@ -176,13 +176,32 @@ class vLLMRollout(BaseRollout):
                 'n': 1  # if greedy, only 1 response
             }
 
+        enable_partial_rollout = False
+        if getattr(self.config, "use_partial_rollout", False):
+            partial_rollout_len = self.config.partial_rollout_len
+            kwargs["max_tokens"] = partial_rollout_len
+            enable_partial_rollout = True
+        # NOTE: partial rollout should not sample multiple responses
+        if enable_partial_rollout:
+            prompt_is_partial = prompts.batch['is_partial'].to('cpu')
+            partial_sampling_params = self.sampling_params.clone()
+            partial_sampling_params.n = 1
+            sampling_params = [
+                partial_sampling_params if is_partial else self.sampling_params
+                for is_partial in prompt_is_partial
+            ]
+        else:
+            sampling_params = self.sampling_params
+
         # users can customize different sampling_params at different run
         with self.update_sampling_params(**kwargs):
             output = self.inference_engine.generate(
                 prompts=None,  # because we have already convert it to prompt token id
-                sampling_params=self.sampling_params,
+                sampling_params=sampling_params,
                 prompt_token_ids=idx_list,
                 use_tqdm=False)
+
+        response_is_partial = output[2].to(idx.device)
 
         # TODO(sgm): disable logprob when recompute_log_prob is enable
         # if n = 1: (bs, response_length) ; if n > 1: (bs * n, response_length)
@@ -216,6 +235,7 @@ class vLLMRollout(BaseRollout):
         # all the tp ranks should contain the same data here. data in all ranks are valid
         batch = TensorDict(
             {
+                'is_partial': response_is_partial,
                 'prompts': idx,
                 'responses': response,
                 'input_ids': seq,  # here input_ids become the whole sentences

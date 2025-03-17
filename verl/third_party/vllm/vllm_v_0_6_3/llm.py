@@ -186,12 +186,20 @@ class LLM(LLM):
                         logprob.append(logprobs_dict[id].logprob)
                     logprobs.append(torch.tensor(logprob))
 
+        response_is_partial = []
+        for output in request_outputs:
+            for sample_id in range(len(output.outputs)):
+                # NOTE: partial rollout: parse the response.
+                is_partial = output.outputs[sample_id].stop_reason != "stop"
+                response_is_partial.append(is_partial)
+        response_is_partial = torch.tensor(response_is_partial, dtype=torch.bool)
+
         pad_token_id = (self.llm_engine.tokenizer.pad_token_id if self.llm_engine.tokenizer.pad_token_id is not None
                         else self.llm_engine.tokenizer.eos_token_id)
         output_token_ids = pad_sequence(output_token_ids, batch_first=True, padding_value=pad_token_id)
         if len(logprobs) > 0:
             logprobs = pad_sequence(logprobs, batch_first=True, padding_value=pad_token_id)
-        return output_token_ids, logprobs
+        return output_token_ids, logprobs, response_is_partial
 
     def sync_model_weights(self, actor_weights: Dict[str, torch.Tensor], load_format: str) -> None:
         self.llm_engine.sync_model_weights(actor_weights=actor_weights, load_format=load_format)
