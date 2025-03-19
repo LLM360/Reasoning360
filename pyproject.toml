@@ -45,7 +45,7 @@ dependencies = [
     "ray[default]>=2.10",
     "tensordict<0.6",
     "torchdata",
-    "transformers==4.47.0",
+    "transformers==4.49.0",
     "vllm==0.6.3",
     'wandb',
     "math-verify[antlr4_9_3]==0.6.0",
