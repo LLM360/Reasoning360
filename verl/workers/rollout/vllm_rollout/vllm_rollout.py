@@ -246,7 +246,7 @@ class vLLMRollout(BaseRollout):
 
         tokens_per_second = torch.sum(response_attention_mask).item() / t()
         import os
-        print(f"Tokens per second: {tokens_per_second} t/s on device {os.environ["CUDA_VISIBLE_DEVICES"]} on host {os.uname().nodename}", flush=True)
+        print(f'Tokens per second: {tokens_per_second} t/s on device {os.environ["CUDA_VISIBLE_DEVICES"]} on host {os.uname().nodename}', flush=True)
 
         # all the tp ranks should contain the same data here. data in all ranks are valid
         batch = TensorDict(
