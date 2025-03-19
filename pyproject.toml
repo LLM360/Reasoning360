@@ -48,7 +48,7 @@ dependencies = [
     "transformers==4.47.0",
     "vllm==0.6.3",
     'wandb',
-    "math-verify[antlr4_9_3]==0.6.0",
+    "math-verify[antlr4_9_3]==0.7.0",
     "nvitop",
     "flash-attn",
 ]

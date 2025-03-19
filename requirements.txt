@@ -22,6 +22,6 @@ wandb
 liger-kernel
 pylatexenc
 pyext
-math-verify[antlr4_9_3]==0.6.0
+math-verify[antlr4_9_3]==0.7.0
 nvitop
 flash-attn
