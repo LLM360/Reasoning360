@@ -123,6 +123,20 @@ if __name__ == "__main__":
 
     print(train_data[0])
 
+    test_data_sources = [
+        "nanoverl/minerva",
+        "nanoverl/aime",
+        "nanoverl/amc",
+        "nanoverl/olympiad_bench",
+        "nanoverl/math",
+    ]
+    print(f"Loading the {test_data_sources} dataset from huggingface...", flush=True)
+
+    test_datasets = [
+        datasets.load_dataset(test_data_source, trust_remote_code=True, split="test")
+        for test_data_source in test_data_sources
+    ]
+
     prompt = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the response. The reasoning process is enclosed within <think> </think> i.e., <think> reasoning process here </think> respond to the user's question here.
 
 User: {{prompt}} Please put your answer in \\boxed{} tags.
@@ -135,12 +149,17 @@ Assistant: <think>
             answer = example.pop("answer")
             data = {
                 "data_source": data_source,
+                "question": question,
                 "prompt": [],
                 "processed_input": prompt.replace("{{prompt}}", question),
                 "ability": "math",
                 "apply_chat_template": False,
                 "reward_model": {"style": "rule", "ground_truth": answer},
-                "extra_info": {"split": split, "index": idx},
+                "extra_info": {
+                    "split": split,
+                    "index": idx,
+                    "question": question,
+                },
             }
             if idx == 0:
                 print("=" * 10 + f"{data_source} {split} {idx}" + "=" * 10)
@@ -158,6 +177,14 @@ Assistant: <think>
     print(train_data[0])
     train_data.to_parquet(os.path.join(local_dir, "train.parquet"))
     print(f"train data size:", len(train_data))
+
+    for test_data_source, test_data in zip(test_data_sources, test_datasets):
+        process_fn = make_map_fn("test", test_data_source)
+        test_data = test_data.map(process_fn, with_indices=True)
+        dataset_name = os.path.basename(test_data_source.lower())
+        test_df = pd.DataFrame(test_data)
+        test_df.to_parquet(os.path.join(local_dir, f"{dataset_name}.parquet"))
+        print(f"test data size: ({dataset_name})", len(test_df))
 
     # Remove test data processing since we're only working with the training data
     if hdfs_dir is not None:

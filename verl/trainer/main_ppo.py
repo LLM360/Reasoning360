@@ -146,12 +146,18 @@ def main_task(config):
     reward_manager_name = config.reward_model.get("reward_manager", "naive")
     if reward_manager_name == "naive":
         from verl.workers.reward_manager import NaiveRewardManager
-
         reward_manager_cls = NaiveRewardManager
+    elif reward_manager_name == "naive_parallel":
+        from verl.workers.reward_manager import NaiveParallelRewardManager
+        reward_manager_cls = NaiveParallelRewardManager
     elif reward_manager_name == "prime":
         from verl.workers.reward_manager import PrimeRewardManager
 
         reward_manager_cls = PrimeRewardManager
+    elif reward_manager_name == "llm_judge":
+        from verl.workers.reward_manager import LLMJudgeRewardManager
+
+        reward_manager_cls = LLMJudgeRewardManager
     else:
         raise NotImplementedError
     compute_score = get_custom_reward_fn(config)

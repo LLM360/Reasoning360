@@ -141,6 +141,7 @@ slurm/
 
 # sandbox
 sandbox/
+backup/
 
 # data
 data

@@ -25,8 +25,7 @@ class NaiveRewardManager:
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.compute_score = compute_score or _default_compute_score
         self.reward_metric = kwargs.get("reward_metric", None)
-        with open("./reward_metric.txt", "a") as f:
-            f.write(f"reward_metric: {self.reward_metric}\n")
+        
 
     def verify(self, data):
         scores = []
