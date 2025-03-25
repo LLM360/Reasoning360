@@ -14,10 +14,9 @@ on:
   push:
     branches: [ "main" ]
   pull_request:
-    types:
-      - "opened"
 # Declare default permissions as read only.
 permissions: read-all
+
 
 jobs:
   analysis:
@@ -29,8 +28,8 @@ jobs:
       # Needed to publish results and get a badge (see publish_results below).
       id-token: write
       # Uncomment the permissions below if installing in a private repository.
-      # contents: read
-      # actions: read
+      contents: read
+      actions: read
 
     steps:
       - name: "Checkout code"
