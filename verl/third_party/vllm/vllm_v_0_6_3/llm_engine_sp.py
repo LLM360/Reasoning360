@@ -333,6 +333,10 @@ class LLMEngine(LLMEngine):
             ),
         )
 
+        self.max_page_usage = 0
+        self.page_usage_average = 0
+        self.page_usage_sample_times = 0
+
     # TODO(sgm): add for verl but we may not tokenizer in Rollout
     def _init_tokenizer(self, tokenizer, **tokenizer_init_kwargs):
         init_kwargs = dict(enable_lora=bool(self.lora_config),
@@ -406,3 +410,36 @@ class LLMEngine(LLMEngine):
 
     def offload_model_weights(self) -> None:
         self.model_executor.offload_model_weights()
+
+    def step(self):
+        ret = super().step()
+        # Log stats for page usage.
+        num_total_gpu = self.cache_config.num_gpu_blocks
+        gpu_cache_usage_sys = 0.
+        if num_total_gpu is not None:
+            num_free_gpu = sum(
+                scheduler.block_manager.get_num_free_gpu_blocks()
+                for scheduler in self.scheduler)
+            gpu_cache_usage_sys = 1.0 - (num_free_gpu / num_total_gpu)
+        self.max_page_usage = max(self.max_page_usage, gpu_cache_usage_sys)
+        self.page_usage_average = (
+            (self.page_usage_average * self.page_usage_sample_times + gpu_cache_usage_sys) /
+            (self.page_usage_sample_times + 1))
+        self.page_usage_sample_times += 1
+        return ret
+
+    def report_page_usage_history(self, reset=False):
+        if reset:
+            max_page_usage = self.max_page_usage
+            page_usage_average = self.page_usage_average
+            self.max_page_usage = 0
+            self.page_usage_average = 0
+            self.page_usage_sample_times = 0
+            return {
+                "gpu_max_page_usage": max_page_usage,
+                "gpu_average_page_usage": page_usage_average,
+            }
+        return {
+            "gpu_max_page_usage": self.max_page_usage,
+            "gpu_average_page_usage": self.page_usage_average,
+        }

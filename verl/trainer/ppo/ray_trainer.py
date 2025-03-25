@@ -1000,6 +1000,12 @@ class RayPPOTrainer(object):
                         gen_batch_output = self.actor_rollout_wg.generate_sequences(
                             gen_batch
                         )
+                        vllm_page_metrics = gen_batch_output.non_tensor_batch["metrics"]
+                        vllm_page_metrics = {
+                            k.removeprefix("metrics_") : v for k, v in vllm_page_metrics.items()
+                        }
+                        vllm_page_metrics = reduce_metrics(vllm_page_metrics)
+                        metrics.update(vllm_page_metrics)
 
                     # This will only work for num_sample % num_worker == 0 now
                     if self.config.algorithm.adv_estimator == AdvantageEstimator.REMAX:
