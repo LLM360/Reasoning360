@@ -97,6 +97,14 @@ class vLLMRollout(BaseRollout):
         assert model_hf_config.max_position_embeddings >= config.prompt_length + config.response_length, \
             "model context length should be greater than total sequence length"
 
+        max_model_len = self.config.max_model_len if self.config.max_model_len \
+                        else config.prompt_length + config.response_length
+        max_model_len = int(max_model_len)
+
+        if max_num_batched_tokens < max_model_len and self.config.enable_chunked_prefill:
+            raise ValueError('Enable chunked prefill, max_num_batched_tokens is smaller than max_model_len, \
+                             please increase max_num_batched_tokens or disable chunked prefill')
+
         self.inference_engine = LLM(
             model=model_path,
             enable_sleep_mode=True,
@@ -107,7 +115,7 @@ class vLLMRollout(BaseRollout):
             gpu_memory_utilization=config.gpu_memory_utilization,
             disable_custom_all_reduce=True,
             skip_tokenizer_init=False,
-            max_model_len=config.prompt_length + config.response_length,
+            max_model_len=max_model_len,
             disable_log_stats=config.disable_log_stats,
             max_num_batched_tokens=max_num_batched_tokens,
             enable_chunked_prefill=config.enable_chunked_prefill,
@@ -195,6 +203,15 @@ class vLLMRollout(BaseRollout):
                 'prompt_token_ids': raw_prompt_ids
             } for raw_prompt_ids in non_tensor_batch.pop('raw_prompt_ids')]
 
+        # ensure the type of `prompt_token_ids` passed to vllm is list[int]
+        # https://github.com/volcengine/verl/pull/772
+        for input_data in vllm_inputs:
+            if isinstance(input_data['prompt_token_ids'], np.ndarray):
+                input_data['prompt_token_ids'] = input_data['prompt_token_ids'].tolist()
+            elif not isinstance(input_data['prompt_token_ids'], list):
+                raise TypeError(
+                    f"prompt_token_ids must be a list or numpy array, got {type(input_data['prompt_token_ids'])}")
+
         do_sample = prompts.meta_info.get('do_sample', True)
         is_validate = prompts.meta_info.get('validate', False)
         if not do_sample:
@@ -214,8 +231,6 @@ class vLLMRollout(BaseRollout):
                 'temperature': self.config.val_kwargs.temperature,
                 'n': 1,  # if validate, already repeat in ray_trainer
             }
-        if 'num_samples' in prompts.meta_info:
-            kwargs['n'] = prompts.meta_info['num_samples']
 
         # users can customize different sampling_params at different run
         with self.update_sampling_params(**kwargs), self.timer() as t:
@@ -235,15 +250,14 @@ class vLLMRollout(BaseRollout):
             response = pad_2d_list_to_length(response, self.pad_token_id,
                                              max_length=self.config.response_length).to(idx.device)
 
-            n = kwargs['n']
-            if n > 1 and do_sample:
-                idx = _repeat_interleave(idx, n)
-                attention_mask = _repeat_interleave(attention_mask, n)
-                position_ids = _repeat_interleave(position_ids, n)
-                batch_size = batch_size * n
+            if self.sampling_params.n > 1 and do_sample:
+                idx = _repeat_interleave(idx, self.sampling_params.n)
+                attention_mask = _repeat_interleave(attention_mask, self.sampling_params.n)
+                position_ids = _repeat_interleave(position_ids, self.sampling_params.n)
+                batch_size = batch_size * self.sampling_params.n
                 if 'multi_modal_inputs' in non_tensor_batch.keys():
                     non_tensor_batch['multi_modal_inputs'] = _repeat_interleave(non_tensor_batch['multi_modal_inputs'],
-                                                                                n)
+                                                                                self.sampling_params.n)
 
             seq = torch.cat([idx, response], dim=-1)
 

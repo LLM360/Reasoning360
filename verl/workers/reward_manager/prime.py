@@ -21,9 +21,8 @@ import torch
 from verl import DataProto
 from verl.utils.reward_score import _default_compute_score
 
-async def single_compute_score(
-  evaluation_func, completion, reference, task, task_extra_info, executor, timeout=300.
-):
+
+async def single_compute_score(evaluation_func, completion, reference, task, task_extra_info, executor, timeout=300.):
     loop = asyncio.get_running_loop()
     try:
         # Ensure process_completion is called properly
@@ -31,9 +30,7 @@ async def single_compute_score(
             asyncio.wait_for(
                 loop.run_in_executor(
                     executor,
-                    partial(
-                      evaluation_func, task, completion, reference, task_extra_info
-                    ),  # Ensure synchronous
+                    partial(evaluation_func, task, completion, reference, task_extra_info)  # Ensure synchronous
                 ),
                 timeout=timeout,
             )
@@ -59,9 +56,7 @@ async def parallel_compute_score_async(evaluation_func,
             extra_info = [None] * len(tasks)
         # Create tasks for all rows
         tasks_async = [
-            single_compute_score(
-              evaluation_func, completion, reference, task, task_extra_info, executor, timeout=300.
-            )
+            single_compute_score(evaluation_func, completion, reference, task, task_extra_info, executor, timeout=300.)
             for completion, reference, task, task_extra_info in zip(completions, references, tasks, extra_info)
         ]
         # to prevent very occasional starvation caused by some anomalous programs ( like infinite loop ), the exceptions in async programs will instantly halt the evaluation, and all summoned processes will be killed.
@@ -127,6 +122,37 @@ class PrimeRewardManager:
         except asyncio.TimeoutError as e:
             print("Global timeout in reward computing! Setting all as 0.")
             scores = [0.0 for _ in range(len(sequences_str))]
+        except Exception as e:
+            print(f"Unexpected error in batched reward computing. Setting all as 0.: {e}")
+            scores = [0. for _ in range(len(sequences_str))]
+        data.batch['acc'] = torch.tensor(scores, dtype=torch.float32, device=prompt_ids.device)
+        return scores
+
+    def verify(self, data):
+        """
+        verify the batch and save as ``acc`` tensor
+        """
+        # batched scoring
+        prompt_ids = data.batch['prompts']
+
+        response_ids = data.batch['responses']
+        sequences_str = self.tokenizer.batch_decode(response_ids, skip_special_tokens=True)
+        ground_truth = [data_item.non_tensor_batch['reward_model']['ground_truth'] for data_item in data]
+        data_sources = data.non_tensor_batch['data_source']
+        extra_info = data.non_tensor_batch.get('extra_info', None)
+
+        assert len(sequences_str) == len(ground_truth) == len(data_sources)
+        try:
+            scores = asyncio.run(
+                parallel_compute_score_async(self.compute_score,
+                                             sequences_str,
+                                             ground_truth,
+                                             data_sources,
+                                             extra_info=extra_info,
+                                             num_processes=64))
+        except asyncio.TimeoutError as e:
+            print('Global timeout in reward computing! Setting all as 0.')
+            scores = [0. for _ in range(len(sequences_str))]
         except Exception as e:
             print(f"Unexpected error in batched reward computing. Setting all as 0.: {e}")
             scores = [0. for _ in range(len(sequences_str))]

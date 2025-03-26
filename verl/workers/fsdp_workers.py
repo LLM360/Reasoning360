@@ -175,14 +175,6 @@ class ActorRolloutRefWorker(Worker):
 
         self.generation_config = get_generation_config(local_path, trust_remote_code=trust_remote_code)
 
-        if use_remove_padding:
-            from verl.models.registry import check_model_support_rmpad
-            check_model_support_rmpad(actor_model_config.model_type)
-
-        if use_remove_padding and self.ulysses_sequence_parallel_size > 1:
-            from verl.models.transformers.monkey_patch import apply_monkey_patch
-            apply_monkey_patch(actor_model_config, verbose=True)
-
         override_config_kwargs = {
             'bos_token_id': self.tokenizer.bos_token_id,
             'eos_token_id': self.tokenizer.eos_token_id,
@@ -209,6 +201,11 @@ class ActorRolloutRefWorker(Worker):
                                                               config=actor_model_config,
                                                               attn_implementation='flash_attention_2',
                                                               trust_remote_code=trust_remote_code)
+
+            if use_remove_padding or self.ulysses_sequence_parallel_size > 1:
+                from verl.models.transformers.monkey_patch import apply_monkey_patch
+                apply_monkey_patch(model=actor_module)
+
             # Apply Liger kernel to the model if use_liger is set to True
             if use_liger:
                 from liger_kernel.transformers.monkey_patch import _apply_liger_kernel_to_instance
@@ -433,7 +430,8 @@ class ActorRolloutRefWorker(Worker):
                 model=self.actor_module_fsdp,
                 optimizer=self.actor.actor_optimizer,
                 lr_scheduler=self.actor_lr_scheduler,
-                processing_class=self.processor if self.processor is not None else self.tokenizer)
+                processing_class=self.processor if self.processor is not None else self.tokenizer,
+                checkpoint_contents=self.config.actor.checkpoint.contents)
 
     @register(dispatch_mode=Dispatch.DP_COMPUTE_PROTO)
     def update_actor(self, data: DataProto):
@@ -583,7 +581,7 @@ class ActorRolloutRefWorker(Worker):
         return output
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
-    def save_checkpoint(self, local_path, hdfs_path=None, global_step=0, remove_previous_ckpt=False):
+    def save_checkpoint(self, local_path, hdfs_path=None, global_step=0, max_ckpt_to_keep=None):
         # only support save and load ckpt for actor
         assert self._is_actor
         import torch
@@ -593,18 +591,20 @@ class ActorRolloutRefWorker(Worker):
         self.checkpoint_manager.save_checkpoint(local_path=local_path,
                                                 hdfs_path=hdfs_path,
                                                 global_step=global_step,
-                                                remove_previous_ckpt=remove_previous_ckpt)
+                                                max_ckpt_to_keep=max_ckpt_to_keep)
 
         torch.distributed.barrier()
         if self._is_offload_param:
             offload_fsdp_model_to_cpu(self.actor_module_fsdp)
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
-    def load_checkpoint(self, path, del_local_after_load=False):
+    def load_checkpoint(self, local_path, hdfs_path=None, del_local_after_load=False):
         if self._is_offload_param:
             load_fsdp_model_to_gpu(self.actor_module_fsdp)
 
-        self.checkpoint_manager.load_checkpoint(path=path, del_local_after_load=del_local_after_load)
+        self.checkpoint_manager.load_checkpoint(local_path=local_path,
+                                                hdfs_path=hdfs_path,
+                                                del_local_after_load=del_local_after_load)
 
         if self._is_offload_param:
             offload_fsdp_model_to_cpu(self.actor_module_fsdp)
@@ -693,15 +693,6 @@ class CriticWorker(Worker):
         critic_model_config = AutoConfig.from_pretrained(local_path, trust_remote_code=trust_remote_code)
         critic_model_config.num_labels = 1
 
-        use_remove_padding = config.model.get('use_remove_padding', False)
-        if use_remove_padding:
-            from verl.models.registry import check_model_support_rmpad
-            check_model_support_rmpad(critic_model_config.model_type)
-
-        if use_remove_padding and self.ulysses_sequence_parallel_size > 1:
-            from verl.models.transformers.monkey_patch import apply_monkey_patch
-            apply_monkey_patch(critic_model_config, verbose=True)
-
         init_context = get_init_weight_context_manager(use_meta_tensor=not critic_model_config.tie_word_embeddings,
                                                        mesh=self.device_mesh)
 
@@ -714,6 +705,11 @@ class CriticWorker(Worker):
                                                                             config=critic_model_config,
                                                                             attn_implementation='flash_attention_2',
                                                                             trust_remote_code=trust_remote_code)
+
+            use_remove_padding = config.model.get('use_remove_padding', False)
+            if use_remove_padding or self.ulysses_sequence_parallel_size > 1:
+                from verl.models.transformers.monkey_patch import apply_monkey_patch
+                apply_monkey_patch(model=critic_module)
 
             # some parameters may not in torch_dtype
             critic_module.to(torch_dtype)
@@ -802,7 +798,8 @@ class CriticWorker(Worker):
             model=self.critic_module,
             optimizer=self.critic_optimizer,
             lr_scheduler=self.critic_lr_scheduler,
-            processing_class=self.processor if self.processor is not None else self.tokenizer)
+            processing_class=self.processor if self.processor is not None else self.tokenizer,
+            checkpoint_contents=self.config.checkpoint.contents)
 
     @register(dispatch_mode=Dispatch.DP_COMPUTE_PROTO)
     def compute_values(self, data: DataProto):
@@ -865,7 +862,7 @@ class CriticWorker(Worker):
         return output
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
-    def save_checkpoint(self, local_path, hdfs_path=None, global_step=0, remove_previous_ckpt=False):
+    def save_checkpoint(self, local_path, hdfs_path=None, global_step=0, max_ckpt_to_keep=None):
         import torch
         if self._is_offload_param:
             load_fsdp_model_to_gpu(self.critic_module)
@@ -873,19 +870,21 @@ class CriticWorker(Worker):
         self.checkpoint_manager.save_checkpoint(local_path=local_path,
                                                 hdfs_path=hdfs_path,
                                                 global_step=global_step,
-                                                remove_previous_ckpt=remove_previous_ckpt)
+                                                max_ckpt_to_keep=max_ckpt_to_keep)
 
         torch.distributed.barrier()
         if self._is_offload_param:
             offload_fsdp_model_to_cpu(self.critic_module)
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
-    def load_checkpoint(self, path, del_local_after_load=True):
+    def load_checkpoint(self, local_path, hdfs_path=None, del_local_after_load=True):
         import torch
         if self._is_offload_param:
             load_fsdp_model_to_gpu(self.critic_module)
 
-        self.checkpoint_manager.load_checkpoint(path=path, del_local_after_load=del_local_after_load)
+        self.checkpoint_manager.load_checkpoint(local_path=local_path,
+                                                hdfs_path=hdfs_path,
+                                                del_local_after_load=del_local_after_load)
 
         torch.distributed.barrier()
         if self._is_offload_param:
@@ -953,15 +952,6 @@ class RewardModelWorker(Worker):
         model_config = AutoConfig.from_pretrained(local_path, trust_remote_code=trust_remote_code)
         model_config.num_labels = 1
 
-        use_remove_padding = config.model.get('use_remove_padding', False)
-        if use_remove_padding:
-            from verl.models.registry import check_model_support_rmpad
-            check_model_support_rmpad(model_config.model_type)
-
-        if use_remove_padding and self.ulysses_sequence_parallel_size > 1:
-            from verl.models.transformers.monkey_patch import apply_monkey_patch
-            apply_monkey_patch(model_config, verbose=True)
-
         # note that we have to create model in fp32. Otherwise, the optimizer is in bf16, which is incorrect
         init_context = get_init_weight_context_manager(use_meta_tensor=not model_config.tie_word_embeddings,
                                                        mesh=self.device_mesh)
@@ -974,7 +964,13 @@ class RewardModelWorker(Worker):
                                                                             torch_dtype=torch.bfloat16,
                                                                             attn_implementation='flash_attention_2',
                                                                             trust_remote_code=trust_remote_code)
+
+            if config.model.get('use_remove_padding', False) or self.ulysses_sequence_parallel_size > 1:
+                from verl.models.transformers.monkey_patch import apply_monkey_patch
+                apply_monkey_patch(model=reward_module)
+
             reward_module.to(torch.bfloat16)
+
         auto_wrap_policy = get_fsdp_wrap_policy(module=reward_module, config=self.config.model.fsdp_config)
 
         fsdp_mesh = self.device_mesh

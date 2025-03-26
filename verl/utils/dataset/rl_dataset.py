@@ -134,6 +134,7 @@ class RLHFDataset(Dataset):
         print(self.dataframe.head())
 
         # Safely check if apply_chat_template exists in dataframe
+        # NOTE: added by Reasoning360
         if "apply_chat_template" not in self.dataframe:
             print("Warning: apply_chat_template column not found in dataframe. Defaulting to True.")
             self.dataframe["apply_chat_template"] = [True] * len(self.dataframe)
