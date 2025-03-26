@@ -157,7 +157,9 @@ Assistant: <think>
                 "ability": "math",
                 "apply_chat_template": False,
                 "reward_model": {"style": "rule", "ground_truth": answer},
-                "extra_info": {"split": split, "index": idx},
+                "extra_info": {"split": split, 
+                               "index": idx,
+                               "question": question},
             }
             if idx == 0:
                 print("=" * 10 + f"{data_source} {split} {idx}" + "=" * 10)

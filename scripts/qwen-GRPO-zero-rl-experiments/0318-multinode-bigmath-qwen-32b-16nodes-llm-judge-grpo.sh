@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=rl-reasoning-shibo
 #SBATCH --partition=mbzuai
-#SBATCH --nodes=32
-#SBATCH --ntasks=32
+#SBATCH --nodes=16
+#SBATCH --ntasks=16
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=32
@@ -71,7 +71,7 @@ test_files="['$aime_test_path', '$amc_test_path', '$math_test_path']"
 # BASE_MODEL=Qwen/Qwen2.5-7B-Instruct
 BASE_MODEL=Qwen/Qwen2.5-32B
 WANDB_PROJECT=Reasoning360
-WANDB_EXPERIMENT_NAME=bigmath-run-shibo-math-grpo-32nodes-8196-${BASE_MODEL##*/}
+WANDB_EXPERIMENT_NAME=bigmath-run-shibo-math-grpo-16nodes-llm-judge-8196-${BASE_MODEL##*/}
 
 export worker_num=$SLURM_NNODES
 # export worker_num=4
@@ -150,4 +150,6 @@ sleep 10
     trainer.save_freq=10 \
     trainer.test_freq=5 \
     trainer.total_epochs=3 \
-    trainer.val_generations_to_log_to_wandb=30
+    trainer.val_generations_to_log_to_wandb=30 \
+    reward_model.reward_manager=llm_judge \
+    reward_model.reward_metric=math_llm_judge

@@ -22,7 +22,7 @@ import re
 import sympy
 from pylatexenc import latex2text
 from sympy.parsing import sympy_parser
-
+import os
 from . import math_normalize
 from .grader import math_equal
 
@@ -33,6 +33,33 @@ from .grader import math_equal
 BAD_SUBSTRINGS = ["^{", "^("]
 BAD_REGEXES = ["\^[0-9]+\^", "\^[0-9][0-9]+"]
 TUPLE_CHARS = "()[]"
+
+
+def timeout(timeout_seconds: int = 8):
+    if os.name == "posix":
+        import signal
+
+        def decorator(func):
+
+            def handler(signum, frame):
+                raise TimeoutError("Operation timed out!")
+
+            def wrapper(*args, **kwargs):
+                old_handler = signal.getsignal(signal.SIGALRM)
+                signal.signal(signal.SIGALRM, handler)
+                signal.alarm(timeout_seconds)
+
+                try:
+                    return func(*args, **kwargs)
+                finally:
+                    signal.alarm(0)
+                    signal.signal(signal.SIGALRM, old_handler)
+
+            return wrapper
+
+        return decorator
+    else:
+        raise NotImplementedError(f"Unsupported OS: {os.name}")
 
 
 def _sympy_parse(expr: str):
@@ -209,6 +236,7 @@ def should_allow_eval(expr: str):
     return True
 
 
+@timeout(timeout_seconds=10)
 def are_equal_under_sympy(ground_truth_normalized: str, given_normalized: str):
     are_equal = False
     try:
@@ -357,21 +385,21 @@ def match_answer(response):
         is_matched = True
         response = ans_boxed
 
-    if ". " in response:
-        dot_idx = response.lower().rfind(". ")
-        if dot_idx != -1:
-            response = response[:dot_idx].strip()
+    # if ". " in response:
+    #     dot_idx = response.lower().rfind(". ")
+    #     if dot_idx != -1:
+    #         response = response[:dot_idx].strip()
 
-    for ans_marker in ['be ', "is ", "are ", "=", ": ", "get ", 'be\n', "is\n", "are\n", ":\n", "get\n"]:
-        ans_idx = response.lower().rfind(ans_marker)
-        if ans_idx != -1:
-            is_matched = True
-            response = response[ans_idx + len(ans_marker):].strip()
-            if response.endswith("\n"):
-                response = response[:-2]
+    # for ans_marker in ['be ', "is ", "are ", "=", ": ", "get ", 'be\n', "is\n", "are\n", ":\n", "get\n"]:
+    #     ans_idx = response.lower().rfind(ans_marker)
+    #     if ans_idx != -1:
+    #         is_matched = True
+    #         response = response[ans_idx + len(ans_marker):].strip()
+    #         if response.endswith("\n"):
+    #             response = response[:-2]
 
-    is_matched = is_matched if any([c.isdigit() for c in response]) else False  # answer must have a digit
-    # Grade
+    # is_matched = is_matched if any([c.isdigit() for c in response]) else False  # answer must have a digit
+    # # Grade
     return is_matched, response
 
 
@@ -390,7 +418,7 @@ def compute_score(model_output: str, ground_truth: str) -> bool:
         return True, True, extracted_model_output
 
     try:
-        if "\pi" in extracted_model_output or "\pi" in ground_truth:
+        if "\\pi" in extracted_model_output or "\\pi" in ground_truth:
             equivs = []
             for pi in [math.pi, 3.14]:
                 equivs.append(math_equal(extracted_model_output, ground_truth, timeout=True, pi=pi))

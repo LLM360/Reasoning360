@@ -11,15 +11,15 @@ address_head=$head_node_ip:$port
 # Experiment config
 WORKING_DIR=${HOME}/Reasoning360
 DATA_DIR=${WORKING_DIR}/data
-deepscaler_train_path=${DATA_DIR}/orz_zero_style/train.parquet
-aime_test_path=${DATA_DIR}/deepscaler_preview_zero_style/aime.parquet
+deepscaler_train_path=${DATA_DIR}/orz_zero_style_v2/train.parquet
+aime_test_path=${DATA_DIR}/orz_zero_style_v2/aime.parquet
 
 train_files="['$deepscaler_train_path']"
 test_files="['$aime_test_path']"
-BASE_MODEL=Qwen/Qwen2.5-7B-Instruct
+BASE_MODEL=Qwen/Qwen2.5-1.5B-Instruct
 
 WANDB_PROJECT=Reasoning360
-WANDB_EXPERIMENT_NAME=orz-zero-debug2-${BASE_MODEL##*/}-${SLURM_JOB_ID}
+WANDB_EXPERIMENT_NAME=orz-zero-debug9-${BASE_MODEL##*/}-${SLURM_JOB_ID}
 
 export worker_num=1
 export VLLM_ATTENTION_BACKEND=XFORMERS
@@ -80,4 +80,6 @@ ray start --head --node-ip-address="$head_node_ip" --port=$port \
     trainer.save_freq=10 \
     trainer.test_freq=10 \
     trainer.total_epochs=1 \
-    trainer.val_generations_to_log_to_wandb=30
+    trainer.val_generations_to_log_to_wandb=30 \
+    reward_model.reward_manager=llm_judge \
+    reward_model.reward_metric=math_llm_judge

@@ -75,7 +75,6 @@ PYTHONUNBUFFERED=1 srun --overlap --nodes=1 --ntasks=1 -w "$head_node" \
     data.train_files=$train_files \
     data.val_files=$val_files \
     data.train_batch_size=256 \
-    data.val_batch_size=1312 \
     data.max_prompt_length=512 \
     data.max_response_length=256 \
     actor_rollout_ref.model.path=Qwen/Qwen2.5-0.5B-Instruct \
@@ -93,8 +92,8 @@ PYTHONUNBUFFERED=1 srun --overlap --nodes=1 --ntasks=1 -w "$head_node" \
     trainer.logger=['console'] \
     +trainer.val_before_train=False \
     trainer.default_hdfs_dir=null \
-    trainer.n_gpus_per_node=4 \
-    trainer.nnodes=1 \
+    trainer.n_gpus_per_node="${SLURM_GPUS_PER_NODE}" \
+    trainer.nnodes="${SLURM_NNODES}" \
     trainer.save_freq=10 \
     trainer.test_freq=10 \
     trainer.total_epochs=15 2>&1 | tee verl_demo_slurm.log

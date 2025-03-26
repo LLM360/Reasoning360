@@ -1,3 +1,4 @@
+
 **/*.pt
 **/checkpoints
 **/wget-log
@@ -26,6 +27,7 @@ tensorflow/my_graph/*
 .idea/
 # C extensions
 *.so
+data_analysis/*.json
 
 # Distribution / packaging
 .Python
@@ -101,6 +103,7 @@ celerybeat-schedule
 
 # virtualenv
 venv/
+.venv/
 ENV/
 
 # Spyder project settings
@@ -124,11 +127,21 @@ tests/e2e/toy_examples/deepspeed/synchronous/output.txt
 # ckpt
 *.lock
 
+# data
+*.parquet
+
+
+# local logs
+logs
+log
+outputs
+
 # slurm
 slurm/
 
 # sandbox
 sandbox/
+backup/
 
 # data
 data

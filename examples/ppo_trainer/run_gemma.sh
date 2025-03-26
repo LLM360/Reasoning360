@@ -4,9 +4,10 @@ python3 -m verl.trainer.main_ppo \
     data.train_files=$HOME/data/gsm8k/train.parquet \
     data.val_files=$HOME/data/gsm8k/test.parquet \
     data.train_batch_size=512 \
-    data.val_batch_size=1312 \
     data.max_prompt_length=1024 \
     data.max_response_length=512 \
+    data.filter_overlong_prompts=True \
+    data.truncation='error' \
     actor_rollout_ref.model.path=google/gemma-2-2b-it \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=False \

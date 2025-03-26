@@ -30,7 +30,7 @@ import pandas as pd
 from transformers import AutoTokenizer
 
 from verl import DataProto
-from verl.utils.fs import copy_local_path_from_hdfs
+from verl.utils.fs import copy_to_local
 from verl.workers.fsdp_workers import ActorRolloutRefWorker
 from verl.utils.hdfs_io import makedirs
 from verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, RayWorkerGroup
@@ -38,11 +38,25 @@ from verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, Ra
 
 @hydra.main(config_path='config', config_name='generation', version_base=None)
 def main(config):
+    run_generation(config)
+
+
+def run_generation(config) -> None:
+
+    if not ray.is_initialized():
+        # this is for local ray cluster
+        ray.init(runtime_env={'env_vars': {'TOKENIZERS_PARALLELISM': 'true', 'NCCL_DEBUG': 'WARN'}})
+
+    ray.get(main_task.remote(config))
+
+
+@ray.remote(num_cpus=1)
+def main_task(config):
     from pprint import pprint
     from omegaconf import OmegaConf
     pprint(OmegaConf.to_container(config, resolve=True))  # resolve=True will eval symbol values
     OmegaConf.resolve(config)
-    local_path = copy_local_path_from_hdfs(config.model.path)
+    local_path = copy_to_local(config.model.path)
     from verl.utils import hf_tokenizer
     tokenizer = hf_tokenizer(local_path)
 
@@ -67,8 +81,8 @@ def main(config):
     total_samples = len(dataset)
     # real_batch_size = data.batch['input_ids'].shape[0]
     config_batch_size = config.data.batch_size
-    dp_size = wg.world_size // config.rollout.tensor_model_parallel_size
-    num_batch = (total_samples // config_batch_size) + 1
+    dispatch_dp_size = wg.world_size
+    num_batch = -(-total_samples // config_batch_size)
     output_lst = [[] for _ in range(config.data.n_samples)]
 
     for batch_idx in range(num_batch):
@@ -90,16 +104,19 @@ def main(config):
 
         data = DataProto.from_dict(batch_dict)
         real_batch_size = data.batch['input_ids'].shape[0]
-        if real_batch_size % dp_size != 0:
-            dummy_data_size = dp_size - real_batch_size % dp_size
-            dummy_data = data[:dummy_data_size]
+        if real_batch_size % dispatch_dp_size != 0:
+            dummy_data_size = dispatch_dp_size - real_batch_size % dispatch_dp_size
+            if dummy_data_size <= real_batch_size:
+                dummy_data = data[:dummy_data_size]
+            else:
+                dummy_data = data.repeat(-(-dummy_data_size // real_batch_size))[:dummy_data_size]
             data = DataProto.concat([data, dummy_data])
             print(
-                f'dp_size {dp_size} is not divisible by real_batch_size {real_batch_size}, add {dummy_data_size} dummy data'
+                f'real_batch_size {real_batch_size} is not divisible by dispatch_dp_size {dispatch_dp_size}, add {dummy_data_size} dummy data'
             )
 
         batch_size = data.batch['input_ids'].shape[0]
-        assert batch_size % dp_size == 0, f'batch_size {batch_size} is not divisible by dp_size {dp_size}'
+        assert batch_size % dispatch_dp_size == 0, f'batch_size {batch_size} is not divisible by dispatch_dp_size {dispatch_dp_size}'
 
         print(f'[{batch_idx+1}/{num_batch}] Start to generate.')
         # START TO GENERATE FOR n_samples TIMES
