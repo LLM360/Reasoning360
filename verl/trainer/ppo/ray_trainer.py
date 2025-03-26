@@ -1000,9 +1000,10 @@ class RayPPOTrainer(object):
                         gen_batch_output = self.actor_rollout_wg.generate_sequences(
                             gen_batch
                         )
-                        vllm_page_metrics = gen_batch_output.non_tensor_batch["metrics"]
+                        vllm_page_metrics = gen_batch_output.non_tensor_batch
                         vllm_page_metrics = {
                             k.removeprefix("metrics_") : v for k, v in vllm_page_metrics.items()
+                            if k.startswith("metrics_")
                         }
                         vllm_page_metrics = reduce_metrics(vllm_page_metrics)
                         metrics.update(vllm_page_metrics)

@@ -266,9 +266,10 @@ class vLLMRollout(BaseRollout):
             self.inference_engine.free_cache_engine()
 
         metrics = self.report_memory_usage(reset=True)
-        # we do not use meta_info because dp collect fn only picks meta_info of the first data
+        # NOTE: we do not use meta_info because dp collect fn only picks
+        # meta_info of the first data.
         non_tensor_batch = {
-            'metrics_' + k: np.asarray([v], dtype=object) for k, v in metrics.items() 
+            'metrics_' + k: np.asarray([v] * seq.size(0), dtype=object) for k, v in metrics.items() 
         }
 
         return DataProto(batch=batch, non_tensor_batch=non_tensor_batch)
