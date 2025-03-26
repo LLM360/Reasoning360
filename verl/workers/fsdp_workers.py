@@ -1070,14 +1070,14 @@ class RewardModelWorker(Worker):
         return token_level_scores
 
     def _switch_chat_template(self, data: DataProto):
-        
+
         raise NotImplementedError(
             "We have revised the code to enable the model to not use the chat template. "
             "The current code for _switch_chat_template still assumes the chat template is used. "
             "So we raise an error here. "
             "You can remove this error temporarily if you want to use the chat template."
         )
-        
+
         src_max_length = data.batch['attention_mask'].shape[-1]
 
         src_tokenizer = self.input_tokenizer
