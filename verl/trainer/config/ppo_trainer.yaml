@@ -167,10 +167,6 @@ custom_reward_function:
   path: null
   name: compute_score
 
-custom_reward_function:
-  path: null
-  name: compute_score
-
 algorithm:
   gamma: 1.0
   lam: 1.0
