@@ -952,18 +952,6 @@ class RayPPOTrainer(object):
 
                 batch: DataProto = DataProto.from_single_dict(batch_dict)
 
-                # pop those keys for generation
-                if 'multi_modal_inputs' in batch.non_tensor_batch.keys():
-                    gen_batch = batch.pop(
-                        batch_keys=['input_ids', 'attention_mask', 'position_ids'],
-                        non_tensor_batch_keys=['raw_prompt_ids', 'multi_modal_data', 'multi_modal_inputs'],
-                    )
-                else:
-                    gen_batch = batch.pop(
-                        batch_keys=['input_ids', 'attention_mask', 'position_ids'],
-                        non_tensor_batch_keys=['raw_prompt_ids'],
-                    )
-
                 is_last_step = self.global_steps >= self.total_training_steps
 
                 with _timer("step", timing_raw):
@@ -989,6 +977,8 @@ class RayPPOTrainer(object):
                     else:
                         raise NotImplementedError("one of ppo_mini_batch_size and world_size must be divisible by the other")
 
+                    # NOTE: modified by Reasoning360 (move gen batch after handling batch size < fsdp)
+                    # pop those keys for generation
                     if 'multi_modal_inputs' in batch.non_tensor_batch.keys():
                         gen_batch = batch.pop(
                             batch_keys=['input_ids', 'attention_mask', 'position_ids'],
@@ -1000,10 +990,8 @@ class RayPPOTrainer(object):
                             non_tensor_batch_keys=['raw_prompt_ids'],
                         )
 
-                    is_last_step = self.global_steps >= self.total_training_steps
-                        
                     gen_batch.meta_info["num_samples"] = num_samples_on_each_worker
-                    
+
                     with _timer("gen", timing_raw):
                         gen_batch_output = self.actor_rollout_wg.generate_sequences(
                             gen_batch
