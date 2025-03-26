@@ -261,17 +261,19 @@ class vLLMRollout(BaseRollout):
         if self.config.free_cache_engine:
             self.inference_engine.free_cache_engine()
 
+        # NOTE: added by Reasoning360
         metrics = self.report_memory_usage(reset=True)
         # NOTE: we do not use meta_info because dp collect fn only picks
         # meta_info of the first data.
         non_tensor_batch = {
             'metrics_' + k: np.asarray([v] * seq.size(0), dtype=object) for k, v in metrics.items() 
-        }
+        } or None
 
         return DataProto(batch=batch, non_tensor_batch=non_tensor_batch)
 
     def report_memory_usage(self, reset: bool=False):
+        # NOTE: added by Reasoning360
         method = getattr(self.inference_engine.llm_engine, 'report_page_usage_history', None)
         if method is not None:
             return method(reset=reset)
-        return {"dummy_vllm_memory_usage": 0}
+        return {}

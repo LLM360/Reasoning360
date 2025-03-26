@@ -333,6 +333,7 @@ class LLMEngine(LLMEngine):
             ),
         )
 
+        # NOTE: added by Reasoning360
         self.max_page_usage = 0
         self.page_usage_average = 0
         self.page_usage_sample_times = 0
@@ -413,7 +414,7 @@ class LLMEngine(LLMEngine):
 
     def step(self):
         ret = super().step()
-        # Log stats for page usage.
+        # # NOTE: added by Reasoning360. Log stats for page usage.
         num_total_gpu = self.cache_config.num_gpu_blocks
         gpu_cache_usage_sys = 0.
         if num_total_gpu is not None:
@@ -429,6 +430,7 @@ class LLMEngine(LLMEngine):
         return ret
 
     def report_page_usage_history(self, reset=False):
+        # NOTE: added by Reasoning360
         if reset:
             max_page_usage = self.max_page_usage
             page_usage_average = self.page_usage_average

@@ -1008,6 +1008,7 @@ class RayPPOTrainer(object):
                         gen_batch_output = self.actor_rollout_wg.generate_sequences(
                             gen_batch
                         )
+                        # NOTE: added by Reasoning360
                         vllm_page_metrics = gen_batch_output.non_tensor_batch
                         vllm_page_metrics = {
                             k.removeprefix("metrics_") : v for k, v in vllm_page_metrics.items()
