@@ -17,6 +17,7 @@ sglang_storage/
 temp_job_scripts/
 SLURM_Logs/
 sgl_job_ids.txt
+dedup_results/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -46,7 +46,7 @@ import re
 import sympy
 from pylatexenc import latex2text
 from sympy.parsing import sympy_parser
-
+import os
 from . import math_normalize
 from .grader import math_equal
 
@@ -59,6 +59,33 @@ import requests
 BAD_SUBSTRINGS = ["^{", "^("]
 BAD_REGEXES = ["\^[0-9]+\^", "\^[0-9][0-9]+"]
 TUPLE_CHARS = "()[]"
+
+
+def timeout(timeout_seconds: int = 8):
+    if os.name == "posix":
+        import signal
+
+        def decorator(func):
+
+            def handler(signum, frame):
+                raise TimeoutError("Operation timed out!")
+
+            def wrapper(*args, **kwargs):
+                old_handler = signal.getsignal(signal.SIGALRM)
+                signal.signal(signal.SIGALRM, handler)
+                signal.alarm(timeout_seconds)
+
+                try:
+                    return func(*args, **kwargs)
+                finally:
+                    signal.alarm(0)
+                    signal.signal(signal.SIGALRM, old_handler)
+
+            return wrapper
+
+        return decorator
+    else:
+        raise NotImplementedError(f"Unsupported OS: {os.name}")
 
 
 def _sympy_parse(expr: str):
@@ -235,6 +262,7 @@ def should_allow_eval(expr: str):
     return True
 
 
+@timeout(timeout_seconds=10)
 def are_equal_under_sympy(ground_truth_normalized: str, given_normalized: str):
     are_equal = False
     try:
@@ -384,14 +412,15 @@ def llm_check_answer(model_output: str, ground_truth: str, question: str) -> boo
         "messages": [{"role": "user", "content": prompt}],
     }
     response = requests.post(url, json=data)
-    eval_result = not "INCORRECT" in response.json()['choices'][0]['message']['content']
-    print({
-        "model_output": model_output,
-        "ground_truth": ground_truth,
-        "question": question,
-        "response": response.json()['choices'][0]['message']['content'],
-        "eval_result": eval_result,
-    })
+    eval_result = not "INCORRECT" in response.json()['choices'][0]['message']['content'] \
+        and "CORRECT" in response.json()['choices'][0]['message']['content']
+    # print({
+    #     "model_output": model_output,
+    #     "ground_truth": ground_truth,
+    #     "question": question,
+    #     "response": response.json()['choices'][0]['message']['content'],
+    #     "eval_result": eval_result,
+    # })
     return eval_result
 
 def compute_score(model_output: str,

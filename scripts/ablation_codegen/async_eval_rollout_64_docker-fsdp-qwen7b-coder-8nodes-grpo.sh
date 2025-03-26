@@ -38,7 +38,8 @@ test_files="[${codegen_test_path}]"
 
 # Model config
 # BASE_MODEL=Qwen/Qwen2.5-32B
-BASE_MODEL=Qwen/Qwen2.5-7B-Instruct
+# BASE_MODEL=Qwen/Qwen2.5-7B-Instruct
+BASE_MODEL=Qwen/Qwen2.5-Coder-7B
 # BASE_MODEL=deepseek-ai/DeepSeek-R1-Distill-Qwen-32B
 # BASE_MODEL=deepseek-ai/DeepSeek-R1-Distill-Qwen-14B
 # BASE_MODEL=deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
@@ -51,7 +52,7 @@ SP_SIZE=1
 ROLLOUT_TP_SIZE=4
 
 WANDB_PROJECT=Reasoning360
-WANDB_EXPERIMENT_NAME=zj-parallel-exec-rollout64-docker-code-${BASE_MODEL##*/}-${SLURM_JOB_ID}
+WANDB_EXPERIMENT_NAME=zhoujun-async-eval-rollout64-${BASE_MODEL##*/}-${SLURM_JOB_ID}
 
 echo "Node list: ${nodes[@]}"
 
@@ -105,7 +106,7 @@ cmd="python3 /Reasoning360/verl/trainer/main_ppo.py  --config-path=/Reasoning360
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=32 \
     algorithm.kl_ctrl.kl_coef=0.001 \
-    reward_model.reward_manager=naive_parallel \
+    reward_model.reward_manager=prime \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name=${WANDB_PROJECT} \

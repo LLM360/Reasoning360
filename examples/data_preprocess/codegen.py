@@ -7,10 +7,12 @@ import os
 import json
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
+from transformers import AutoTokenizer
 from datasets import load_dataset, concatenate_datasets
 from rich.rule import Rule
 import rich
+import matplotlib.pyplot as plt
+import datasets
 
 from verl.utils.hdfs_io import copy, makedirs
 from verl.utils.reward_score.coder1 import (
@@ -19,118 +21,113 @@ from verl.utils.reward_score.coder1 import (
     _ERROR_MSG_PREFIX,
 )
 
-N_TESTSET_PER_DATASET = 512  # per dataset
-_EMPTY_RETURN_ = {
-    "data_source": None,
-    "prompt": None,
-    "ability": None,
-    "reward_model": None,
-    "extra_info": None,
-}
+from examples.data_preprocess.code_utils import *
 
-
-def minimize_stdio(inputs, outputs, max_n_tests=8):
-    stdin_list = []
-    stdout_list = []
-    for stdin, stdout in zip(inputs, outputs):
-        if isinstance(stdin, list):
-            stdin = "\n".join(stdin)
-        if isinstance(stdout, list):
-            stdout = "\n".join(stdout)
-        if sys.getsizeof(stdin) > 4 * 1024:
-            continue
-        stdout.replace("\r\n", "\n")
-        stdin_list.append(stdin)
-        stdout_list.append(stdout)
-
-    zipped = sorted(zip(stdin_list, stdout_list), key=lambda x: sys.getsizeof(x[0]))
-
-    if not zipped:
-        print("No tests found!")
-        return [], []
-
-    sorted_stdin, sorted_stdout = zip(*zipped)
-    return list(sorted_stdin[:max_n_tests]), list(sorted_stdout[:max_n_tests])
-
-
-SYSTEM_PROMPT = """You are a helpful programming assistant. \
-The user will ask you a question and you as the assistant solve it. \
-The assistant first thinks how to solve the task through reasoning and then provides the user with the final answer. \
-The reasoning process and answer are enclosed within <think>...</think> and <answer>...</answer> tags, respectively."""
-
-PY_IMPORTS = "import heapq\nfrom math import floor, gcd\nimport random\nimport sys\nfrom typing import *\nfrom functools import *\nimport collections\nfrom collections import *\nfrom itertools import *\nfrom heapq import *\nfrom bisect import *\nfrom string import *\nimport math\nimport datetime\ninf = float('inf')\n"
+WORKDING_DIR = os.path.join(os.environ.get("HOME"), "Reasoning360")
 
 
 def kodcode():  # Thanks!!! to Zhangchen and Yueqin
     # library requirements?
     rich.print(Rule("Loading KodCode/KodCode-V1-SFT-R1..."))
     dataset = load_dataset("KodCode/KodCode-V1-SFT-R1")
-
-    packages = [
-        "beautifulsoup4",
-        "fake-useragent",
-        "imageio",
-        "keras",
-        "lxml",
-        "matplotlib",
-        "numpy",
-        "opencv-python",
-        "pandas",
-        "pillow",
-        "requests",
-        "rich",
-        "scikit-learn",
-        "sphinx-pyproject",
-        "statsmodels",
-        "sympy",
-        "tweepy",
-        "typing_extensions",
-        "xgboost",
-        "flask",
-        "seaborn",
-    ]
-    block_libs = [
-        "fake-useragent",
-        "keras",
-        "socket",
-        "torch",
-        "scipy",
-        "sklearn",
-        "cv2",
-        "scipy",
-        "imageio",
-        "sphinx-pyproject",
-        "xgboost",
-        "tweepy",
-        "flask",
-        "matplotlib",
-        "pillow",
-        "seaborn",
-        "smtpd",
-    ]
+    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-32B-Instruct")
 
     def make_map_fn(split):
 
         def process_fn(example, idx):
             reference_solution = example["solution"]
-            test_code = "from solution import *\n" + example["test_code"].strip()
-            # skip it if reference solution requires libs from block_libs
-            if any(lib in reference_solution for lib in block_libs):
-                return _EMPTY_RETURN_
-            if any(lib in test_code for lib in block_libs):
-                return _EMPTY_RETURN_
-            prompt = f"Please solve the programming task below in Python. Code should wrapped in a markdown code block.\n\n{example['question'].strip()}"
-            if example["test_entry_point"] and example["test_entry_point"].strip():
-                prompt += f"\n\nNote that the output function should be {example['test_entry_point'].strip()}."
-
+            test_code = "from solution import *\n" + example["test"].strip()
+            # Filtering...
+            # + block libs are used in reference solution and test code
+            # + block usages are used in reference solution or test code
+            # + filter out too long prompts
+            # + filter out easy problems
+            # + filter out failed unittests
+            filter_info = {}
+            for lib in BLOCK_LIBS:
+                if (
+                    f"import {lib}"
+                    in reference_solution  # naive import detection; ast then detect would be better
+                    or f"from {lib}" in reference_solution
+                ):
+                    print("===========Blocked lib in solution===========")
+                    print(f"reference_solution:")
+                    print(reference_solution)
+                    print(f"lib: {lib}")
+                    print(f"question_id: {example['question_id']}")
+                    return {
+                        **EMPTY_RETURN,
+                        "filter_info": {
+                            "type": f"blocked_lib",
+                            "detail": lib,
+                        },
+                    }
+            for lib in BLOCK_LIBS:
+                if f"import {lib}" in test_code or f"from {lib}" in test_code:
+                    print("===========Blocked lib in test===========")
+                    print(f"test_code:")
+                    print(test_code)
+                    print(f"lib: {lib}")
+                    print(f"question_id: {example['question_id']}")
+                    return {
+                        **EMPTY_RETURN,
+                        "filter_info": {
+                            "type": f"blocked_lib",
+                            "detail": lib,
+                        },
+                    }
+            for usage in BLOCK_USAGES:
+                if usage in reference_solution:
+                    return {
+                        **EMPTY_RETURN,
+                        "filter_info": {
+                            "type": f"blocked_usage",
+                            "detail": usage,
+                        },
+                    }
+            for usage in BLOCK_USAGES:
+                if usage in test_code:
+                    return {
+                        **EMPTY_RETURN,
+                        "filter_info": {
+                            "type": f"blocked_usage",
+                            "detail": usage,
+                        },
+                    }
+            if (
+                len(tokenizer.encode(example["question"])) > MAX_PROMPT_LENGTH - 200
+            ):  # -200 for (approximately) the prompt template extra tokens
+                return {
+                    **EMPTY_RETURN,
+                    "filter_info": {"type": "prompt_too_long", "detail": None},
+                }
+            if example["gpt_difficulty"] == "easy":
+                return {
+                    **EMPTY_RETURN,
+                    "filter_info": {"type": "easy_problem", "detail": None},
+                }
             succ, err = code_exec(code=reference_solution, pytest=test_code)
             if not succ:
-                rich.print(
-                    f"[bold red]Test code failed for {example['conversation_id']}"
-                )
+                # The above code is using the `rich` library in Python to print a formatted message in the console.
+                # The message is in red color and includes the value of `example['conversation_id']`.
+                # rich.print(
+                #     f"[bold red]Test code failed for {example['conversation_id']}"
+                # )
+                print("===========Unittest failed===========")
+                print(f"reference_solution:")
                 print(reference_solution)
+                print(f"test_code:")
+                print(test_code)
+                print(f"err:")
                 print(err)
-                return _EMPTY_RETURN_
+                return {
+                    **EMPTY_RETURN,
+                    "filter_info": {"type": "failed_unittests", "detail": None},
+                }
+
+            prompt = f"Please solve the programming task below in Python. Code should wrapped in a markdown code block.\n\n{example['question'].strip()}"
+            if example["test_info"]:
+                prompt += f"\n\nNote that the output function should be {str(example['test_info']).strip()}."
 
             return {
                 "data_source": "code",
@@ -148,20 +145,74 @@ def kodcode():  # Thanks!!! to Zhangchen and Yueqin
                     "index": idx,
                     "reference": reference_solution,
                     "prompt": prompt,
-                    "dataset": "flydust/KodCode-V1",
+                    "dataset": "KodCode/KodCode-V1-SFT-R1",
+                    "question_subset": example["subset"],
+                    "question_id": example["question_id"],
+                    "gpt_difficulty": example["gpt_difficulty"],
                 },
+                "filter_info": None,
             }
 
         return process_fn
 
+    # shuffle the dataset, and pick 5k examples for debugging
+    dataset = dataset["train"].shuffle(seed=666).select(range(150000))
+    # Preprocess the dataset
+    print("Executing tests to ensure correctness...")
     dataset = dataset.map(
         function=make_map_fn("train"),
         with_indices=True,
         num_proc=64,
     )
-    splits = dataset["train"].train_test_split(
-        test_size=N_TESTSET_PER_DATASET, seed=666
+    # Analyze the filter reasons
+    filter_counts, filter_counts_fine_block_libs = {}, {}
+    for entry in dataset:
+        if entry["filter_info"] is None:
+            continue
+        filter_type = entry["filter_info"]["type"]
+        if filter_type is not None:
+            # Filter type distribution
+            if filter_type not in filter_counts:
+                filter_counts[filter_type] = 0
+            filter_counts[filter_type] += 1
+            # Filter detail distribution
+            filter_detail = entry["filter_info"].get("detail", None)
+            if filter_detail is not None:
+                if filter_detail not in filter_counts_fine_block_libs:
+                    filter_counts_fine_block_libs[filter_detail] = 0
+                filter_counts_fine_block_libs[filter_detail] += 1
+        # entry["filter_info"] = None
+
+    print(f"Filtered samples from KodCode: {filter_counts}")
+
+    plot_hist(
+        filter_counts,
+        file_path=os.path.join(WORKDING_DIR, "artifacts", "filter_counts.png"),
+        title="Filter Sample Distribution from KodCode",
+        xlabel="Filter Reason",
+        ylabel="Count",
     )
+    plot_hist(
+        filter_counts_fine_block_libs,
+        file_path=os.path.join(
+            WORKDING_DIR, "artifacts", "filter_counts_fine_block_libs.png"
+        ),
+        title="Blocked Library Distribution from KodCode",
+        xlabel="Blocked Library",
+        ylabel="Count",
+    )
+
+    dataset = dataset.filter(lambda x: x["data_source"] is not None)
+    print(f"Remaining samples from KodCode: {len(dataset)}")
+
+    # pick random 50k examples for RL, otherwise it's too large
+    dataset = dataset.select(range(50000 + N_TESTSET_PER_DATASET))
+
+    # Split into train and test
+    # splits = dataset["train"].train_test_split(
+    #     test_size=N_TESTSET_PER_DATASET, seed=666
+    # )
+    splits = dataset.train_test_split(test_size=N_TESTSET_PER_DATASET, seed=666)
     train_dataset = splits["train"].shuffle(seed=666)
     test_dataset = splits["test"]
     return train_dataset, test_dataset
@@ -181,15 +232,15 @@ def taco():
 
             # skip poorly formatted examples
             if source in ["geeksforgeeks", "leetcode"]:
-                return _EMPTY_RETURN_
+                return EMPTY_RETURN
 
             # too short description
             if len("".join([c for c in example["question"] if c.isalnum()])) < 100:
-                return _EMPTY_RETURN_
+                return EMPTY_RETURN
 
             # no image
             if "image" in example["question"].lower() or "\n![" in example["question"]:
-                return _EMPTY_RETURN_
+                return EMPTY_RETURN
 
             prompt_pieces = [
                 "Solve the programming task below in a Python markdown code block.",
@@ -242,7 +293,7 @@ for i, o in zip(_inputs, _outputs):
                     rich.print(f"[bold red]Test code failed for {source}")
                     print(_check_test)
                     print(err)
-                    return _EMPTY_RETURN_
+                    return EMPTY_RETURN
                 oracle = json.dumps({"functional": test_code})
                 assert example["starter_code"].strip() != ""
             elif "inputs" in oracle and "outputs" in oracle:
@@ -250,7 +301,7 @@ for i, o in zip(_inputs, _outputs):
                     oracle["inputs"], oracle["outputs"]
                 )
                 if len(stdin_list) == 0:
-                    return _EMPTY_RETURN_
+                    return EMPTY_RETURN
 
                 with ThreadPoolExecutor(
                     max_workers=min(len(stdin_list), 8)
@@ -277,7 +328,7 @@ for i, o in zip(_inputs, _outputs):
                                 print("output = \n", output)
                             else:
                                 print(f"{output = }")
-                            return _EMPTY_RETURN_
+                            return EMPTY_RETURN
 
                 oracle = json.dumps({"inputs": stdin_list, "outputs": stdout_list})
             else:
@@ -313,7 +364,7 @@ for i, o in zip(_inputs, _outputs):
         with_indices=True,
         num_proc=64,
         remove_columns=dataset.column_names,
-    ).filter(lambda x: x != _EMPTY_RETURN_)
+    ).filter(lambda x: x != EMPTY_RETURN)
     splits = dataset.train_test_split(
         test_size=max(1, min(N_TESTSET_PER_DATASET, len(dataset) * 0.1)), seed=666
     )
@@ -324,13 +375,10 @@ for i, o in zip(_inputs, _outputs):
         print(f"{t = }")
         t["extra_info"]["split"] = "test"
 
+    print(f"Taco train set: {train_dataset}")
+    print(f"Taco test set: {test_dataset}")
+
     return train_dataset, test_dataset
-
-
-# Some tests are very broken and needs verification
-def codecontests():
-    rich.print(Rule("Loading deepmind/code_contests..."))
-    dataset = load_dataset("deepmind/code_contests")
     train_dataset = dataset["train"]
     test_dataset = dataset["valid"][:N_TESTSET_PER_DATASET]
 
@@ -340,7 +388,7 @@ def codecontests():
         def process_fn(example, idx):
             if "<image>" in example["description"]:
                 print("Description includes image, skipping...")
-                return _EMPTY_RETURN_
+                return EMPTY_RETURN
 
             stdin_list = (
                 example["public_tests"]["input"]
@@ -358,7 +406,7 @@ def codecontests():
             )
             assert len(stdin_list) == len(stdout_list)
             if len(stdin_list) == 0:
-                return _EMPTY_RETURN_
+                return EMPTY_RETURN
 
             prompt = (
                 "Solve the programming task below in a Python markdown code block. "
@@ -398,7 +446,7 @@ def codecontests():
         function=make_map_fn("train"),
         with_indices=True,
         remove_columns=dataset.column_names,
-    ).filter(lambda x: x != _EMPTY_RETURN_)
+    ).filter(lambda x: x != EMPTY_RETURN)
     test_dataset = test_dataset.map(function=make_map_fn("test"), with_indices=True)
     return train_dataset, test_dataset
 
@@ -474,6 +522,8 @@ def leetcode2k():
 
     train_dataset = train_dataset.map(function=make_map_fn("train"), with_indices=True)
     test_dataset = test_dataset.map(function=make_map_fn("test"), with_indices=True)
+    print(f"Leetcode2k train set: {train_dataset}")
+    print(f"Leetcode2k test set: {test_dataset}")
     return train_dataset, test_dataset
 
 
@@ -481,18 +531,25 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--root_dir", default="./data/")
-    parser.add_argument("--hdfs_dir", default=None)
+    parser.add_argument("--root_dir", default=os.path.join(WORKDING_DIR, "data"))
+    parser.add_argument(
+        "--dataset_names", default="kodcode", help="comma separated dataset names"
+    )
 
     args = parser.parse_args()
 
     root_dir = args.root_dir
-    hdfs_dir = args.hdfs_dir
+    dataset_names = args.dataset_names.split(",")
 
     train_datasets = []
     test_datasets = []
 
-    dataset_makes = [leetcode2k, taco]
+    dataset_map = {
+        "kodcode": kodcode,
+        "taco": taco,
+        "leetcode2k": leetcode2k,
+    }
+    dataset_makes = [dataset_map[name] for name in dataset_names]
     names = "-".join([make.__name__ for make in dataset_makes])
 
     for train, test in [make() for make in dataset_makes]:
@@ -512,8 +569,3 @@ if __name__ == "__main__":
     rich.print(f"[bold green]Saving to {local_dir}...")
     train_dataset.to_parquet(os.path.join(local_dir, "train.parquet"))
     test_dataset.to_parquet(os.path.join(local_dir, "test.parquet"))
-
-    if hdfs_dir is not None:
-        makedirs(hdfs_dir)
-
-        copy(src=root_dir, dst=hdfs_dir)

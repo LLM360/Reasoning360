@@ -57,6 +57,10 @@ def _default_compute_score(
         "orz_math_57k_collected.json",
         "examples/data_preprocess/orz_math_57k_collected.json",
         "SynthLabsAI/Big-Math-RL-Verified",
+        "SDSB/deepscale_partial_mar21_filtered_basic",
+        "SDSB/big_math_partial_mar21_filtered_basic",
+        "SDSB/aime_repeated_8x",
+        "SDSB/amc_repeated_4x",
     ]:
         if reward_metric == "prime_math" or reward_metric is None:
             from . import prime_math

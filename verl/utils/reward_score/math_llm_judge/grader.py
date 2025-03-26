@@ -145,9 +145,9 @@ def handle_base(x) -> str:
 
 
 def handle_pi(string, pi):
-    if isinstance(string, str) and "\pi" in string:
+    if isinstance(string, str) and "\\pi" in string:
         # Find the first occurrence of "\pi"
-        idx = string.find("\pi")
+        idx = string.find("\\pi")
 
         # Iterate over the string and find all occurrences of "\pi" with a valid previous character
         while idx != -1:
@@ -160,7 +160,7 @@ def handle_pi(string, pi):
                 string = string[:idx] + f"1*{pi}" + string[idx + 3:]
 
             # Find the next occurrence of "\pi"
-            idx = string.find("\pi", idx + 1)
+            idx = string.find("\\pi", idx + 1)
 
         # Evaluate the expression using eval() function
         try:
@@ -274,7 +274,7 @@ def math_equal(prediction: Union[bool, float, str],
                 return True
 
     # if reference is a matrix
-    if "\begin{pmatrix}" in reference and prediction.startswith("Matrix"):
+    if "\\\begin{pmatrix}" in reference and prediction.startswith("Matrix"):
         try:
             pred_matrix = parse_expr(prediction)
             ref_matrix_items = reference.split()[1:-1:2]
@@ -286,13 +286,13 @@ def math_equal(prediction: Union[bool, float, str],
                     return True
         except Exception:
             pass
-    elif "\begin{pmatrix}" in reference and prediction.startswith("[") and prediction.endswith("]"):
+    elif "\\begin{pmatrix}" in reference and prediction.startswith("[") and prediction.endswith("]"):
         if isinstance(eval(prediction), list):
             try:
                 pred_matrix = eval(prediction)
                 # ref_matrix_items = reference.split()[1:-1:2]
                 ref_matrix_items = reference.lstrip("\\begin{pmatrix}").lstrip("\begin{pmatrix}").rstrip(
-                    "\\end{pmatrix}").rstrip("\end{pmatrix}")
+                    "\\end{pmatrix}").rstrip("\\end{pmatrix}")
                 ref_matrix_items = ref_matrix_items.split("\\")
                 ref_matrix_items = [row.split("&") if "&" in row else row for row in ref_matrix_items]
                 if len(pred_matrix) == len(ref_matrix_items):
