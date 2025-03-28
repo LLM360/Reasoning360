@@ -186,7 +186,9 @@ class ActorRolloutRefWorker(MegatronWorker):
         # Step 3: initialize the megatron model
         if self._is_actor and self._is_rollout:
             # Initialize the 3D HybridEngine
-            hybrid_engine = AllGatherPPModel(model_provider=megatron_actor_model_provider)
+            hybrid_engine = AllGatherPPModel(
+                model_provider=megatron_actor_model_provider,
+                use_distributed_optimizer=self.config.actor.megatron.use_distributed_optimizer)
             # Fetch the model at current rank
             actor_module = hybrid_engine.this_rank_models
             actor_modules_list = []
@@ -209,7 +211,8 @@ class ActorRolloutRefWorker(MegatronWorker):
             print(f'self.config.ref.load_weight: {self.config.ref.load_weight}')
             ref_module = get_model(model_provider_func=megatron_actor_model_provider,
                                    model_type=ModelType.encoder_or_decoder,
-                                   wrap_with_ddp=False)
+                                   wrap_with_ddp=False,
+                                   use_distributed_optimizer=self.config.ref.megatron.use_distributed_optimizer)
             # ref_module = nn.ModuleList(ref_module)
 
             if self.config.ref.load_weight:  # should align with the actor:
@@ -438,7 +441,13 @@ class ActorRolloutRefWorker(MegatronWorker):
         return output
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
-    def load_checkpoint(self, checkpoint_path, **kwargs):
+    def load_checkpoint(self, checkpoint_path, hdfs_path=None, del_local_after_load=True):
+        self.checkpoint_mananager.load_checkpoint(local_path=checkpoint_path,
+                                                  hdfs_path=hdfs_path,
+                                                  del_local_after_load=del_local_after_load)
+
+    @register(dispatch_mode=Dispatch.ONE_TO_ALL)
+    def load_pretrained_model(self, checkpoint_path, del_local_after_load=True):
         pass
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
@@ -539,7 +548,7 @@ class CriticWorker(MegatronWorker):
         local_path = copy_to_local(model_path)
         self.tokenizer = hf_tokenizer(local_path)
 
-        # Step 2: get the actor_model_config
+        # Step 2: get the critic_model_config
         critic_model_config = AutoConfig.from_pretrained(local_path)
 
         override_config_kwargs = {
@@ -548,10 +557,11 @@ class CriticWorker(MegatronWorker):
             'pad_token_id': self.tokenizer.pad_token_id,
         }
         override_config_kwargs.update(override_model_config)
+        self.share_embeddings_and_output_weights = getattr(critic_model_config, "tie_word_embeddings", False)
         update_model_config(critic_model_config, override_config_kwargs=override_config_kwargs)
-
+        self.architectures = getattr(critic_model_config, "architectures", None)
         if self.rank == 0:
-            print(f'Model config after override: {critic_model_config}')
+            print(f'Model config after override: critic_model_config {critic_model_config}')
 
         def megatron_critic_model_provider(pre_process, post_process):
             from verl.utils.model import get_parallel_model_from_config
@@ -571,17 +581,18 @@ class CriticWorker(MegatronWorker):
         # Step 3: initialize the megatron model
         critic_module = get_model(model_provider_func=megatron_critic_model_provider,
                                   model_type=ModelType.encoder_or_decoder,
-                                  wrap_with_ddp=True)
+                                  wrap_with_ddp=True,
+                                  use_distributed_optimizer=self.config.megatron.use_distributed_optimizer)
         # note that here critic_module will be a list to be compatible with the construction of interleaved pp (vpp).
         # but here, we do not use pp (vpp) yet. For simplicity, we remove the list
         # critic_module = nn.ModuleList(critic_module)
 
         if self.config.load_weight:
-            load_megatron_model_weights(self.config,
-                                        critic_model_config,
-                                        critic_module,
-                                        params_dtype=megatron_config.params_dtype,
-                                        is_value_model=True)
+            self.hf_config = load_megatron_model_weights(self.config,
+                                                         critic_model_config,
+                                                         critic_module,
+                                                         params_dtype=megatron_config.params_dtype,
+                                                         is_value_model=True)
         if self.rank == 0:
             print_model_size(critic_module[0])
 
@@ -621,10 +632,10 @@ class CriticWorker(MegatronWorker):
             optim_config=self.config.optim,
             override_model_config=override_model_config)
         self.critic = MegatronPPOCritic(config=self.config,
-                                        model_config=critic_model_config,
+                                        model_config=self.critic_model_config,
                                         megatron_config=megatron_config,
-                                        critic_module=critic_module,
-                                        critic_optimizer=critic_optimizer,
+                                        critic_module=self.critic_module,
+                                        critic_optimizer=self.critic_optimizer,
                                         critic_optimizer_config=critic_optimizer_config)
         self.flops_counter = FlopsCounter(critic_model_config)
 
@@ -651,8 +662,9 @@ class CriticWorker(MegatronWorker):
         return output
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
-    def load_checkpoint(self, checkpoint_path, **kwargs):
-        pass
+    def load_checkpoint(self, checkpoint_path, del_local_after_load=True):
+        self.hf_config = self.checkpoint_mananager.load_checkpoint(local_path=checkpoint_path,
+                                                                   del_local_after_load=del_local_after_load)
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
     def save_checkpoint(self, checkpoint_path, hdfs_path=None, **kwargs):
@@ -722,7 +734,7 @@ class RewardModelWorker(MegatronWorker):
         update_model_config(rm_model_config, override_config_kwargs=override_config_kwargs)
 
         if self.rank == 0:
-            print(f'Model config after override: {rm_model_config}')
+            print(f'Model config after override: rm_model_config {rm_model_config}')
 
         def megatron_rm_model_provider(pre_process, post_process):
             from verl.utils.model import get_parallel_model_from_config
@@ -742,7 +754,8 @@ class RewardModelWorker(MegatronWorker):
         # Step 3: initialize the megatron model
         reward_model = get_model(model_provider_func=megatron_rm_model_provider,
                                  model_type=ModelType.encoder_or_decoder,
-                                 wrap_with_ddp=False)
+                                 wrap_with_ddp=False,
+                                 use_distributed_optimizer=self.config.reward_model.use_distributed_optimizer)
         # note that here critic_module will be a list to be compatible with the construction of interleaved pp (vpp).
         # but here, we do not use pp (vpp) yet. For simplicity, we remove the list
         # reward_model = nn.ModuleList(reward_model)

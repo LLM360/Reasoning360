@@ -22,12 +22,16 @@ def _default_compute_score(
 
         res = gsm8k.compute_score(solution_str, ground_truth)
     elif data_source in ['lighteval/MATH', 'DigitalLearningGmbH/MATH-lighteval']:
-        # from . import math
-        # res = math.compute_score(solution_str, ground_truth)
+        from . import math
+        res = math.compute_score(solution_str, ground_truth)
 
-        # Use Math-Verify (https://github.com/huggingface/Math-Verify) for better evaluation accuracy
-        from . import math_verify
-        res = math_verify.compute_score(solution_str, ground_truth)
+        # [Optional] Math-Verify Integration
+        # For enhanced accuracy, consider utilizing Math-Verify (https://github.com/huggingface/Math-Verify).
+        # Note: Math-Verify needs to be manually installed via pip: `pip install math-verify`.
+        # To use it, override the `compute_score` function with the following implementation:
+
+        # from . import math_verify
+        # res = math_verify.compute_score(solution_str, ground_truth)
     elif data_source in [
         "numina_aops_forum",
         "numina_synthetic_math",
@@ -42,6 +46,7 @@ def _default_compute_score(
     elif data_source in ["codecontests", "apps", "codeforces", "taco"]:
         from . import prime_code
         res = prime_code.compute_score(solution_str, ground_truth, continuous=True)
+    # NOTE: added by Reasoning360
     elif data_source in [
         "agentica-org/DeepScaleR-Preview-Dataset",
         "nanoverl/math",
@@ -52,6 +57,10 @@ def _default_compute_score(
         "orz_math_57k_collected.json",
         "examples/data_preprocess/orz_math_57k_collected.json",
         "SynthLabsAI/Big-Math-RL-Verified",
+        "SDSB/deepscale_partial_mar21_filtered_basic",
+        "SDSB/big_math_partial_mar21_filtered_basic",
+        "SDSB/aime_repeated_8x",
+        "SDSB/amc_repeated_4x",
     ]:
         if reward_metric == "prime_math" or reward_metric is None:
             from . import prime_math

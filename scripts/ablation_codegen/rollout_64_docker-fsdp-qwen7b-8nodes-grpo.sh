@@ -6,7 +6,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --exclusive
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=64
 #SBATCH --output=slurm/verl-%j.out
 #SBATCH --error=slurm/verl-%j.err
 
@@ -49,7 +49,7 @@ SP_SIZE=1
 ROLLOUT_TP_SIZE=4
 
 WANDB_PROJECT=Reasoning360
-WANDB_EXPERIMENT_NAME=zj-rollout64-docker-code-${BASE_MODEL##*/}-${SLURM_JOB_ID}
+WANDB_EXPERIMENT_NAME=zhoujun-rollout64-${BASE_MODEL##*/}-${SLURM_JOB_ID}
 
 echo "Node list: ${nodes[@]}"
 

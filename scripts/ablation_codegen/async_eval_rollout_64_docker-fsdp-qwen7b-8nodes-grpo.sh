@@ -1,17 +1,17 @@
 #!/bin/bash
-#SBATCH --partition=mbzuai
 #SBATCH --job-name=rl
-#SBATCH --nodes=16
-#SBATCH --ntasks=16
+#SBATCH --partition=mbzuai
+#SBATCH --nodes=8
+#SBATCH --ntasks=8
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
-#SBATCH --exclusive
 #SBATCH --cpus-per-task=64
+#SBATCH --mem=512G
 #SBATCH --output=slurm/verl-%j.out
 #SBATCH --error=slurm/verl-%j.err
-#SBATCH --exclude=g42-odin-h100-[106,342,358]
 #SBATCH --exclusive
-
+#SBATCH --time=96:00:00
+#SBATCH --exclude=g42-odin-h100-[093-100,173-180,279-286,200-207]
 
 nodes=( $( scontrol show hostnames $SLURM_JOB_NODELIST ) )
 export head_node=${nodes[0]}
@@ -37,8 +37,9 @@ train_files="[${codegen_train_path}]"
 test_files="[${codegen_test_path}]"
 
 # Model config
-BASE_MODEL=Qwen/Qwen2.5-32B
-# BASE_MODEL=Qwen/Qwen2.5-7B-Instruct
+# BASE_MODEL=Qwen/Qwen2.5-32B
+BASE_MODEL=Qwen/Qwen2.5-7B-Instruct
+# BASE_MODEL=Qwen/Qwen2.5-Coder-7B
 # BASE_MODEL=deepseek-ai/DeepSeek-R1-Distill-Qwen-32B
 # BASE_MODEL=deepseek-ai/DeepSeek-R1-Distill-Qwen-14B
 # BASE_MODEL=deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
@@ -48,10 +49,10 @@ BASE_MODEL=Qwen/Qwen2.5-32B
 
 # Parallel config
 SP_SIZE=1
-ROLLOUT_TP_SIZE=8
+ROLLOUT_TP_SIZE=4
 
 WANDB_PROJECT=Reasoning360
-WANDB_EXPERIMENT_NAME=zj-docker-code-${BASE_MODEL##*/}-${SLURM_JOB_ID}
+WANDB_EXPERIMENT_NAME=zhoujun-async-eval-rollout64-${BASE_MODEL##*/}-${SLURM_JOB_ID}
 
 echo "Node list: ${nodes[@]}"
 
@@ -101,7 +102,7 @@ cmd="python3 /Reasoning360/verl/trainer/main_ppo.py  --config-path=/Reasoning360
     actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.tensor_model_parallel_size=${ROLLOUT_TP_SIZE} \
-    actor_rollout_ref.rollout.n=1 \
+    actor_rollout_ref.rollout.n=64 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=32 \
     algorithm.kl_ctrl.kl_coef=0.001 \

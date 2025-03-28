@@ -40,8 +40,13 @@ jobs:
         uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel packaging
       - name: Install the current repository
         run: |
+          pip install torch==2.4.0 --index-url https://download.pytorch.org/whl/cu124
+          pip install flash-attn --no-build-isolation
           pip install -e .[test]
       - name: Run sanity test
         run: |
