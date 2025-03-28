@@ -42,7 +42,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install torch dependencies
         run: |
-          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
       - name: Install the current repository
         run: |
           pip install -e .[test]
