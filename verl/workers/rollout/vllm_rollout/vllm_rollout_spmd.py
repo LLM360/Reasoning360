@@ -40,6 +40,9 @@ from vllm.distributed import parallel_state as vllm_ps
 from vllm import LLM, SamplingParams
 from verl.third_party.vllm import vllm_version
 
+# Added by Reasoning360
+import types
+
 # TODO
 # 1. support pp in vllm
 # 2. passing tokenizer is not necessary? no encoding/decoding is happending here
@@ -134,6 +137,8 @@ class vLLMRollout(BaseRollout):
             enable_chunked_prefill=config.enable_chunked_prefill,
             enable_prefix_caching=True,
         )
+        # NOTE: added by Reasoning360
+        self._monkey_patch_vllm_engine_v0()
 
         # Offload vllm model to reduce peak memory usage
         self.inference_engine.sleep(level=1)
@@ -347,4 +352,78 @@ class vLLMRollout(BaseRollout):
         ):
             self.inference_engine.free_cache_engine()
 
+        # NOTE: added by Reasoning360
+        metrics = self.report_memory_usage(reset=True)
+        # NOTE: we do not use meta_info because dp collect fn only picks
+        # meta_info of the first data.
+        metrics = {
+            'metrics_' + k: np.asarray([v] * seq.size(0), dtype=object) for k, v in metrics.items()
+        }
+        non_tensor_batch.update(metrics)
+
         return DataProto(batch=batch, non_tensor_batch=non_tensor_batch)
+
+    def report_memory_usage(self, reset: bool=False):
+        # NOTE: added by Reasoning360
+        method = getattr(self.inference_engine.llm_engine, 'report_page_usage_history', None)
+        if method is not None:
+            return method(reset=reset)
+        return {}
+
+    def _monkey_patch_vllm_engine_v0(self):
+        """
+        NOTE: added by Reasoning360.
+        Monkey patching vllm engine v0 to support page usage report.
+        """
+        from vllm.v1.engine.llm_engine import LLMEngine as V1VllmEngine
+        from vllm.engine.llm_engine import LLMEngine
+
+        if isinstance(self.inference_engine.llm_engine, V1VllmEngine):
+            # FIXME: monkey-patch V1 engine as well.
+            return
+        assert isinstance(self.inference_engine.llm_engine, LLMEngine)
+        engine = self.inference_engine.llm_engine
+        engine.max_page_usage = 0.
+        engine.page_usage_average = 0.
+        engine.page_usage_sample_times = 0
+
+        step = engine.step
+
+        def custom_step(self: LLMEngine):
+            ret = step()
+            # update page usage metrics
+            num_total_gpu = self.cache_config.num_gpu_blocks
+            gpu_cache_usage_sys = 0.
+            if num_total_gpu is not None:
+                num_free_gpu = sum(
+                    scheduler.block_manager.get_num_free_gpu_blocks()
+                    for scheduler in self.scheduler)
+                gpu_cache_usage_sys = 1.0 - (num_free_gpu / num_total_gpu)
+            self.max_page_usage = max(self.max_page_usage, gpu_cache_usage_sys)
+            self.page_usage_average = (
+                (self.page_usage_average * self.page_usage_sample_times + gpu_cache_usage_sys) /
+                (self.page_usage_sample_times + 1))
+            self.page_usage_sample_times += 1
+            return ret
+
+        def report_page_usage_history(self, reset=False):
+            # NOTE: added by Reasoning360
+            if reset:
+                max_page_usage = self.max_page_usage
+                page_usage_average = self.page_usage_average
+                self.max_page_usage = 0
+                self.page_usage_average = 0
+                self.page_usage_sample_times = 0
+                return {
+                    "gpu_max_page_usage": max_page_usage,
+                    "gpu_average_page_usage": page_usage_average,
+                }
+            return {
+                "gpu_max_page_usage": self.max_page_usage,
+                "gpu_average_page_usage": self.page_usage_average,
+            }
+
+        engine.step = types.MethodType(custom_step, engine)
+        engine.report_page_usage_history = types.MethodType(
+            report_page_usage_history, engine
+        )
