@@ -228,13 +228,13 @@ class vLLMRollout(BaseRollout):
             enable_partial_rollout = False
             if getattr(self.config, "use_partial_rollout", False):
                 partial_rollout_len = self.config.partial_rollout_len
-                kwargs["max_tokens"] = partial_rollout_len
                 enable_partial_rollout = True
             # NOTE: partial rollout should not sample multiple responses
             if enable_partial_rollout:
                 prompt_is_partial = prompts.batch['is_partial'].to('cpu')
                 partial_sampling_params = self.sampling_params.clone()
                 partial_sampling_params.n = 1
+                partial_sampling_params.max_tokens = partial_rollout_len
                 sampling_params = [
                     partial_sampling_params if is_partial else self.sampling_params
                     for is_partial in prompt_is_partial
