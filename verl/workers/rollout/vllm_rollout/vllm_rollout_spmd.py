@@ -282,11 +282,12 @@ class vLLMRollout(BaseRollout):
             # NOTE: partial rollout should not sample multiple responses
             if enable_partial_rollout:
                 prompt_is_partial = prompts.batch['is_partial'].to('cpu')
-                partial_sampling_params = self.sampling_params.clone()
+                raw_sampling_params = self.sampling_params.clone()
+                raw_sampling_params.max_tokens = partial_rollout_len
+                partial_sampling_params = raw_sampling_params.clone()
                 partial_sampling_params.n = 1
-                partial_sampling_params.max_tokens = partial_rollout_len
                 sampling_params = [
-                    partial_sampling_params if is_partial else self.sampling_params
+                    partial_sampling_params if is_partial else raw_sampling_params
                     for is_partial in prompt_is_partial
                 ]
             else:
@@ -304,9 +305,16 @@ class vLLMRollout(BaseRollout):
             response_is_partial = []
             for output in outputs:
                 for sample_id in range(len(output.outputs)):
-                    # NOTE: partial rollout: parse the response.
-                    is_partial = output.outputs[sample_id].stop_reason != "stop"
-                    response_is_partial.append(is_partial)
+                    if enable_partial_rollout:
+                        # NOTE: Added by Reasoning360 partial rollout: parse the response.
+                        is_partial = (
+                            output.outputs[sample_id].stop_reason != "stop"
+                            and (
+                                len(output.outputs[sample_id].token_ids) <
+                                self.sampling_params.max_tokens
+                            )
+                        )
+                        response_is_partial.append(is_partial)
                     response.append(output.outputs[sample_id].token_ids)
 
             response = pad_2d_list_to_length(
@@ -315,6 +323,17 @@ class vLLMRollout(BaseRollout):
             response_is_partial = torch.tensor(response_is_partial, dtype=torch.bool, device=idx.device)
 
             if self.sampling_params.n > 1 and do_sample:
+                # NOTE: Added by Reasoning360. Only repeat raw prompts.
+                if enable_partial_rollout:
+                    prompt_is_partial = prompts.batch['is_partial']
+                    partial_idx, partial_attention_mask, partial_position_ids = (
+                        torch.gather(t, 0, prompt_is_partial, device=t.device)
+                        for t in (idx, attention_mask, position_ids)
+                    )
+                    idx, attention_mask, position_ids = (
+                        torch.gather(t, 0, ~prompt_is_partial)
+                        for t in (idx, attention_mask, position_ids)
+                    )
                 idx = _repeat_interleave(idx, self.sampling_params.n)
                 attention_mask = _repeat_interleave(attention_mask, self.sampling_params.n)
                 position_ids = _repeat_interleave(position_ids, self.sampling_params.n)
@@ -322,6 +341,11 @@ class vLLMRollout(BaseRollout):
                 if 'multi_modal_inputs' in non_tensor_batch.keys():
                     non_tensor_batch['multi_modal_inputs'] = _repeat_interleave(non_tensor_batch['multi_modal_inputs'],
                                                                                 self.sampling_params.n)
+                # NOTE: Added by Reasoning360. We assume raw prompts appears the last
+                if enable_partial_rollout:
+                    idx = torch.concat([partial_idx, idx], dim=0)
+                    attention_mask = torch.concat([partial_attention_mask, attention_mask], dim=0)
+                    position_ids = torch.concat([partial_position_ids, position_ids], dim=0)
 
             seq = torch.cat([idx, response], dim=-1)
 

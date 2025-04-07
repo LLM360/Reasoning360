@@ -1344,7 +1344,7 @@ class RayPPOTrainer(object):
         batch_lst = [left.batch, right.batch]
         # TODO: for each key, pad here
         for key in ["input_ids", "attention_mask", "position_ids"]:
-            pad_value = self.tokenizer.pad_token_id if key is "input_ids" else 0
+            pad_value = self.tokenizer.pad_token_id if key == "input_ids" else 0
             seq_len_left = left.batch[key].shape[1]
             seq_len_right = right.batch[key].shape[1]
             if seq_len_left < seq_len_right:
@@ -1385,7 +1385,8 @@ class RayPPOTrainer(object):
         # NOTE: this will introduce a few over-estimation of the padding length, because some other
         # tokens are also considered padded.
         pad_response_right = (responses == pad_token_id).sum(dim=-1, keepdim=True)
-        j = torch.arange(seq_len, device=tensor.device).unsqueeze(0).expand(batch_size, seq_len)
+        batch_size, seq_len = partial_rollouts.batch["input_ids"].shape
+        j = torch.arange(seq_len).unsqueeze(0).expand(batch_size, seq_len)
         indices = torch.where(
             j < pad_prompt_left,
             j,
@@ -1406,6 +1407,13 @@ class RayPPOTrainer(object):
             # Rearrange each row using the computed indices.
             tensor = torch.gather(tensor, 1, indices)
             partial_rollouts.batch[key] = tensor
+            if key == "input_ids":
+                total_padding = (pad_prompt_left + pad_response_right).squeeze(-1).numpy()
+                raw_input_ids = np.array([
+                    t[p:]
+                    for (t, p) in zip(tensor.numpy(), total_padding)
+                ], dtype=object)
+                partial_rollouts.non_tensor_batch['raw_prompt_ids'] = raw_input_ids
 
         # 3. concatenate with existing replay buffer partial (Should not exist?)
         replay_buffer_partial = self._concat_with_left_padding(replay_buffer_partial, partial_rollouts)
@@ -1426,12 +1434,12 @@ class RayPPOTrainer(object):
         # pop those keys for generation
         if 'multi_modal_inputs' in batch.non_tensor_batch.keys():
             gen_batch = batch.pop(
-                batch_keys=['input_ids', 'attention_mask', 'position_ids'],
+                batch_keys=['input_ids', 'attention_mask', 'position_ids', 'is_partial'],
                 non_tensor_batch_keys=['raw_prompt_ids', 'multi_modal_data', 'multi_modal_inputs'],
             )
         else:
             gen_batch = batch.pop(
-                batch_keys=['input_ids', 'attention_mask', 'position_ids'],
+                batch_keys=['input_ids', 'attention_mask', 'position_ids', 'is_partial'],
                 non_tensor_batch_keys=['raw_prompt_ids'],
             )
         if len(batch) < self.actor_rollout_wg.world_size:
@@ -1483,11 +1491,13 @@ class RayPPOTrainer(object):
             replay_buffer_raw: DataProto = None
             # Form a large enough gen batch.
             while (desired_gen_batch_size >
-                n * self._buffer_size(replay_buffer_raw) + self._buffer_size(replay_buffer_partial)):
-                new_batch: DataProto = next(data_iter, None)
-                if new_batch is None:
+                    n * self._buffer_size(replay_buffer_raw) +
+                    self._buffer_size(replay_buffer_partial)):
+                new_batch_dict = next(data_iter, None)
+                if new_batch_dict is None:
                     # dataloader exhausted
                     break
+                new_batch = DataProto.from_single_dict(new_batch_dict)
                 new_batch = self._post_process_raw_batch(new_batch)
                 replay_buffer_raw = self._concat_with_left_padding(
                     replay_buffer_raw, new_batch
@@ -1499,6 +1509,7 @@ class RayPPOTrainer(object):
             # run generation
             timing_cur = {}
             metrics_cur = {}
+            # NOTE: TODO: avoid sleeping here.
             generated_batch = self._partial_rollout_generation(
                 batch_to_gen, timing_cur, metrics_cur
             )
@@ -1521,8 +1532,8 @@ class RayPPOTrainer(object):
         while self._buffer_size(replay_buffer_full) < desired_num:
             # No enough data to train, generate more.
             # TODO: make the train_batch_size * n * 10 a configurable parameter.
-            desired_gen_batch_size = max(desired_num - replay_buffer_full,
-                                        train_batch_size * n * 10)
+            desired_gen_batch_size = max(desired_num - self._buffer_size(replay_buffer_full),
+                                         train_batch_size * n * 5)
             (replay_buffer_partial, replay_buffer_full) = generate_one_round(
                 desired_gen_batch_size, replay_buffer_partial, replay_buffer_full
             )
