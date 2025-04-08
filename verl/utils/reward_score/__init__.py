@@ -106,6 +106,9 @@ def _default_compute_score(
         from . import coder1
 
         res = coder1.compute_score(solution_str, ground_truth, extra_info=extra_info)
+    elif data_source in ['ordering_puzzle_dataset']:
+        from . import puzzles_dataset
+        res = puzzles_dataset.compute_score(solution_str, ground_truth)
     else:
         raise NotImplementedError
 
