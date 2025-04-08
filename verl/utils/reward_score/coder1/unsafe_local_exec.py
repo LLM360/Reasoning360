@@ -26,7 +26,6 @@ def code_exec_local(
     else:
         python_executable = os.path.join(python_env, "python3")
 
-    # print(f"Using python environment: {python_executable}")
     if solution:
         with TemporaryDirectory() as tmpdir:
             assert stdin is None, "STDIN is not supported with solution_file"

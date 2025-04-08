@@ -76,7 +76,7 @@ def extract_code_from_string(solution_str):
 
 
 def _compute_score(
-    solution_str, ground_truth, extra_info, format_reward=0.1, answer_reward=1.0
+    solution_str, ground_truth, extra_info, format_reward=0.0, answer_reward=1.0
 ):
     reward_log = []
 
@@ -94,7 +94,8 @@ def _compute_score(
         reward_log.append("-" * 16 + "Bad format detected!" + "-" * 16)
         reward_log.append("-" * 16 + "Original Model Output" + "-" * 16)
         reward_log.append(solution_str)
-        return -answer_reward - format_reward, "\n".join(reward_log)
+        # return -answer_reward - format_reward, "\n".join(reward_log)
+        return 0.0, "\n".join(reward_log)
 
     reward_log.append("-" * 16 + "Extracted Code to Execute" + "-" * 16)
     ground_truth = json.loads(ground_truth)
@@ -171,7 +172,7 @@ def _compute_score(
 
 
 def compute_score(
-    solution_str, ground_truth, extra_info, format_reward=0.1, answer_reward=1.0
+    solution_str, ground_truth, extra_info, format_reward=0.0, answer_reward=1.0
 ):
     if isinstance(extra_info, np.ndarray):
         extra_info = extra_info.item()
