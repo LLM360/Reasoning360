@@ -21,8 +21,9 @@ def _default_compute_score(
         from . import gsm8k
 
         res = gsm8k.compute_score(solution_str, ground_truth)
-    elif data_source in ['lighteval/MATH', 'DigitalLearningGmbH/MATH-lighteval']:
+    elif data_source in ["lighteval/MATH", "DigitalLearningGmbH/MATH-lighteval"]:
         from . import math
+
         res = math.compute_score(solution_str, ground_truth)
 
         # [Optional] Math-Verify Integration
@@ -45,6 +46,7 @@ def _default_compute_score(
         res = prime_math.compute_score(solution_str, ground_truth)
     elif data_source in ["codecontests", "apps", "codeforces", "taco"]:
         from . import prime_code
+
         res = prime_code.compute_score(solution_str, ground_truth, continuous=True)
     # NOTE: added by Reasoning360
     elif data_source in [
@@ -69,8 +71,11 @@ def _default_compute_score(
 
         elif reward_metric == "math_llm_judge":
             from . import math_llm_judge
-            res = math_llm_judge.compute_score(solution_str, ground_truth, extra_info=extra_info)
-            
+
+            res = math_llm_judge.compute_score(
+                solution_str, ground_truth, extra_info=extra_info
+            )
+
         elif reward_metric == "math_verify":
             from .orz.math_utils_sync import is_equal, solution2answer
 
@@ -93,11 +98,13 @@ def _default_compute_score(
                 add_boxed(solution2answer(str(ground_truth))),
                 math_mode="math_verify",
             )
-    elif data_source in ['hiyouga/geometry3k']:
+    elif data_source in ["hiyouga/geometry3k"]:
         from . import geo3k
+
         res = geo3k.compute_score(solution_str, ground_truth)
-    elif data_source in ['code']:
+    elif data_source.startswith("code"):
         from . import coder1
+
         res = coder1.compute_score(solution_str, ground_truth, extra_info=extra_info)
     else:
         raise NotImplementedError
