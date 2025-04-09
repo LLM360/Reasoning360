@@ -308,9 +308,14 @@ class vLLMRollout(BaseRollout):
                     if enable_partial_rollout:
                         # NOTE: Added by Reasoning360 partial rollout: parse the response.
                         is_partial = (
-                            output.outputs[sample_id].stop_reason != "stop"
+                            output.outputs[sample_id].finish_reason == "length"
                             and (
-                                len(output.outputs[sample_id].token_ids) <
+                                # TODO: this does not count original prompt ids.
+                                # Need to consider the factor.
+                                (
+                                    len(output.prompt_token_ids) +
+                                    len(output.outputs[sample_id].token_ids)
+                                ) <
                                 self.sampling_params.max_tokens
                             )
                         )
@@ -323,29 +328,25 @@ class vLLMRollout(BaseRollout):
             response_is_partial = torch.tensor(response_is_partial, dtype=torch.bool, device=idx.device)
 
             if self.sampling_params.n > 1 and do_sample:
-                # NOTE: Added by Reasoning360. Only repeat raw prompts.
+                # NOTE: Modified by Reasoning360. Only repeat raw prompts.
                 if enable_partial_rollout:
-                    prompt_is_partial = prompts.batch['is_partial']
-                    partial_idx, partial_attention_mask, partial_position_ids = (
-                        torch.gather(t, 0, prompt_is_partial, device=t.device)
-                        for t in (idx, attention_mask, position_ids)
+                    repeats = torch.where(
+                        prompts.batch['is_partial'].reshape(-1),
+                        torch.tensor(1, device=idx.device),
+                        torch.tensor(self.sampling_params.n, device=idx.device),
                     )
-                    idx, attention_mask, position_ids = (
-                        torch.gather(t, 0, ~prompt_is_partial)
-                        for t in (idx, attention_mask, position_ids)
-                    )
-                idx = _repeat_interleave(idx, self.sampling_params.n)
-                attention_mask = _repeat_interleave(attention_mask, self.sampling_params.n)
-                position_ids = _repeat_interleave(position_ids, self.sampling_params.n)
-                batch_size = batch_size * self.sampling_params.n
-                if 'multi_modal_inputs' in non_tensor_batch.keys():
-                    non_tensor_batch['multi_modal_inputs'] = _repeat_interleave(non_tensor_batch['multi_modal_inputs'],
-                                                                                self.sampling_params.n)
-                # NOTE: Added by Reasoning360. We assume raw prompts appears the last
-                if enable_partial_rollout:
-                    idx = torch.concat([partial_idx, idx], dim=0)
-                    attention_mask = torch.concat([partial_attention_mask, attention_mask], dim=0)
-                    position_ids = torch.concat([partial_position_ids, position_ids], dim=0)
+                    idx = _repeat_interleave(idx, repeats)
+                    attention_mask = _repeat_interleave(attention_mask, repeats)
+                    position_ids = _repeat_interleave(position_ids, repeats)
+                    batch_size = torch.sum(repeats).cpu().item()
+                else:
+                    idx = _repeat_interleave(idx, self.sampling_params.n)
+                    attention_mask = _repeat_interleave(attention_mask, self.sampling_params.n)
+                    position_ids = _repeat_interleave(position_ids, self.sampling_params.n)
+                    batch_size = batch_size * self.sampling_params.n
+                    if 'multi_modal_inputs' in non_tensor_batch.keys():
+                        non_tensor_batch['multi_modal_inputs'] = _repeat_interleave(non_tensor_batch['multi_modal_inputs'],
+                                                                                    self.sampling_params.n)
 
             seq = torch.cat([idx, response], dim=-1)
 

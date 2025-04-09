@@ -1343,8 +1343,10 @@ class RayPPOTrainer(object):
         # them on the left to allow the concatenation.
         batch_lst = [left.batch, right.batch]
         # TODO: for each key, pad here
-        for key in ["input_ids", "attention_mask", "position_ids"]:
-            pad_value = self.tokenizer.pad_token_id if key == "input_ids" else 0
+        for key in left.batch.keys():
+            if left.batch[key].ndim < 2:
+                continue
+            pad_value = self.tokenizer.pad_token_id if key in ["input_ids", "prompts"] else 0
             seq_len_left = left.batch[key].shape[1]
             seq_len_right = right.batch[key].shape[1]
             if seq_len_left < seq_len_right:
@@ -1449,11 +1451,14 @@ class RayPPOTrainer(object):
             gen_batch_output = self.actor_rollout_wg.generate_sequences(
                 gen_batch
             )
-            # NOTE: added by Reasoning360
-            vllm_page_metrics = gen_batch_output.non_tensor_batch
-            vllm_page_metrics = {
-                k.removeprefix("metrics_") : v for k, v in vllm_page_metrics.items()
+            # pop the key because next iter will have new values
+            vllm_page_metrics_keys = [
+                k for k in gen_batch_output.non_tensor_batch.keys()
                 if k.startswith("metrics_")
+            ]
+            vllm_page_metrics = {
+                k: gen_batch_output.non_tensor_batch.pop(k)
+                for k in vllm_page_metrics_keys
             }
             vllm_page_metrics = reduce_metrics(vllm_page_metrics)
             metrics.update(vllm_page_metrics)
@@ -1464,8 +1469,15 @@ class RayPPOTrainer(object):
                 raise NotImplementedError("REMAX not supported in partial rollout")
 
         # repeat to align with repeated responses in rollout
-        batch = batch.repeat(
-            repeat_times=self.config.actor_rollout_ref.rollout.n,
+        # NOTE: Added by Reasoning360. Only repeat raw prompts.
+        repeats = torch.where(
+            gen_batch.batch['is_partial'].reshape(-1),
+            torch.tensor(1),
+            torch.tensor(self.config.actor_rollout_ref.rollout.n),
+        )
+
+        batch = batch.repeat_complex(
+            repeat_times=repeats,
             interleave=True,
         )
         batch = batch.union(gen_batch_output)

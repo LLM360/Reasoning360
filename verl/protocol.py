@@ -596,6 +596,47 @@ class DataProto:
             meta_info=self.meta_info,
         )
 
+    def repeat_complex(self, repeat_times: torch.Tensor, interleave=True):
+        """
+        Added by Reasoning360. A complex repeat to allow indices beging different values.
+        This is to allow handling output of partial inference and sampling. (some inputs
+        need to be repeated and others do not).
+        """
+        if self.batch is not None:
+            if interleave:
+                # Interleave the data
+                repeated_tensors = {
+                    key: tensor.repeat_interleave(repeat_times, dim=0) for key, tensor in self.batch.items()
+                }
+            else:
+                # Stack the data
+                repeated_tensors = {
+                    key: tensor.unsqueeze(0).expand(repeat_times, *tensor.shape).reshape(-1, *tensor.shape[1:])
+                    for key, tensor in self.batch.items()
+                }
+
+            batch_size = torch.sum(repeat_times).item()
+            repeated_batch = TensorDict(
+                source=repeated_tensors,
+                batch_size=(batch_size,),
+            )
+        else:
+            repeated_batch = None
+
+        repeated_non_tensor_batch = {}
+        repeat_times = repeat_times.cpu().numpy()
+        for key, val in self.non_tensor_batch.items():
+            if interleave:
+                repeated_non_tensor_batch[key] = np.repeat(val, repeat_times, axis=0)
+            else:
+                repeated_non_tensor_batch[key] = np.tile(val, (repeat_times,) + (1,) * (val.ndim - 1))
+
+        return DataProto(
+            batch=repeated_batch,
+            non_tensor_batch=repeated_non_tensor_batch,
+            meta_info=self.meta_info,
+        )
+
 
 import ray
 
