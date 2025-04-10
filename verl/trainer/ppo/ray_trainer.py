@@ -1208,11 +1208,11 @@ class RayPPOTrainer(object):
                 is_last_step = self.global_steps >= self.total_training_steps
 
                 with _timer("step", timing_raw):
-                    batch = self.get_train_batch(data_iter,
-                                                 replay_buffer_partial,
-                                                 replay_buffer_full,
-                                                 timing_raw,
-                                                 metrics)
+                    (batch,
+                     (data_iter, replay_buffer_partial, replay_buffer_full)) = self.get_train_batch(
+                         data_iter, replay_buffer_partial, replay_buffer_full,
+                         timing_raw, metrics
+                        )
 
                     # balance the number of valid tokens on each dp rank.
                     # Note that this breaks the order of data inside the batch.
@@ -1368,8 +1368,8 @@ class RayPPOTrainer(object):
     def _split_rollout_by_partial(self, batch: DataProto):
         partial_index = batch.batch["is_partial"].nonzero(as_tuple=True)[0]
         full_index = torch.logical_not(batch.batch["is_partial"]).nonzero(as_tuple=True)[0]
-        partial_batch = self._data_proto_item_to_data_proto(batch[partial_index])
-        full_batch = self._data_proto_item_to_data_proto(batch[full_index])
+        partial_batch = self._data_proto_item_to_data_proto(batch[partial_index.numpy()])
+        full_batch = self._data_proto_item_to_data_proto(batch[full_index.numpy()])
         return partial_batch, full_batch
     
     def _data_proto_item_to_data_proto(self, item):
@@ -1398,7 +1398,8 @@ class RayPPOTrainer(object):
                 j - pad_response_right
             )
         )
-        # TODO: remove all shared padding columns
+        # remove all shared padding columns
+        shared_padding_size = (torch.min(pad_prompt_left) + torch.min(pad_response_right)).item()
 
         # 2. The value is current both left and right padded. We need to make it instead
         # only right padded. This applies for "input_ids", "attention_mask", "position_ids"
@@ -1408,6 +1409,7 @@ class RayPPOTrainer(object):
             batch_size, seq_len = tensor.shape
             # Rearrange each row using the computed indices.
             tensor = torch.gather(tensor, 1, indices)
+            tensor = tensor[:, shared_padding_size:]
             partial_rollouts.batch[key] = tensor
             if key == "input_ids":
                 total_padding = (pad_prompt_left + pad_response_right).squeeze(-1).numpy()
@@ -1431,7 +1433,7 @@ class RayPPOTrainer(object):
         return batch
 
     def _partial_rollout_generation(self, batch: DataProto,
-                                   timing_raw, metrics):
+                                    timing_raw, metrics):
         # NOTE: modified by Reasoning360 (move gen batch after handling batch size < fsdp)
         # pop those keys for generation
         if 'multi_modal_inputs' in batch.non_tensor_batch.keys():
@@ -1475,7 +1477,6 @@ class RayPPOTrainer(object):
             torch.tensor(1),
             torch.tensor(self.config.actor_rollout_ref.rollout.n),
         )
-
         batch = batch.repeat_complex(
             repeat_times=repeats,
             interleave=True,
@@ -1486,6 +1487,7 @@ class RayPPOTrainer(object):
     def _buffer_size(self, buffer: DataProto):
         return 0 if buffer is None else len(buffer)
 
+    @torch.no_grad()
     def get_train_batch(self, data_iter,
                         replay_buffer_partial: DataProto,
                         replay_buffer_full: DataProto,
@@ -1514,6 +1516,20 @@ class RayPPOTrainer(object):
                 replay_buffer_raw = self._concat_with_left_padding(
                     replay_buffer_raw, new_batch
                 )
+            # Handle undivisible part. The replay buffer raw is always
+            # divisible because it's batch size * n
+            if (self._buffer_size(replay_buffer_partial) % 
+                self.actor_rollout_wg.world_size
+                ) != 0:
+                remainder_num = (
+                    self._buffer_size(replay_buffer_partial) %
+                    self.actor_rollout_wg.world_size
+                )
+                rb_partial_remainder = replay_buffer_partial[-remainder_num:]
+                replay_buffer_partial = replay_buffer_partial[remainder_num:]
+            else:
+                rb_partial_remainder = None
+
             batch_to_gen = self._concat_with_left_padding(
                 replay_buffer_partial, replay_buffer_raw
             )
@@ -1533,6 +1549,10 @@ class RayPPOTrainer(object):
             # parse generated result
             replay_buffer_partial, full_rollout = self._split_rollout_by_partial(generated_batch)
             replay_buffer_partial = self._post_process_partial_rollout(replay_buffer_partial, None)
+            replay_buffer_partial = self._concat_with_left_padding(
+                replay_buffer_partial, rb_partial_remainder
+            )
+
             replay_buffer_full = self._concat_with_left_padding(
                 replay_buffer_full, full_rollout
             )
@@ -1545,7 +1565,7 @@ class RayPPOTrainer(object):
             # No enough data to train, generate more.
             # TODO: make the train_batch_size * n * 10 a configurable parameter.
             desired_gen_batch_size = max(desired_num - self._buffer_size(replay_buffer_full),
-                                         train_batch_size * n * 5)
+                                         train_batch_size * n * 2)
             (replay_buffer_partial, replay_buffer_full) = generate_one_round(
                 desired_gen_batch_size, replay_buffer_partial, replay_buffer_full
             )

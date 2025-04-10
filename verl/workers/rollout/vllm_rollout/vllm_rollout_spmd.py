@@ -310,13 +310,13 @@ class vLLMRollout(BaseRollout):
                         is_partial = (
                             output.outputs[sample_id].finish_reason == "length"
                             and (
+                                # Avoid the length exceeding global max tokens
                                 # TODO: this does not count original prompt ids.
                                 # Need to consider the factor.
                                 (
                                     len(output.prompt_token_ids) +
                                     len(output.outputs[sample_id].token_ids)
-                                ) <
-                                self.sampling_params.max_tokens
+                                ) < self.sampling_params.max_tokens
                             )
                         )
                         response_is_partial.append(is_partial)
