@@ -1412,7 +1412,7 @@ class RayPPOTrainer(object):
             tensor = tensor[:, shared_padding_size:]
             partial_rollouts.batch[key] = tensor
             if key == "input_ids":
-                total_padding = (pad_prompt_left + pad_response_right).squeeze(-1).numpy()
+                total_padding = (pad_prompt_left + pad_response_right).squeeze(-1).numpy() - shared_padding_size
                 raw_input_ids = np.empty((batch_size,), dtype=object)
                 for i, p in enumerate(total_padding.tolist()):
                     raw_input_ids[i] = tensor.numpy()[i, p:].tolist()
