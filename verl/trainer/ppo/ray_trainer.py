@@ -1413,10 +1413,9 @@ class RayPPOTrainer(object):
             partial_rollouts.batch[key] = tensor
             if key == "input_ids":
                 total_padding = (pad_prompt_left + pad_response_right).squeeze(-1).numpy()
-                raw_input_ids = np.array([
-                    t[p:]
-                    for (t, p) in zip(tensor.numpy(), total_padding)
-                ], dtype=object)
+                raw_input_ids = np.empty((batch_size,), dtype=object)
+                for i, p in enumerate(total_padding.tolist()):
+                    raw_input_ids[i] = tensor.numpy()[i, p:].tolist()
                 partial_rollouts.non_tensor_batch['raw_prompt_ids'] = raw_input_ids
 
         # 3. concatenate with existing replay buffer partial (Should not exist?)
