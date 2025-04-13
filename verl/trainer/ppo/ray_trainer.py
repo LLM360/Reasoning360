@@ -550,6 +550,7 @@ class RayPPOTrainer(object):
     def _validate(self):
         data_source_lst = []
         reward_extra_infos_dict: dict[str, list] = defaultdict(list)
+        dataset_lst = []
 
         # Lists to collect samples for the table
         sample_inputs = []
@@ -654,7 +655,7 @@ class RayPPOTrainer(object):
             assert len(lst) == 0 or len(lst) == len(sample_scores), (f"{key_info}: {len(lst)=}, {len(sample_scores)=}")
         
         data_sources = np.concatenate(data_source_lst, axis=0)
-        datasets = np.concatenate(dataset_lst, axis=0)
+        datasets = np.concatenate(dataset_lst, axis=0)  # Concatenate datasets
 
         data_src2var2metric2val = process_validation_metrics(data_sources, sample_inputs, reward_extra_infos_dict)
         metric_dict = {}
@@ -669,6 +670,21 @@ class RayPPOTrainer(object):
                         metric_sec = "val-aux"
                     pfx = f"{metric_sec}/{data_source}/{var_name}/{metric_name}"
                     metric_dict[pfx] = metric_val
+                    
+        # Calculate the mean reward for each data source and dataset
+        data_source_dataset_reward = {}
+        for i in range(len(sample_scores)):
+            data_source = data_sources[i]
+            dataset = datasets[i]
+            key = (data_source, dataset)
+            if key not in data_source_dataset_reward:
+                data_source_dataset_reward[key] = []
+            data_source_dataset_reward[key].append(sample_scores[i])
+
+        # Record the mean reward for each data source and dataset
+        for (data_source, dataset), rewards in data_source_dataset_reward.items():
+            metric_dict[f"val/test_score/{data_source}/{dataset}"] = np.mean(rewards)
+            
         return metric_dict
 
     def init_workers(self):
