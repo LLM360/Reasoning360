@@ -738,6 +738,14 @@ check_{fn_name}()
                     "prompt": prompt,
                     "reference": solution,
                     "dataset": "PrimeIntellect",
+                    "function_name": fn_name,
+                },
+            }
+        
+        return process_fn
+    
+    # Process train and test splits
+    train_dataset = dataset.map(
         function=make_map_fn("train"),
         with_indices=True,
         num_proc=64,
