@@ -160,5 +160,6 @@ trainer:
   critic_warmup: 0
   resume_mode: disable
   val_generations_to_log_to_wandb: 0
+  remove_previous_ckpt_in_save: False
   default_hdfs_dir: ~/experiments/gsm8k/ppo/${trainer.experiment_name}
   default_local_dir: checkpoints/${trainer.project_name}/${trainer.experiment_name}

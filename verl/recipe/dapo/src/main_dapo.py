@@ -14,7 +14,7 @@
 """
 Note that we don't combine the main with ray_trainer as ray_trainer is used by other main.
 """
-from verl.trainer.ppo.ray_trainer import RayPPOTrainer
+from .dapo_ray_trainer import RayDAPOTrainer
 
 import os
 import ray
@@ -49,7 +49,7 @@ def get_custom_reward_fn(config):
     return getattr(module, function_name)
 
 
-@hydra.main(config_path='config', config_name='ppo_trainer', version_base=None)
+@hydra.main(config_path='config', config_name='dapo_trainer', version_base=None)
 def main(config):
     run_ppo(config)
 
@@ -107,7 +107,6 @@ class TaskRunner:
         else:
             raise NotImplementedError
 
-
         from verl.trainer.ppo.ray_trainer import ResourcePoolManager, Role
 
         role_worker_mapping = {
@@ -142,6 +141,11 @@ class TaskRunner:
             role_worker_mapping[Role.RewardModel] = ray.remote(RewardModelWorker)
             mapping[Role.RewardModel] = global_pool_id
 
+        # reference model
+        if config.algorithm.use_kl_in_reward or config.actor_rollout_ref.actor.use_kl_loss:
+            role_worker_mapping[Role.RefPolicy] = ray.remote(ActorRolloutRefWorker)
+            mapping[Role.RefPolicy] = global_pool_id
+
         reward_manager_name = config.reward_model.get("reward_manager", "naive")
         if reward_manager_name == 'naive':
             from verl.workers.reward_manager import NaiveRewardManager
@@ -152,53 +156,44 @@ class TaskRunner:
         elif reward_manager_name == 'dapo':
             from verl.workers.reward_manager import DAPORewardManager
             reward_manager_cls = DAPORewardManager
-        # NOTE: added by Reasoning360
-        elif reward_manager_name == "naive_parallel":
-            from verl.workers.reward_manager import NaiveParallelRewardManager
-            reward_manager_cls = NaiveParallelRewardManager
-        elif reward_manager_name == "llm_judge":
-            from verl.workers.reward_manager import LLMJudgeRewardManager
-            reward_manager_cls = LLMJudgeRewardManager
         else:
+
             raise NotImplementedError
 
         compute_score = get_custom_reward_fn(config)
-        reward_fn = reward_manager_cls(
-            tokenizer=tokenizer,
-            num_examine=0,
-            compute_score=compute_score,
-            reward_fn_key=config.data.reward_fn_key,
-            max_resp_len=config.data.max_response_length,
-            overlong_buffer_cfg=config.reward_model.overlong_buffer,
-            # NOTE: added by Reasoning360
-            reward_metric=config.reward_model.get("reward_metric", None),
-        )
+        reward_fn = reward_manager_cls(tokenizer=tokenizer,
+                                       num_examine=0,
+                                       compute_score=compute_score,
+                                       reward_fn_key=config.data.reward_fn_key,
+                                       max_resp_len=config.data.max_response_length,
+                                       overlong_buffer_cfg=config.reward_model.overlong_buffer,
+                                       # NOTE: added by Reasoning360 # TODO remove this hard-coding...
+                                       reward_metric=config.reward_model.get("reward_metric", None),
+                                       )
 
         # Note that we always use function-based RM for validation
-        val_reward_fn = reward_manager_cls(
-            tokenizer=tokenizer,
-            num_examine=1,
-            compute_score=compute_score,
-            reward_fn_key=config.data.reward_fn_key,
-            max_resp_len=config.data.max_response_length,
-            overlong_buffer_cfg=config.reward_model.overlong_buffer,
-            # NOTE: added by Reasoning360
-            reward_metric=config.reward_model.get("reward_metric", None),
-        )
-
+        val_reward_fn = reward_manager_cls(tokenizer=tokenizer,
+                                           num_examine=1,
+                                           compute_score=compute_score,
+                                           reward_fn_key=config.data.reward_fn_key,
+                                           max_resp_len=config.data.max_response_length,
+                                           overlong_buffer_cfg=config.reward_model.overlong_buffer,
+                                           # NOTE: added by Reasoning360 # TODO remove this hard-coding...
+                                           reward_metric=config.reward_model.get("reward_metric", None),
+                                       )
         resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=mapping)
 
-        trainer = RayPPOTrainer(config=config,
-                                tokenizer=tokenizer,
-                                processor=processor,
-                                role_worker_mapping=role_worker_mapping,
-                                resource_pool_manager=resource_pool_manager,
-                                ray_worker_group_cls=ray_worker_group_cls,
-                                reward_fn=reward_fn,
-                                val_reward_fn=val_reward_fn)
+        trainer = RayDAPOTrainer(config=config,
+                                 tokenizer=tokenizer,
+                                 processor=processor,
+                                 role_worker_mapping=role_worker_mapping,
+                                 resource_pool_manager=resource_pool_manager,
+                                 ray_worker_group_cls=ray_worker_group_cls,
+                                 reward_fn=reward_fn,
+                                 val_reward_fn=val_reward_fn)
         trainer.init_workers()
         trainer.fit()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

@@ -26,7 +26,8 @@ export PYTHONPATH=/Reasoning360:$PYTHONPATH
 
 WORKING_DIR=${HOME}/Reasoning360
 MOUNT_WORKING_DIR=/Reasoning360
-IMAGE_PATH=${HOME}/Reasoning360/docker/images/verl_megatron_v2.sqsh
+# IMAGE_PATH=${HOME}/Reasoning360/docker/images/verl_megatron_v2.sqsh
+IMAGE_PATH=${HOME}/Reasoning360/docker/images/verl_v3.sqsh
 
 # Data config
 DATA_DIR=${MOUNT_WORKING_DIR}/data
@@ -36,7 +37,8 @@ train_files="['$deepscaler_train_path']"
 test_files="['$aime_test_path']"
 
 # Model config
-BASE_MODEL=deepseek-ai/DeepSeek-R1-Distill-Qwen-32B
+BASE_MODEL=Qwen/Qwen2.5-32B
+# BASE_MODEL=deepseek-ai/DeepSeek-R1-Distill-Qwen-32B
 # BASE_MODEL=deepseek-ai/DeepSeek-R1-Distill-Qwen-14B
 # BASE_MODEL=deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
 # BASE_MODEL=deepseek-ai/DeepSeek-R1-Distill-Llama-70B
@@ -51,7 +53,7 @@ ROLLOUT_TP_SIZE=8
 
 # Log config
 WANDB_PROJECT=Reasoning360
-WANDB_EXPERIMENT_NAME=math-${BASE_MODEL##*/}-megatron
+WANDB_EXPERIMENT_NAME=taylor-32B-docker-ppo-math-${BASE_MODEL##*/}-${SLURM_JOB_ID}
 
 echo "Node list: ${nodes[@]}"
 
@@ -119,9 +121,9 @@ cmd="python3 /Reasoning360/verl/trainer/main_ppo.py  --config-path=/Reasoning360
     trainer.n_gpus_per_node=8 \
     +trainer.val_before_train=True \
     trainer.nnodes=$worker_num \
-    trainer.save_freq=-1 \
-    trainer.test_freq=20 \
-    trainer.total_epochs=10"
+    trainer.save_freq=25 \
+    trainer.test_freq=5 \
+    trainer.total_epochs=5"
 
 node_i=${nodes[worker_num - 1]}
 echo "================================================"

@@ -152,7 +152,7 @@ Assistant: <think>
             data = {
                 "data_source": data_source,
                 "prompt": [],
-                "processed_input": prompt.replace("{{prompt}}", question),
+                "raw_prompt": prompt.replace("{{prompt}}", question),
                 "ability": "math",
                 "apply_chat_template": False,
                 "reward_model": {"style": "rule", "ground_truth": answer},
