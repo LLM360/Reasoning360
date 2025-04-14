@@ -60,7 +60,7 @@ test = [
 ]
 prime = ["pyext"]
 gpu = ["liger-kernel", "flash-attn"]
-sglang = ["sglang[all]==0.4.4"]
+sglang = ["sglang[all]==0.4.5"]
 math = ["math-verify"]  # Add math-verify as an optional dependency
 
 # URLs
