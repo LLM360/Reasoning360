@@ -16,7 +16,7 @@ pylatexenc
 ray[default]
 tensordict<0.6
 torchdata
-transformers==4.47.0
+transformers==4.51.3
 vllm==0.6.3
 wandb
 liger-kernel
