@@ -102,6 +102,11 @@ def _default_compute_score(
         from . import geo3k
 
         res = geo3k.compute_score(solution_str, ground_truth)
+        
+    elif data_source in ["codeio-pyedu"]:
+        from . import codeio
+        res = codeio.compute_score(solution_str, ground_truth)
+
     elif data_source.startswith("code"):
         from . import coder1
 
