@@ -136,9 +136,9 @@ if __name__ == "__main__":
 
     prompt = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the response. The reasoning process is enclosed within <think> </think> i.e., <think> reasoning process here </think> respond to the user's question here.
 
-User: {{prompt}} Please put your answer in \\boxed{} tags.
-Assistant: <think>
-"""
+    User: {{prompt}} Please put your answer in \\boxed{} tags.
+    Assistant: <think>
+    """
 
     # add a row to each data item that represents a unique id
     def make_map_fn(split, data_source):
