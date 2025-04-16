@@ -149,3 +149,6 @@ data
 
 # docker
 docker/images/
+
+# untracked files
+*.txt
