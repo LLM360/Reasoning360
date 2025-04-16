@@ -107,7 +107,7 @@ def extract_solution(solution_str):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--local_dir", default="data/bigmath_preview_zero_style_filter")
+    parser.add_argument("--local_dir", default="data/bigmath_preview_filtered_mar21_r1_instruction_style")
     parser.add_argument("--hdfs_dir", default=None)
 
     args = parser.parse_args()
@@ -131,15 +131,9 @@ if __name__ == "__main__":
 
     print(f"Loading the {test_data_sources} dataset from huggingface...", flush=True)
     instruction_following = (
-        "Let's think step by step and output the final answer within \\boxed{}."
+        "Please output the final answer within \\boxed{}."
     )
 
-
-    prompt = """A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the response. The reasoning process is enclosed within <think> </think> i.e., <think> reasoning process here </think> respond to the user's question here.
-
-User: {{prompt}} Please put your answer in \\boxed{} tags.
-Assistant: <think>
-"""
 
     # add a row to each data item that represents a unique id
     def make_map_fn(split, data_source):
@@ -147,15 +141,17 @@ Assistant: <think>
         def process_fn(example, idx):
             question = example.pop("problem")
 
-            # question = question + " " + instruction_following
+            question = question + " " + instruction_following
 
             answer = example.pop("answer")
             data = {
                 "data_source": data_source,
-                "prompt": [],
-                "raw_prompt": prompt.replace("{{prompt}}", question),
+                "prompt": [{
+                    "role": "user",
+                    "content": question
+                }],
                 "ability": "math",
-                "apply_chat_template": False,
+                "apply_chat_template": True,
                 "reward_model": {"style": "rule", "ground_truth": answer},
                 "extra_info": {"split": split, 
                                "index": idx,

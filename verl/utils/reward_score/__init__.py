@@ -14,25 +14,20 @@
 # from . import gsm8k, math, prime_math, prime_code
 
 
-def _default_compute_score(
-    data_source, solution_str, ground_truth, extra_info=None, reward_metric=None
-):
+def _default_compute_score(data_source, solution_str, ground_truth, reward_metric=None, extra_info=None):
     if data_source == "openai/gsm8k":
         from . import gsm8k
-
         res = gsm8k.compute_score(solution_str, ground_truth)
-    elif data_source in ["lighteval/MATH", "DigitalLearningGmbH/MATH-lighteval"]:
+    elif data_source in ['lighteval/MATH', 'DigitalLearningGmbH/MATH-lighteval']:
         from . import math
-
         res = math.compute_score(solution_str, ground_truth)
+        # Use Math-Verify (https://github.com/huggingface/Math-Verify) for better evaluation accuracy
 
-        # [Optional] Math-Verify Integration
-        # For enhanced accuracy, consider utilizing Math-Verify (https://github.com/huggingface/Math-Verify).
-        # Note: Math-Verify needs to be manually installed via pip: `pip install math-verify`.
-        # To use it, override the `compute_score` function with the following implementation:
-
-        # from . import math_verify
-        # res = math_verify.compute_score(solution_str, ground_truth)
+        # from . import math_verify # from . import math
+        # res = math_verify.compute_score(solution_str, ground_truth) # res = math.compute_score(solution_str, ground_truth)
+    elif data_source == 'math_dapo' or data_source.startswith("aime"): # TWK NOTE: commented out original filtering to DAPO function.
+        from . import math_dapo
+        res = math_dapo.compute_score(solution_str, ground_truth)
     elif data_source in [
         "numina_aops_forum",
         "numina_synthetic_math",
@@ -48,6 +43,9 @@ def _default_compute_score(
         from . import prime_code
 
         res = prime_code.compute_score(solution_str, ground_truth, continuous=True)
+    elif data_source in ['hiyouga/geometry3k']:
+        from . import geo3k
+        res = geo3k.compute_score(solution_str, ground_truth)
     # NOTE: added by Reasoning360
     elif data_source in [
         "agentica-org/DeepScaleR-Preview-Dataset",
@@ -63,7 +61,7 @@ def _default_compute_score(
         "SDSB/big_math_partial_mar21_filtered_basic",
         "SDSB/aime_repeated_8x",
         "SDSB/amc_repeated_4x",
-    ]:
+    ]:  
         if reward_metric == "prime_math" or reward_metric is None:
             from . import prime_math
 
@@ -98,16 +96,14 @@ def _default_compute_score(
                 add_boxed(solution2answer(str(ground_truth))),
                 math_mode="math_verify",
             )
-    elif data_source in ["hiyouga/geometry3k"]:
-        from . import geo3k
-
-        res = geo3k.compute_score(solution_str, ground_truth)
+        elif reward_metric == "dapo":
+            from . import naive_dapo
+            res = naive_dapo.compute_score(solution_str, ground_truth, extra_info=extra_info)
         
     elif data_source in ["codeio-pyedu"]:
         from . import codeio
         res = codeio.compute_score(solution_str, ground_truth)
-
-    elif data_source.startswith("code"):
+    elif data_source.startswith('codegen'):
         from . import coder1
 
         res = coder1.compute_score(solution_str, ground_truth, extra_info=extra_info)
@@ -115,9 +111,11 @@ def _default_compute_score(
         from . import puzzles_dataset
         res = puzzles_dataset.compute_score(solution_str, ground_truth)
     else:
-        raise NotImplementedError
+        raise NotImplementedError(f"Reward function is not implemented for {data_source=}")
 
-    if isinstance(res, (int, float, bool)):
+    if isinstance(res, dict):
+        return res
+    elif isinstance(res, (int, float, bool)):
         return float(res)
     else:
         return float(res[0])

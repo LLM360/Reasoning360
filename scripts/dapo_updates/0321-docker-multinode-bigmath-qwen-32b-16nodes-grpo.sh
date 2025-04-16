@@ -1,16 +1,51 @@
 #!/bin/bash
+#SBATCH --job-name=rl-reasoning-taylor
 #SBATCH --partition=mbzuai
-#SBATCH --job-name=rl
 #SBATCH --nodes=16
 #SBATCH --ntasks=16
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
-#SBATCH --exclusive
-#SBATCH --cpus-per-task=64
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=512G
 #SBATCH --output=slurm/verl-%j.out
 #SBATCH --error=slurm/verl-%j.err
-#SBATCH --exclude=g42-odin-h100-[106,342,358,396]
 #SBATCH --exclusive
+#SBATCH --time=96:00:00
+
+# sleep 172800
+#!/bin/bash
+
+# Get the list of allocated nodes
+nodes=( $(scontrol show hostnames "$SLURM_JOB_NODELIST") )
+echo "Nodes to check: ${nodes[@]}"
+
+# We'll track PIDs so we can wait on them and detect errors
+declare -A pids
+
+# Spawn each check in the background
+for host in "${nodes[@]}"; do
+    echo "Spawning GPU check on node: $host"
+    srun --nodes=1 --ntasks=1 --nodelist="$host" \
+         ~/Reasoning360/scripts/check_gpu.sh &
+    pids["$host"]=$!
+done
+
+# Now wait for each job to finish and capture errors
+error_found=0
+for host in "${nodes[@]}"; do
+    # wait returns the exit code of the process
+    if ! wait "${pids[$host]}"; then
+        echo "ERROR: Found GPU usage by other users on $host. Exiting."
+        error_found=1
+    fi
+done
+
+if [[ $error_found -eq 1 ]]; then
+    exit 1
+fi
+
+echo "=== No leftover GPU usage found on all allocated nodes. ==="
+echo "Proceeding with the main job..."
 
 
 nodes=( $( scontrol show hostnames $SLURM_JOB_NODELIST ) )
@@ -19,49 +54,42 @@ head_node_ip=$(srun --nodes=1 --ntasks=1 -w "$head_node" hostname --ip-address)
 port=6379
 address_head=$head_node_ip:$port
 
-export VLLM_ATTENTION_BACKEND=XFORMERS
-export GLOO_SOCKET_IFNAME=ens10f0np0
-export worker_num=$SLURM_NNODES
-export PYTHONPATH=/Reasoning360:$PYTHONPATH
+# 176.56.202.149
+# address_head=176.56.202.149:6379
 
+# Experiment config
 WORKING_DIR=${HOME}/Reasoning360
 MOUNT_WORKING_DIR=/Reasoning360
-# IMAGE_PATH=${HOME}/Reasoning360/docker/images/verl_megatron_v2.sqsh
 IMAGE_PATH=${HOME}/Reasoning360/docker/images/verl_v3.sqsh
 
-# Data config
-DATA_DIR=${MOUNT_WORKING_DIR}/data
-deepscaler_train_path=${DATA_DIR}/deepscaler_preview/train.parquet
-aime_test_path=${DATA_DIR}/deepscaler_preview/aime.parquet
-amc_test_path=${DATA_DIR}/deepscaler_preview/amc.parquet
-math_test_path=${DATA_DIR}/deepscaler_preview/math.parquet
-minerva_test_path=${DATA_DIR}/deepscaler_preview/minerva.parquet
-olympiad_bench_test_path=${DATA_DIR}/deepscaler_preview/olympiad_bench.parquet
+DATA_DIR=${WORKING_DIR}/data
+# math_train_path=${DATA_DIR}/math/train.parquet
+orz_train_path=${DATA_DIR}/bigmath/train.parquet
+# math_test_path=${DATA_DIR}/math/test.parquet
+aime_test_path=${DATA_DIR}/bigmath/aime_repeated_8x.parquet
+amc_test_path=${DATA_DIR}/bigmath/amc_repeated_4x.parquet
+math_test_path=${DATA_DIR}/bigmath/math.parquet
 
-train_files="[${deepscaler_train_path}]"
-test_files="[${aime_test_path},${amc_test_path},${math_test_path},${minerva_test_path},${olympiad_bench_test_path}]"
-
-# Model config
+train_files="['$orz_train_path']"
+test_files="['$aime_test_path', '$amc_test_path', '$math_test_path']"
 # BASE_MODEL=Qwen/Qwen2.5-7B-Instruct
 BASE_MODEL=Qwen/Qwen2.5-32B
-# BASE_MODEL=deepseek-ai/DeepSeek-R1-Distill-Qwen-32B
-# BASE_MODEL=deepseek-ai/DeepSeek-R1-Distill-Qwen-14B
-# BASE_MODEL=deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
-# BASE_MODEL=deepseek-ai/DeepSeek-R1-Distill-Llama-70B
-# BASE_MODEL=meta-llama/Llama-3.3-70B-Instruct
-# BASE_MODEL=meta-llama/Meta-Llama-3-8B-Instruct
-
-# Parallel config
-SP_SIZE=2
-ROLLOUT_TP_SIZE=8
 
 WANDB_PROJECT=Reasoning360
-WANDB_EXPERIMENT_NAME=taylor-32B-docker-grpo-math-${BASE_MODEL##*/}-${SLURM_JOB_ID}
+WANDB_EXPERIMENT_NAME=taylor-32B-test-bigmath-grpo-${BASE_MODEL##*/}
+
+export worker_num=$SLURM_NNODES
+# export worker_num=4
+export VLLM_ATTENTION_BACKEND=XFORMERS
+export HYDRA_FULL_ERROR=1
+export GLOO_SOCKET_IFNAME=ens10f0np0
+export PYTHONPATH=/Reasoning360:$PYTHONPATH
 
 echo "Node list: ${nodes[@]}"
 
 srun --container-image=$IMAGE_PATH --container-mounts="${WORKING_DIR}:/Reasoning360" --nodes=$worker_num --ntasks=$worker_num --ntasks-per-node=1 rm -rf /tmp/ray/ray_current_cluster
 
+# Start Ray head node
 echo "================================================"
 echo "Starting HEAD at $head_node"
 srun --container-image=$IMAGE_PATH --container-mounts="${WORKING_DIR}:/Reasoning360" --nodes=1 --ntasks=1 -w "$head_node" --export=ALL \
@@ -69,6 +97,7 @@ srun --container-image=$IMAGE_PATH --container-mounts="${WORKING_DIR}:/Reasoning
 sleep 30
 echo "RAY HEAD STARTED!"
 
+# Start Ray worker nodes
 echo "================================================"
 for ((i = 1; i < worker_num - 1; i++)); do
     node_i=${nodes[$i]}
@@ -79,15 +108,18 @@ for ((i = 1; i < worker_num - 1; i++)); do
     echo "RAY WORKER $i STARTED!"
 done
 
+# address_head=176.56.202.149:6379
+# ray start --address $address_head --num-cpus 96  --num-gpus 8
 
-cmd="python3 /Reasoning360/verl/trainer/main_ppo.py  --config-path=/Reasoning360/verl/trainer/config --config-name='ppo_trainer' \
+# Start training
+cmd="python3 /Reasoning360/verl/trainer/main_ppo.py --config-path=/Reasoning360/verl/trainer/config --config-name='ppo_trainer' \
     algorithm.adv_estimator=grpo \
     data.train_files="$train_files" \
     data.val_files="$test_files" \
     data.train_batch_size=128 \
-    data.val_batch_size=2048 \
+    data.val_batch_size=1024 \
     data.max_prompt_length=1024 \
-    data.max_response_length=3072 \
+    data.max_response_length=8196 \
     actor_rollout_ref.model.path=$BASE_MODEL \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
@@ -95,17 +127,17 @@ cmd="python3 /Reasoning360/verl/trainer/main_ppo.py  --config-path=/Reasoning360
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
     actor_rollout_ref.actor.fsdp_config.param_offload=False \
     actor_rollout_ref.actor.optim.lr=1e-6 \
-    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=32 \
+    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=8 \
     actor_rollout_ref.actor.ppo_mini_batch_size=128 \
     actor_rollout_ref.actor.strategy="fsdp" \
-    actor_rollout_ref.actor.ulysses_sequence_parallel_size=${SP_SIZE} \
+    actor_rollout_ref.actor.ulysses_sequence_parallel_size=1 \
     actor_rollout_ref.actor.use_kl_loss=True \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=32 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
     actor_rollout_ref.rollout.name=vllm \
-    actor_rollout_ref.rollout.tensor_model_parallel_size=${ROLLOUT_TP_SIZE} \
+    actor_rollout_ref.rollout.tensor_model_parallel_size=8 \
     actor_rollout_ref.rollout.n=64 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=32 \
@@ -114,12 +146,13 @@ cmd="python3 /Reasoning360/verl/trainer/main_ppo.py  --config-path=/Reasoning360
     trainer.logger=['console','wandb'] \
     trainer.project_name=${WANDB_PROJECT} \
     trainer.experiment_name=${WANDB_EXPERIMENT_NAME} \
-    +trainer.val_before_train=True \
+    +trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=$worker_num \
     trainer.save_freq=25 \
     trainer.test_freq=5 \
-    trainer.total_epochs=5"
+    trainer.total_epochs=5 \
+    trainer.val_generations_to_log_to_wandb=30"
 
 node_i=${nodes[worker_num - 1]}
 echo "================================================"
@@ -131,5 +164,3 @@ srun --overlap --container-image=$IMAGE_PATH --container-mounts="${WORKING_DIR}:
     ray status
 srun --overlap --container-image=$IMAGE_PATH --container-mounts="${WORKING_DIR}:/Reasoning360" --nodes=1 --ntasks=1 -w "$node_i" --export=ALL \
     bash -c "cd /Reasoning360/ && pip install -e . && $full_cmd" 
-
-

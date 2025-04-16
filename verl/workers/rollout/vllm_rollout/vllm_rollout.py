@@ -200,6 +200,7 @@ class vLLMRollout(BaseRollout):
 
         do_sample = prompts.meta_info.get("do_sample", True)
         is_validate = prompts.meta_info.get("validate", False)
+
         if not do_sample:
             kwargs = {
                 "best_of": 1,
@@ -208,7 +209,7 @@ class vLLMRollout(BaseRollout):
                 "min_p": 0.0,
                 "temperature": 0,
                 "n": 1,  # if greedy, only 1 response
-            }
+            }   
         elif is_validate:
             # TODO: try **
             kwargs = {
@@ -241,7 +242,7 @@ class vLLMRollout(BaseRollout):
                     response, self.config.response_length, self.pad_token_id
                 )
                 # log_probs = pad_sequence_to_length(log_probs, self.config.response_length, self.pad_token_id)
-
+            
             # utilize current sampling params
             if self.sampling_params.n > 1 and do_sample:
                 idx = idx.repeat_interleave(self.sampling_params.n, dim=0)

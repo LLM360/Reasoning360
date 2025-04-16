@@ -75,6 +75,99 @@ def extract_code_from_string(solution_str):
     return "\n".join(code_blocks).strip()
 
 
+def fuzzy_equal(actual: str, expected: str, tolerance: float = 1e-6) -> bool:
+    """
+    Compare two outputs line by line and element by element for approximate equality.
+    Handles:
+    1. Integer and floating-point number comparison with tolerance
+    2. Case-insensitive comparison for yes/no
+    
+    Args:
+        actual: The actual output from code execution
+        expected: The expected output
+        tolerance: Tolerance for floating point number comparison
+        
+    Returns:
+        bool: True if outputs are approximately equal
+    """
+    # Save original values for debugging
+    original_actual = actual
+    original_expected = expected
+    
+    # Normalize line endings
+    actual = actual.strip().replace('\r\n', '\n')
+    expected = expected.strip().replace('\r\n', '\n')
+    
+    # If exact match after normalization, return early
+    if actual == expected:
+        return True
+    
+    # Split into lines
+    actual_lines = actual.split('\n')
+    expected_lines = expected.split('\n')
+    
+    # If different number of lines, they're definitely not equal
+    if len(actual_lines) != len(expected_lines):
+        return False
+    
+    # Track fuzzy matches for debugging
+    fuzzy_match_reasons = []
+    
+    # Compare each line
+    for i, (actual_line, expected_line) in enumerate(zip(actual_lines, expected_lines)):
+        # If lines match exactly, continue
+        if actual_line == expected_line:
+            continue
+            
+        # Split into tokens by whitespace
+        actual_tokens = actual_line.split()
+        expected_tokens = expected_line.split()
+        
+        # If different number of tokens, they're not equal
+        if len(actual_tokens) != len(expected_tokens):
+            return False
+        
+        # Compare each token
+        for j, (actual_token, expected_token) in enumerate(zip(actual_tokens, expected_tokens)):
+            # If tokens match exactly, continue
+            if actual_token == expected_token:
+                continue
+                
+            # For yes/no, use case-insensitive comparison
+            if actual_token.lower() in ["yes", "no"] and expected_token.lower() in ["yes", "no"]:
+                if actual_token.lower() == expected_token.lower():
+                    fuzzy_match_reasons.append(f"Line {i+1}, Token {j+1}: Case-insensitive yes/no match '{actual_token}' ≈ '{expected_token}'")
+                    continue
+                else:
+                    return False
+            
+            # Try numeric comparison
+            try:
+                actual_num = float(actual_token)
+                expected_num = float(expected_token)
+                diff = abs(actual_num - expected_num)
+                
+                if diff <= tolerance:
+                    fuzzy_match_reasons.append(f"Line {i+1}, Token {j+1}: Numeric match '{actual_token}' ≈ '{expected_token}' (diff: {diff})")
+                    continue
+                else:
+                    return False
+            except ValueError:
+                # Not numeric values
+                return False
+    
+    # Output fuzzy match information if any occurred
+    if fuzzy_match_reasons:
+        print(f"🔍 FUZZY MATCH - Outputs approximately equal:")
+        print(f"  Expected: {repr(original_expected)}")
+        print(f"  Actual:   {repr(original_actual)}")
+        print(f"  Reasons for fuzzy matching:")
+        for reason in fuzzy_match_reasons:
+            print(f"    • {reason}")
+    
+    # If we made it here, all lines are approximately equal
+    return True
+
 def _compute_score(
     solution_str, ground_truth, extra_info, format_reward=0.0, answer_reward=1.0
 ):
@@ -150,7 +243,7 @@ def _compute_score(
             ]
             for future in as_completed(futures):
                 succ, output, stdin, stdout = future.result()
-                if not succ or output.strip() != stdout.strip():
+                if not succ or not fuzzy_equal(output.strip(), stdout.strip()):
                     output = output[:_MAX_CHAR_DISPLAY]  # truncate output to print
                     reward_log.append(
                         "!" * 16
@@ -199,5 +292,5 @@ def compute_score(
         + f"Final Rward = {score}"
         + marker * 16
     )
-    print(reward_log + "\n\n")
+    # print(reward_log + "\n\n")
     return score

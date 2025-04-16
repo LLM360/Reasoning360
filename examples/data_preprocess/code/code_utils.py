@@ -13,8 +13,7 @@ EMPTY_RETURN = {
     "prompt": None,
     "ability": None,
     "reward_model": None,
-    "extra_info": None,
-    "filter_info": None,
+    "extra_info": None
 }
 SYSTEM_PROMPT = """You are a helpful programming assistant. \
 The user will ask you a question and you as the assistant solve it. \

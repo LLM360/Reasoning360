@@ -20,6 +20,8 @@ from verl.utils.reward_score.coder1 import (
     code_exec,
     remote_check_stdio,
     _ERROR_MSG_PREFIX,
+    extract_code_from_string,
+    fuzzy_equal
 )
 
 from examples.data_preprocess.code.code_utils import *
@@ -131,12 +133,12 @@ def kodcode():  # Thanks!!! to Zhangchen and Yueqin
                 prompt += f"\n\nNote that the output function should be {str(example['test_info']).strip()}."
 
             return {
-                "data_source": "code-kodcode",
+                "data_source": "codegen-kodcode",
                 "prompt": [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": prompt},
                 ],
-                "ability": "coding",
+                "ability": "codegen",
                 "reward_model": {
                     "style": "rule",
                     "ground_truth": json.dumps({"pytest": test_code}),
@@ -323,7 +325,7 @@ for i, o in zip(_inputs, _outputs):
                         )
                     for future in as_completed(futures):
                         exec_succ, output, stdin, stdout = future.result()
-                        pass_test = exec_succ and output.strip() == stdout.strip()
+                        pass_test = exec_succ and fuzzy_equal(output.strip(), stdout.strip())
                         if not pass_test:
                             rich.print(f"[bold red]Test code failed for {source}")
                             print(example["solutions"][-1])
@@ -341,12 +343,12 @@ for i, o in zip(_inputs, _outputs):
 
             prompt = "\n".join(prompt_pieces)
             return {
-                "data_source": "code",
+                "data_source": "codegen-taco",
                 "prompt": [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": prompt},
                 ],
-                "ability": "coding",
+                "ability": "codegen",
                 "reward_model": {
                     "style": "rule",
                     "ground_truth": oracle,
@@ -370,95 +372,28 @@ for i, o in zip(_inputs, _outputs):
         num_proc=64,
         remove_columns=dataset.column_names,
         load_from_cache_file=False,
-    ).filter(lambda x: x != EMPTY_RETURN)
-    splits = dataset.train_test_split(
-        test_size=max(1, min(N_TESTSET_PER_DATASET, len(dataset) * 0.1)), seed=666
-    )
-    train_dataset = splits["train"]
-    test_dataset = splits["test"]
-
-    for t in dataset:
-        print(f"{t = }")
-        t["extra_info"]["split"] = "test"
+    ).filter(lambda x: x['reward_model'] is not None)
+    
+    if N_TESTSET_PER_DATASET == 0:
+        # Return no test samples if N_TESTSET_PER_DATASET is 0
+        test_dataset = datasets.Dataset.from_dict({
+            "data_source": [],
+            "prompt": [],
+            "ability": [],
+            "reward_model": [],
+            "extra_info": []
+        })
+        train_dataset = dataset
+    else:
+        splits = dataset.train_test_split(
+            test_size=min(N_TESTSET_PER_DATASET, len(dataset) * 0.1), seed=666
+        )
+        train_dataset = splits["train"]
+        test_dataset = splits["test"]
 
     print(f"Taco train set: {train_dataset}")
     print(f"Taco test set: {test_dataset}")
 
-    return train_dataset, test_dataset
-    train_dataset = dataset["train"]
-    test_dataset = dataset["valid"][:N_TESTSET_PER_DATASET]
-
-    # add a row to each data item that represents a unique id
-    def make_map_fn(split):
-
-        def process_fn(example, idx):
-            if "<image>" in example["description"]:
-                print("Description includes image, skipping...")
-                return EMPTY_RETURN
-
-            stdin_list = (
-                example["public_tests"]["input"]
-                + example["private_tests"]["input"]
-                + example["generated_tests"]["input"]
-            )
-            stdout_list = (
-                example["public_tests"]["output"]
-                + example["private_tests"]["output"]
-                + example["generated_tests"]["output"]
-            )
-
-            stdin_list, stdout_list = minimize_stdio(
-                stdin_list, stdout_list, max_n_tests
-            )
-            assert len(stdin_list) == len(stdout_list)
-            if len(stdin_list) == 0:
-                return EMPTY_RETURN
-
-            prompt = (
-                "Solve the programming task below in a Python markdown code block. "
-                "Each time, given inputs through STDIN (like those in the 'Input' section), the program "
-                "produces outputs through STDOUT (like those in the 'Output' section)."
-                f"\n\n{example['description'].strip()}"
-            )
-            return {
-                "data_source": "code",
-                "prompt": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-                "ability": "coding",
-                "reward_model": {
-                    "style": "rule",
-                    "ground_truth": json.dumps(
-                        {"inputs": stdin_list, "outputs": stdout_list}
-                    ),
-                },
-                "extra_info": {
-                    "split": split,
-                    "index": idx,
-                    "prompt": prompt,
-                    "reference": (
-                        example["solutions"]["solution"][0]
-                        if example["solutions"]["solution"]
-                        else ""
-                    ),
-                    "dataset": "deepmind/code_contests",
-                },
-            }
-
-        return process_fn
-
-    train_dataset = train_dataset.map(
-        function=make_map_fn("train"),
-        with_indices=True,
-        remove_columns=dataset.column_names,
-        load_from_cache_file=False,
-    ).filter(lambda x: x != EMPTY_RETURN)
-    test_dataset = test_dataset.map(
-        function=make_map_fn("test"), 
-        with_indices=True,
-        load_from_cache_file=False,
-    )
     return train_dataset, test_dataset
 
 
@@ -502,12 +437,12 @@ def leetcode2k():
                 return EMPTY_RETURN
 
             return {
-                "data_source": "code",
+                "data_source": "codegen-leetcode2k",
                 "prompt": [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": prompt},
                 ],
-                "ability": "coding",
+                "ability": "codegen",
                 "reward_model": {
                     "style": "rule",
                     "ground_truth": json.dumps({
@@ -572,12 +507,12 @@ def humaneval():
             return EMPTY_RETURN
         
         return {
-            "data_source": "code",
+            "data_source": "codegen-humaneval",
             "prompt": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
-            "ability": "coding",
+            "ability": "codegen",
             "reward_model": {
                 "style": "rule",
                 "ground_truth": json.dumps(
@@ -651,12 +586,12 @@ def mbpp():
                 return EMPTY_RETURN
             
             return {
-                "data_source": "code",
+                "data_source": "codegen-mbpp",
                 "prompt": [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": prompt},
                 ],
-                "ability": "coding",
+                "ability": "codegen",
                 "reward_model": {
                     "style": "rule",
                     "ground_truth": json.dumps(
@@ -692,6 +627,271 @@ def mbpp():
     print(f"MBPP test set: {test_dataset}")
     return train_dataset, test_dataset
 
+def primeintellect():
+    rich.print(Rule("Loading PrimeIntellect dataset..."))
+    dataset = load_dataset("agentica-org/DeepCoder-Preview-Dataset", "primeintellect", split="train")
+
+    # # random pick 1000 examples for test
+    # dataset = dataset.shuffle(seed=666).select(range(1000))
+    
+    def make_map_fn(split):
+        def process_fn(example, idx):
+            # Get the problem description
+            prompt = example["problem"]
+            
+            # Get the solution code
+            solution = example["solutions"][0] if example["solutions"] else ""
+            solution = extract_code_from_string(solution)
+            
+            # Process tests
+            tests = json.loads(example["tests"])
+            if not tests:
+                return EMPTY_RETURN
+                
+            # Handle different test types
+            if tests[0]["type"] == "function_call":
+                # Function call tests
+                fn_name = tests[0]["fn_name"]
+                test_code = f"""\
+def check_{fn_name}():
+"""
+                for test in tests:
+                    input_args = ", ".join([
+                        repr(arg) if isinstance(arg, (str, list, tuple, dict)) else str(arg)
+                        for arg in test["input"]
+                    ])
+                    expected_output = repr(test["output"][0]) if isinstance(test["output"][0], (str, list, tuple, dict)) else test["output"][0]
+                    test_code += f"""    assert {fn_name}({input_args}) == {expected_output}
+"""
+                test_code += f"""
+check_{fn_name}()
+"""
+                
+                # Validate the solution
+                full_code = f"{solution}\n{test_code}"
+                succ, err = code_exec(full_code)
+                if not succ:
+                    rich.print(f"[bold red]Test code failed for PrimeIntellect example {idx}")
+                    print(f"===========Full code===========")
+                    print(full_code)
+                    print(f"===========Error===========")
+                    print(err)
+                    return EMPTY_RETURN
+
+
+                    
+                oracle = json.dumps({"functional": test_code})
+                
+            elif tests[0]["type"] == "stdin_stdout":
+                # STDIN/STDOUT tests
+                stdin_list = []
+                stdout_list = []
+                for test in tests:
+                    stdin_list.append(test["input"])
+                    stdout_list.append(test["output"])
+                
+                # Validate the solution
+                with ThreadPoolExecutor(max_workers=min(len(stdin_list), 8)) as executor:
+                    futures = []
+                    for stdin, stdout in zip(stdin_list, stdout_list):
+                        futures.append(
+                            executor.submit(
+                                remote_check_stdio,
+                                solution,
+                                stdin,
+                                stdout,
+                            )
+                        )
+                    for future in as_completed(futures):
+                        exec_succ, output, stdin, stdout = future.result()
+                        pass_test = exec_succ and fuzzy_equal(output.strip(), stdout.strip())
+                        if not pass_test:
+                            rich.print(f"[bold red]Test code failed for PrimeIntellect example {idx}")
+                            print(f"===========Solution===========")
+                            print(solution)
+                            print(f"===========Input===========")
+                            print(stdin)
+                            print(f"===========Expected output===========")
+                            print(stdout)
+                            print(f"===========Actual output===========")
+                            print(output)
+                            return EMPTY_RETURN
+                
+                oracle = json.dumps({"inputs": stdin_list, "outputs": stdout_list})
+            else:
+                raise ValueError(f"Unknown test type: {tests[0]['type']}")
+            
+            return {
+                "data_source": "codegen-primeintellect",
+                "prompt": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                "ability": "codegen",
+                "reward_model": {
+                    "style": "rule",
+                    "ground_truth": oracle,
+                },
+                "extra_info": {
+                    "split": split,
+                    "index": idx,
+                    "prompt": prompt,
+                    "reference": solution,
+                    "dataset": "PrimeIntellect",
+                    "function_name": fn_name,
+                },
+            }
+        
+        return process_fn
+    
+    # Process train and test splits
+    train_dataset = dataset.map(
+        function=make_map_fn("train"),
+        with_indices=True,
+        num_proc=64,
+        remove_columns=dataset.column_names,
+        load_from_cache_file=False,
+    ).filter(lambda x: x['reward_model'] is not None)
+
+    # Split into train and test sets
+    if N_TESTSET_PER_DATASET == 0:
+        # Return no test samples if N_TESTSET_PER_DATASET is 0
+        test_dataset = datasets.Dataset.from_dict({
+            "data_source": [],
+            "prompt": [],
+            "ability": [],
+            "reward_model": [],
+            "extra_info": []
+        })
+        train_dataset = dataset
+    else:
+        splits = dataset.train_test_split(
+            test_size=min(N_TESTSET_PER_DATASET, len(dataset) * 0.1), seed=666
+        )
+        train_dataset = splits["train"].shuffle(seed=666)
+        test_dataset = splits["test"]
+
+    print(f"PrimeIntellect train set: {train_dataset}")
+    print(f"PrimeIntellect test set: {test_dataset}")
+    return train_dataset, test_dataset
+
+def livecodebench():
+    rich.print(Rule("Loading LiveCodeBench dataset..."))
+    # Load both train and test splits directly
+    train_dataset = load_dataset("agentica-org/DeepCoder-Preview-Dataset", "lcbv5", split="train")
+    test_dataset = load_dataset("agentica-org/DeepCoder-Preview-Dataset", "lcbv5", split="test")
+    
+    def make_map_fn(split):
+        def process_fn(example, idx):
+            # Get the problem description
+            problem_desc = example["problem"]
+            starter_code = example["starter_code"]
+            
+            # Create the prompt with the starter code 
+            prompt = f"{problem_desc}\n\nComplete the implementation using the provided starter code:\n```python\n{starter_code}\n```\n\nYour solution should implement the method(s) in the Solution class."
+            
+            # Process tests
+            tests = json.loads(example["tests"])
+            if not tests:
+                return EMPTY_RETURN
+            
+            # Process metadata to get function name
+            metadata = example["metadata"]
+            function_name = metadata.get("func_name")
+                
+            # Handle different test types
+            if tests[0]["testtype"] == "functional":
+                if not function_name:
+                    return EMPTY_RETURN
+                
+                # Function call tests
+                test_code = f"""\
+def check_{function_name}():
+"""
+                for test in tests:
+                    # Parse input string by splitting on '\n'
+                    input_parts = test["input"].split('\n')
+                    # Create proper comma-separated arguments for the function call
+                    input_args = ', '.join(input_parts)
+                    # Get the output value
+                    output_val = test["output"]
+                    
+                    test_code += f"""    assert Solution().{function_name}({input_args}) == {output_val}
+"""
+                    
+                test_code += f"""
+check_{function_name}()
+"""
+                
+                # For debugging - print a few examples
+                if idx < 20:  
+                    print(f"Generated test code for example {idx}:")
+                    print(test_code)
+                
+                oracle = json.dumps({"functional": test_code})
+                
+            elif tests[0]["testtype"] == "stdin":
+                # STDIN/STDOUT tests
+                stdin_list = []
+                stdout_list = []
+                for test in tests:
+                    stdin_list.append(test["input"])
+                    stdout_list.append(test["output"])
+
+                # For debugging - print a few examples
+                if idx < 20: 
+                    print(f"Generated test code for example {idx}:")
+                    for i in range(len(stdin_list)):
+                        print(f"Test {i+1}:")
+                        print(f"Input: {stdin_list[i]}")
+                        print(f"Output: {stdout_list[i]}")
+                
+                oracle = json.dumps({"inputs": stdin_list, "outputs": stdout_list})
+            else:
+                raise ValueError(f"Unknown test type: {tests[0]['testtype']}")
+            
+            return {
+                "data_source": "codegen-livecodebench",
+                "prompt": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                "ability": "codegen",
+                "reward_model": {
+                    "style": "rule",
+                    "ground_truth": oracle,
+                },
+                "extra_info": {
+                    "split": split,
+                    "index": idx,
+                    "prompt": prompt,
+                    "reference": "",  # No solution data
+                    "dataset": "LiveCodeBench",
+                    "function_name": function_name,
+                },
+            }
+        
+        return process_fn
+    
+    # Process train and test datasets
+    train_dataset = train_dataset.map(
+        function=make_map_fn("train"),
+        with_indices=True,
+        num_proc=64,
+        load_from_cache_file=False,
+    ).filter(lambda x: x['reward_model'] is not None)
+    
+    test_dataset = test_dataset.map(
+        function=make_map_fn("test"),
+        with_indices=True,
+        num_proc=64,
+        load_from_cache_file=False,
+    ).filter(lambda x: x['reward_model'] is not None)
+
+    print(f"LiveCodeBench train set: {train_dataset}")
+    print(f"LiveCodeBench test set: {test_dataset}")
+    return train_dataset, test_dataset
+
 
 if __name__ == "__main__":
     import argparse
@@ -716,6 +916,8 @@ if __name__ == "__main__":
         "leetcode2k": leetcode2k,
         "humaneval": humaneval,
         "mbpp": mbpp,
+        "primeintellect": primeintellect,
+        "livecodebench": livecodebench, 
     }
     dataset_makes = [dataset_map[name] for name in dataset_names]
     names = "-".join([make.__name__ for make in dataset_makes])

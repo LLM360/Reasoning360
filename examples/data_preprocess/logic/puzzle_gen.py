@@ -314,3 +314,4 @@ if __name__ == "__main__":
 
 # example usage
 # python puzzle_gen.py --num_puzzles 10000 --output_dir data/puzzles_dataset --output_file puzzles_dataset.json  --test True
+

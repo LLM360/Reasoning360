@@ -107,16 +107,16 @@ def extract_solution(solution_str):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--local_dir", default="data/bigmath")
+    parser.add_argument("--local_dir", default="data/bigmath_preview_filtered_mar21_r1_zero_style")
     parser.add_argument("--hdfs_dir", default=None)
 
     args = parser.parse_args()
 
-    train_data_source = "SynthLabsAI/Big-Math-RL-Verified"
+    train_data_source = "SDSB/big_math_partial_mar21_filtered_basic"
     test_data_sources = [
         "nanoverl/minerva",
-        "nanoverl/aime",
-        "nanoverl/amc",
+        "SDSB/aime_repeated_8x",
+        "SDSB/amc_repeated_4x",
         "nanoverl/olympiad_bench",
         "nanoverl/math",
     ]
