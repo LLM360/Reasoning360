@@ -45,6 +45,7 @@ def _default_compute_score(data_source, solution_str, ground_truth, reward_metri
         res = prime_code.compute_score(solution_str, ground_truth, continuous=True)
     elif data_source in ['hiyouga/geometry3k']:
         from . import geo3k
+        
         res = geo3k.compute_score(solution_str, ground_truth)
     # NOTE: added by Reasoning360
     elif data_source in [
@@ -103,6 +104,10 @@ def _default_compute_score(data_source, solution_str, ground_truth, reward_metri
     elif data_source in ["codeio-pyedu"]:
         from . import codeio
         res = codeio.compute_score(solution_str, ground_truth)
+    elif data_source.startswith("tablereason"):
+        # TODO: tmp placeholder using math_verify
+        from . import tablereason
+        res = tablereason.compute_score(solution_str, ground_truth)
     elif data_source.startswith('codegen'):
         from . import coder1
 
