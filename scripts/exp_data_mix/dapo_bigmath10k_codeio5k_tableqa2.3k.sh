@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=zhoujun-dapo-bigmath-7k
+#SBATCH --job-name=zhoujun-dapo-bigmath10k-codeio5k-tableqa2.3k
 #SBATCH --partition=main
 #SBATCH --nodes=4
 #SBATCH --ntasks=4

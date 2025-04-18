@@ -42,31 +42,26 @@ else:
     raise ValueError(f"Unknown CODER1_EXEC: {CODER1_EXEC}")
 
 
+CODE_PATTERN = re.compile(r"```(?:\w+)?\n(.*?)\n```", re.DOTALL)
+ANSWER_PATTERN = re.compile(r"</think>(.*)", re.DOTALL)
+
 def remote_check_stdio(code, stdin, stdout):
     succ, output = code_exec(code=code, stdin=stdin)
     return succ, output, stdin, stdout
 
 
 def validate_response_structure(processed_str: str) -> bool:
-    # pattern = re.compile(r'<think>.*</think>.*<answer>.*</answer>$', re.DOTALL)
-    # return bool(pattern.match(processed_str.strip()))
-    pattern = re.compile(r"<think>.*</think>.*<answer>.*</answer>", re.DOTALL)
+    pattern = re.compile(r".*</think>.*", re.DOTALL)
     return bool(pattern.search(processed_str.strip()))
 
 
-# https://github.com/Unakar/Logic-RL/blob/main/verl/utils/reward_score/kk.py
-def try_extract_solution(solution_str: str) -> Tuple[Optional[str], str]:
-    answer_pattern = r"<answer>(.*?)</answer>"
-    matches = list(re.finditer(answer_pattern, solution_str, re.DOTALL))
-
-    if matches:
-        final_answer = matches[-1].group(1).strip()
-        return final_answer
-
+def try_extract_solution(solution_str: str) -> str:
+    match = re.search(ANSWER_PATTERN, solution_str, re.DOTALL)
+    
+    if match:
+        return match.group(1).strip()
+    
     return solution_str
-
-
-CODE_PATTERN = re.compile(r"```(?:\w+)?\n(.*?)\n```", re.DOTALL)
 
 
 def extract_code_from_string(solution_str):
@@ -292,5 +287,4 @@ def compute_score(
         + f"Final Rward = {score}"
         + marker * 16
     )
-    # print(reward_log + "\n\n")
     return score

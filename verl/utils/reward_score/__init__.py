@@ -101,16 +101,15 @@ def _default_compute_score(data_source, solution_str, ground_truth, reward_metri
             from . import naive_dapo
             res = naive_dapo.compute_score(solution_str, ground_truth, extra_info=extra_info)
         
-    elif data_source in ["codeio-pyedu"]:
+    elif data_source.startswith("simulation"):
         from . import codeio
         res = codeio.compute_score(solution_str, ground_truth)
-    elif data_source.startswith("tablereason"):
+    elif data_source.startswith("tableqa"):
         # TODO: tmp placeholder using math_verify
         from . import tablereason
         res = tablereason.compute_score(solution_str, ground_truth)
-    elif data_source.startswith('code'):
+    elif data_source.startswith('codegen'):
         from . import coder1
-
         res = coder1.compute_score(solution_str, ground_truth, extra_info=extra_info)
     elif data_source in ['ordering_puzzle_dataset']:
         from . import puzzles_dataset

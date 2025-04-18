@@ -435,8 +435,13 @@ for i, o in zip(_inputs, _outputs):
 
 def leetcode2k():
     rich.print(Rule("Loading LeetCodeDataset..."))
-    train_dataset = load_dataset("newfacade/LeetCodeDataset")["train"]
-    test_dataset = load_dataset("newfacade/LeetCodeDataset")["test"]
+    commit_hash = "34803eb64eab1979069ba1f80e7ea474282e28f3"
+    train_dataset = load_dataset("newfacade/LeetCodeDataset", 
+                                    revision=commit_hash, 
+                                    cache_dir=cache_dir)["train"]
+    test_dataset = load_dataset("newfacade/LeetCodeDataset", 
+                                revision=commit_hash, 
+                                cache_dir=cache_dir)["test"]
     print("Train set:", train_dataset)
     print("Test set:", test_dataset)
 

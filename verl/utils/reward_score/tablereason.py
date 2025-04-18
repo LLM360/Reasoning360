@@ -1,19 +1,8 @@
-from math_verify.metric import math_metric
-from math_verify.parser import LatexExtractionConfig, ExprExtractionConfig
-
+from verl.utils.reward_score import prime_math
+from verl.utils.reward_score import math
 
 def compute_score(model_output: str, ground_truth: str) -> bool:
-    verify_func = math_metric(
-        gold_extraction_target=(LatexExtractionConfig(),),
-        pred_extraction_target=(ExprExtractionConfig(), LatexExtractionConfig()),
-    )
-    ret_score = 0.
-
-    # Wrap the ground truth in \boxed{} format for verification
-    ground_truth_boxed = "\\boxed{" + ground_truth + "}"
-    try:
-        ret_score, _ = verify_func([ground_truth_boxed], [model_output])
-    except Exception as e:
-        print(e)
-
-    return ret_score
+    model_output = str(model_output)
+    ground_truth = str(ground_truth)
+    _, response = prime_math.match_answer(model_output)
+    return math.is_equiv(response, ground_truth)
