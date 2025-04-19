@@ -260,7 +260,7 @@ if __name__ == '__main__':
     train_output_path = save_dataset(
         dataset=dataset,
         output_dir=train_output_dir,
-        filename_prefix=args.output_filename,
+        filename_prefix=data_source,
         sample_size=args.train_sample_size
     )
 
