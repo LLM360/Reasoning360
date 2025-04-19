@@ -70,7 +70,7 @@ def extract_code_from_string(solution_str):
     return "\n".join(code_blocks).strip()
 
 
-def fuzzy_equal(actual: str, expected: str, tolerance: float = 1e-6) -> bool:
+def fuzzy_equal(actual: str, expected: str, tolerance: float = 1e-6, verbose=True) -> bool:
     """
     Compare two outputs line by line and element by element for approximate equality.
     Handles:
@@ -152,7 +152,7 @@ def fuzzy_equal(actual: str, expected: str, tolerance: float = 1e-6) -> bool:
                 return False
     
     # Output fuzzy match information if any occurred
-    if fuzzy_match_reasons:
+    if fuzzy_match_reasons and verbose:
         print(f"🔍 FUZZY MATCH - Outputs approximately equal:")
         print(f"  Expected: {repr(original_expected)}")
         print(f"  Actual:   {repr(original_actual)}")
