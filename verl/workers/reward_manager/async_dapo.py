@@ -12,10 +12,62 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
+from concurrent.futures import ProcessPoolExecutor
+from functools import partial
+from collections import defaultdict
+
 from verl import DataProto
 from verl.utils.reward_score import _default_compute_score
 import torch
-from collections import defaultdict
+
+
+async def single_compute_score(compute_score_fn, data_source, solution_str, ground_truth, extra_info, reward_metric, executor, timeout=300.):
+    loop = asyncio.get_running_loop()
+    try:
+        tasks = [
+            asyncio.wait_for(
+                loop.run_in_executor(
+                    executor,
+                    partial(compute_score_fn, data_source=data_source, solution_str=solution_str, 
+                            ground_truth=ground_truth, extra_info=extra_info, reward_metric=reward_metric)
+                ),
+                timeout=timeout,
+            )
+        ]
+        return await asyncio.gather(*tasks)
+    except asyncio.TimeoutError:
+        print(f"Timeout occurred for solution: {solution_str[:64]}...")
+        return None
+    except Exception as e:
+        print(f"Error processing solution: {solution_str[:10]}, Error: {e}")
+        return None
+
+
+async def parallel_compute_score_async(compute_score_fn, data_sources, solutions, ground_truths, 
+                                      extra_infos, reward_metric, num_processes=64):
+    results = []
+    with ProcessPoolExecutor(max_workers=num_processes) as executor:
+        # Create tasks for all items
+        tasks_async = [
+            single_compute_score(compute_score_fn, data_source, solution, ground_truth, 
+                                extra_info, reward_metric, executor, timeout=300.)
+            for data_source, solution, ground_truth, extra_info in 
+            zip(data_sources, solutions, ground_truths, extra_infos)
+        ]
+        
+        # Handle potential exceptions to prevent process starvation
+        try:
+            results = await asyncio.gather(*tasks_async, return_exceptions=False)
+        except:
+            for pid, proc in executor._processes.items():
+                try:
+                    proc.kill()
+                except Exception as kill_err:
+                    print('shut down failed: ' + str(kill_err))
+            raise
+
+    return results
 
 
 class DAPORewardManager:
@@ -32,15 +84,7 @@ class DAPORewardManager:
                  **kwargs) -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
-        original_compute_score = compute_score or _default_compute_score
-        
-        def debug_compute_score(*args, **kwargs):
-            print(f"[DEBUG] compute_score called with data_source={kwargs.get('data_source')}")
-            result = original_compute_score(*args, **kwargs)
-            print(f"[DEBUG] compute_score returned {result}")
-            return result
-        
-        self.compute_score = debug_compute_score
+        self.compute_score = compute_score or _default_compute_score
         self.reward_fn_key = reward_fn_key
         self.overlong_buffer_cfg = overlong_buffer_cfg
         self.max_resp_len = max_resp_len
@@ -69,7 +113,6 @@ class DAPORewardManager:
         print(f"[DEBUG] DataProto non_tensor_batch keys: {list(data.non_tensor_batch.keys())}")
 
         reward_extra_info = defaultdict(list)
-
         already_print_data_sources = {}
 
         print(f"[DEBUG] Processing {len(data)} items")
@@ -92,66 +135,92 @@ class DAPORewardManager:
             if 'reward_model' not in data_item.non_tensor_batch or 'ground_truth' not in data_item.non_tensor_batch['reward_model']:
                 print(f"[DEBUG] Warning: Item {i} missing ground_truth")
 
+        # Prepare data for parallel processing
+        data_sources = []
+        solutions = []
+        ground_truths = []
+        extra_infos = []
+        valid_response_lengths = []
+        prompt_strs = []
+        response_strs = []
+
         for i in range(len(data)):
             data_item = data[i]  # DataProtoItem
 
             prompt_ids = data_item.batch['prompts']
-
             prompt_length = prompt_ids.shape[-1]
 
             valid_prompt_length = data_item.batch['attention_mask'][:prompt_length].sum()
             valid_prompt_ids = prompt_ids[-valid_prompt_length:]
 
             response_ids = data_item.batch['responses']
-            valid_response_length = data_item.batch['attention_mask'][prompt_length:].sum()  # qqq
+            valid_response_length = data_item.batch['attention_mask'][prompt_length:].sum()
+            valid_response_lengths.append(valid_response_length)
             valid_response_ids = response_ids[:valid_response_length]
 
             # decode
             prompt_str = self.tokenizer.decode(valid_prompt_ids, skip_special_tokens=True)
+            prompt_strs.append(prompt_str)
+            
             response_str = self.tokenizer.decode(valid_response_ids, skip_special_tokens=True)
             eos_token = self.tokenizer.eos_token
             if response_str.endswith(eos_token):
                 response_str = response_str[:-len(eos_token)]
+            response_strs.append(response_str)
 
             ground_truth = data_item.non_tensor_batch['reward_model']['ground_truth']
-
             data_source = data_item.non_tensor_batch[self.reward_fn_key]
-            print(f"[DEBUG] Item {i}, data_source: {data_source}")
-
             extra_info = data_item.non_tensor_batch.get('extra_info', None)
 
-            print(f"[DEBUG] Computing score for data_source: {data_source}")
-            try:
-                result = self.compute_score(
-                    data_source=data_source,
-                    solution_str=response_str,
-                    ground_truth=ground_truth,
-                    extra_info=extra_info,
-                    reward_metric=self.reward_metric
-                )
-                print(f"[DEBUG] Score computation successful: {result}")
-            except Exception as e:
-                print(f"[DEBUG] Error computing score for data_source {data_source}: {e}")
-                raise
+            data_sources.append(data_source)
+            solutions.append(response_str)
+            ground_truths.append(ground_truth)
+            extra_infos.append(extra_info)
 
-            score: float
-            if isinstance(result, dict):
-                score = result["score"]
-                # Store the information including original reward
-                for key, value in result.items():
-                    print(f"[DEBUG] in reward_extra_info, key: {key}, value: {value}")
-                    reward_extra_info[key].append(value)
-            else:
-                score = result
+        # Run parallel score computation
+        try:
+            print(f"[DEBUG] Starting parallel score computation for {len(solutions)} items")
+            results = asyncio.run(
+                parallel_compute_score_async(
+                    self.compute_score,
+                    data_sources,
+                    solutions,
+                    ground_truths,
+                    extra_infos,
+                    self.reward_metric,
+                    num_processes=64
+                )
+            )
+            print(f"[DEBUG] Parallel score computation completed")
+        except Exception as e:
+            print(f"[DEBUG] Error in parallel score computation: {e}")
+            # Fallback to zeros if computation fails
+            results = [None] * len(solutions)
+
+        # Process results
+        for i, (result, data_source, response_str, ground_truth, valid_response_length) in enumerate(
+            zip(results, data_sources, response_strs, ground_truths, valid_response_lengths)
+        ):
+            score = 0.0
+            if result is not None:
+                result = result[0]  # Unwrap from asyncio.gather
+                if isinstance(result, dict):
+                    score = result["score"]
+                    # Store the information including original reward
+                    for key, value in result.items():
+                        print(f"[DEBUG] in reward_extra_info, key: {key}, value: {value}")
+                        reward_extra_info[key].append(value)
+                else:
+                    score = result
 
             reward = score
 
-            if self.overlong_buffer_cfg.enable:
-                overlong_buffer_len = self.overlong_buffer_cfg.len  # 512
-                expected_len = self.max_resp_len - overlong_buffer_len  # 16k-512=15488
+            if self.overlong_buffer_cfg is not None and self.overlong_buffer_cfg.enable:
+                overlong_buffer_len = self.overlong_buffer_cfg.len
+                expected_len = self.max_resp_len - overlong_buffer_len
                 exceed_len = valid_response_length - expected_len
                 overlong_penalty_factor = self.overlong_buffer_cfg.penalty_factor
-                overlong_reward = min(-exceed_len / overlong_buffer_len * overlong_penalty_factor, 0)  # qqq: there's no lower bound of `overlong_reward` as suggested in the paper
+                overlong_reward = min(-exceed_len / overlong_buffer_len * overlong_penalty_factor, 0)
                 reward += overlong_reward
                 if self.overlong_buffer_cfg.log:
                     reward_extra_info["overlong_reward"].append(overlong_reward)
@@ -165,10 +234,10 @@ class DAPORewardManager:
 
             if already_print_data_sources[data_source] < self.num_examine:
                 already_print_data_sources[data_source] += 1
-                print("[prompt]", prompt_str)
+                print("[prompt]", prompt_strs[i])
                 print("[response]", response_str)
-                print("[ground_truth]", ground_truth) 
-                if isinstance(result, dict):
+                print("[ground_truth]", ground_truth)
+                if result is not None and isinstance(result, dict):
                     for key, value in result.items():
                         print(f"[{key}]", value)
                 else:

@@ -104,7 +104,7 @@ def _default_compute_score(data_source, solution_str, ground_truth, reward_metri
     elif data_source.startswith("simulation"):
         from . import codeio
         res = codeio.compute_score(solution_str, ground_truth)
-    elif data_source.startswith("tableqa"):
+    elif data_source.startswith("table"):
         # TODO: tmp placeholder using math_verify
         from . import tablereason
         res = tablereason.compute_score(solution_str, ground_truth)

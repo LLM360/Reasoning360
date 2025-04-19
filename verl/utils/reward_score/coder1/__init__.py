@@ -56,7 +56,7 @@ def validate_response_structure(processed_str: str) -> bool:
 
 
 def try_extract_solution(solution_str: str) -> str:
-    match = re.search(ANSWER_PATTERN, solution_str, re.DOTALL)
+    match = re.search(ANSWER_PATTERN, solution_str)
     
     if match:
         return match.group(1).strip()

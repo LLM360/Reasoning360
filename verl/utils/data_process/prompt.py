@@ -37,13 +37,13 @@ def build_zero_style_prompt(
             "{{user_symbol}}": USER_SYMBOL,
             "{{assistant_symbol}}": ASSISTANT_SYMBOL,
             "{{system_prompt}}": SYSTEM_PROMPT,
+            "{{prompt}}": prompt,
+            "{{extra_instruction}}": extra_instruction,
         }
 
         for key, val in replacements.items():
             template = template.replace(key, val)
-            
-        if prompt:
-            template = template.replace("{{prompt}}", prompt)
+
         if extra_instruction:
             template = template.replace("{{extra_instruction}}", " " + extra_instruction)
     else:
