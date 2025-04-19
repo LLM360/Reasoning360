@@ -107,7 +107,7 @@ check_{fn_name}()
                     )
                 for future in as_completed(futures):
                     exec_succ, output, stdin, stdout = future.result()
-                    pass_test = exec_succ and fuzzy_equal(output.strip(), stdout.strip())
+                    pass_test = exec_succ and fuzzy_equal(output.strip(), stdout.strip(), verbose=False)
                     if not pass_test:
                         print(f"Test code failed for example {idx}")
                         print(f"Input: {stdin}")
@@ -180,7 +180,7 @@ if __name__ == '__main__':
 
     # Process the dataset
     process_fn = make_map_fn('train', data_source, args.prompt_style)
-    
+        
     dataset = dataset.map(function=process_fn, with_indices=True, num_proc=64)
 
     # Filter out examples where processing failed
@@ -202,7 +202,7 @@ if __name__ == '__main__':
     train_output_path = save_dataset(
         dataset=train_dataset,
         output_dir=train_output_dir,
-        filename_prefix=args.output_train_filename,
+        filename_prefix=data_source,
         sample_size=len(train_dataset)
     )
 
