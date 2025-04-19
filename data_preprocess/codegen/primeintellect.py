@@ -155,6 +155,7 @@ check_{fn_name}()
 if __name__ == '__main__':
     """Main script execution: parse args, load, process, and save datasets."""
     parser = argparse.ArgumentParser(description="Process and save PrimeIntellect datasets.")
+    parser.add_argument('--data-dir', type=str, default='data', help='Directory to save the processed datasets.')
     parser.add_argument('--domain', default="codegen",
                         help='Domain of the dataset.')
     parser.add_argument('--name', default="primeintellect",
