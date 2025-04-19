@@ -61,13 +61,17 @@ def make_map_fn(split: str, data_source: str, prompt_style: str="zero_style") ->
     def process_fn(example, idx):
         # Create a default "skip" response with all required fields
         skip_response = {
-            "data_source": None,
-            "prompt": None,
-            "raw_prompt": None,  # Add this field to prevent KeyError
-            "ability": None,
+            "data_source": data_source,
+            "prompt": [],
+            "raw_prompt": "",
+            "ability": "codegen",
             "apply_chat_template": False,
             "reward_model": None,
-            "extra_info": None
+            "extra_info": {
+                "split": split,
+                "index": idx,
+                "dataset": "likaixin/TACO-verified"
+            }
         }
         
         oracle = json.loads(example["input_output"])
