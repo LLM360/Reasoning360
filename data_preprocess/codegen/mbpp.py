@@ -116,7 +116,7 @@ if __name__ == '__main__':
 
     set_seed(args.seed)
 
-    data_source = args.output_train_filename
+    data_source = f"{args.domain}_{args.name}"
     train_output_dir = os.path.join(args.data_dir, 'train')
     test_output_dir = os.path.join(args.data_dir, 'test')
     os.makedirs(train_output_dir, exist_ok=True)

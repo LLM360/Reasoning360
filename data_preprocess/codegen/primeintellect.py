@@ -190,7 +190,7 @@ if __name__ == '__main__':
     try:
         tokenizer = transformers.AutoTokenizer.from_pretrained("Qwen/Qwen2.5-7B")
         length_filter = LengthFilter(tokenizer=tokenizer, max_length=4096)
-        dataset = dataset.filter(lambda x: length_filter.check(x), num_proc=64)
+        dataset = dataset.filter(lambda x: length_filter.check(x),)
     except Exception as e:
         print(f"Warning: Could not perform length filtering. Error: {e}")
         print("Proceeding without length filtering.")
