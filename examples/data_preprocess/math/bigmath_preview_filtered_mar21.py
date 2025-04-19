@@ -16,11 +16,6 @@ from verl.utils.data_process.utils import add_suffix, set_seed, sample_dataset, 
 
 InstructionFollow = "Please output the final answer within \\boxed{}."
 
-def extract_solution(solution_str: str) -> str:
-    """Extracts the final answer assuming it's in the last \\boxed{}."""
-    return remove_boxed(last_boxed_only_string(solution_str))
-
-
 def get_datasets(train_data_source, test_data_sources):
     """
     Load the math datasets from Hugging Face Hub.

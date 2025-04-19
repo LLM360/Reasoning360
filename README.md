@@ -5,9 +5,18 @@ The repo is an attempt to replicate the large-scale RL training of [DeepSeek R1]
 It's initialized from [verl](https://github.com/volcengine/verl). verl's README is appended below.
 
 ## Setup
-Check the guide of verl to setup the environment.
 
-Remember to process data and wandb login before launching the experiments.
+
+```bash
+conda create -n Reasoning360 python=3.12
+conda install -c nvidia/label/cuda-12.4.0 cuda-toolkit cuda-nvcc
+pip install uv # using uv to install packages is faster than pip
+uv pip install torch
+uv pip install flash-attn --no-build-isolation
+uv pip install -e .[gpu,math]
+```
+
+Remember to process data and wandb and huggingface login before launching the experiments.
 
 ---
 ## How to add the dataset

@@ -1,4 +1,4 @@
-from puzzle_gen import Constraint
+
 import os
 from typing import List, Set, Dict, Tuple, Optional
 import re
@@ -10,6 +10,32 @@ import pdb
 import signal
 import time
 from contextlib import contextmanager
+
+
+class Constraint:
+    text: str              # Human-readable constraint
+    object1: Optional[int]   # First object's encoded value (if applicable)
+    object2: Optional[int]   # Second object's encoded value (if applicable)
+    constraint_type: str   # Type of mathematical constraint
+    value: Optional[int]   # Additional value needed for constraint (e.g., number of birds between)
+    
+    def evaluate(self, positions: List[int]) -> bool:
+        """Evaluate if the constraint is satisfied for given positions."""
+        if self.constraint_type == "left_of":
+            return positions.index(self.object1) < positions.index(self.object2)
+        elif self.constraint_type == "right_of":
+            return positions.index(self.object1) > positions.index(self.object2)
+        elif self.constraint_type == "adjacent_left":
+            return positions.index(self.object1) + 1 == positions.index(self.object2)
+        elif self.constraint_type == "adjacent_right":
+            return positions.index(self.object1) - 1 == positions.index(self.object2)
+        elif self.constraint_type == "birds_between":
+            return abs(positions.index(self.object1) - positions.index(self.object2)) - 1 == self.value
+        elif self.constraint_type == "absolute_position_left":
+            return positions.index(self.object1) == self.value - 1
+        elif self.constraint_type == "absolute_position_right":
+            return positions.index(self.object1) == len(positions) - self.value
+        return False
 
 DEBUG = False
 

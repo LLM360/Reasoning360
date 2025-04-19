@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import os
 from datetime import datetime
 import random
-import examples.data_preprocess.logic.gen_proof as gen_proof
+import gen_proof as gen_proof
 import csv
 import argparse
 import json
