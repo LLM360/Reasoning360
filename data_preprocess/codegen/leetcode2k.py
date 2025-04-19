@@ -138,8 +138,8 @@ if __name__ == '__main__':
     process_train_fn = make_map_fn('train', data_source, args.prompt_style)
     process_test_fn = make_map_fn('test', data_source, args.prompt_style)
     
-    train_dataset = train_dataset.map(function=process_train_fn, with_indices=True)
-    test_dataset = test_dataset.map(function=process_test_fn, with_indices=True)
+    train_dataset = train_dataset.map(function=process_train_fn, with_indices=True, num_proc=64)
+    test_dataset = test_dataset.map(function=process_test_fn, with_indices=True, num_proc=64)
 
     # Filter out examples where processing failed
     train_dataset = train_dataset.filter(lambda x: x["data_source"] is not None)

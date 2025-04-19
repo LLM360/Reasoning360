@@ -178,15 +178,15 @@ if __name__ == '__main__':
     test_dataset = test_dataset.map(function=process_test_fn, with_indices=True, num_proc=64)
 
     # Filter out examples where processing failed
-    train_dataset = train_dataset.filter(lambda x: x["data_source"] is not None, num_proc=64)
-    test_dataset = test_dataset.filter(lambda x: x["data_source"] is not None, num_proc=64)
+    train_dataset = train_dataset.filter(lambda x: x["data_source"] is not None)
+    test_dataset = test_dataset.filter(lambda x: x["data_source"] is not None)
 
     # Length filter
     try:
         tokenizer = transformers.AutoTokenizer.from_pretrained("Qwen/Qwen2.5-7B")
         length_filter = LengthFilter(tokenizer=tokenizer, max_length=4096)
-        train_dataset = train_dataset.filter(lambda x: length_filter.check(x))
-        test_dataset = test_dataset.filter(lambda x: length_filter.check(x))
+        train_dataset = train_dataset.filter(lambda x: length_filter.check(x), num_proc=64)
+        test_dataset = test_dataset.filter(lambda x: length_filter.check(x), num_proc=64)
     except Exception as e:
         print(f"Warning: Could not perform length filtering. Error: {e}")
         print("Proceeding without length filtering.")

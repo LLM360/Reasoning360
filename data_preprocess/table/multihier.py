@@ -245,8 +245,8 @@ if __name__ == "__main__":
     # Filter dataset
     tokenizer = transformers.AutoTokenizer.from_pretrained("Qwen/Qwen2.5-7B")
     table_filter = MultiHierTTFilter(tokenizer=tokenizer, max_length=4096)
-    train_dataset = train_dataset.filter(lambda x: table_filter.check(x))
-    test_dataset = test_dataset.filter(lambda x: table_filter.check(x))
+    train_dataset = train_dataset.filter(lambda x: table_filter.check(x), num_proc=64)
+    test_dataset = test_dataset.filter(lambda x: table_filter.check(x), num_proc=64)
     args.train_sample_size = len(train_dataset) if args.train_sample_size is None else args.train_sample_size
     args.test_sample_size = len(test_dataset) if args.test_sample_size is None else args.test_sample_size
     
