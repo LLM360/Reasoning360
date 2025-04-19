@@ -6,7 +6,6 @@ import json
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import transformers
-import datasets
 from datasets import load_dataset, Dataset
 
 from verl.utils.data_process.prompt import build_zero_style_prompt
@@ -247,7 +246,7 @@ if __name__ == '__main__':
         print("Proceeding without length filtering.")
 
     # Sample the dataset
-    dataset = sample_dataset(dataset, args.sample_size)
+    dataset = sample_dataset(dataset, args.train_sample_size)
     
     
     # Update split information in extra_info
@@ -262,7 +261,7 @@ if __name__ == '__main__':
         dataset=dataset,
         output_dir=train_output_dir,
         filename_prefix=args.output_filename,
-        sample_size=len(dataset)
+        sample_size=args.train_sample_size
     )
 
     print(f"\nDone! \n"
