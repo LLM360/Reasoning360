@@ -258,13 +258,13 @@ if __name__ == "__main__":
     train_output_path = save_dataset(
         dataset=train_dataset,
         output_dir=train_output_dir,
-        filename_prefix=args.output_train_filename,
+        filename_prefix=data_source,
         sample_size=args.train_sample_size
     )
     test_output_path = save_dataset(
         dataset=test_dataset,
         output_dir=test_output_dir,
-        filename_prefix=args.output_test_filename,
+        filename_prefix=data_source,
         sample_size=args.test_sample_size
     )
     

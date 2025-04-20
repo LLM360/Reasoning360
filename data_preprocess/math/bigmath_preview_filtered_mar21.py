@@ -61,15 +61,11 @@ def make_map_fn(split: str, data_source: str, prompt_style: str="zero_style") ->
         answer = example.pop("answer")
         
         if prompt_style == "zero_style":
-            prompt = build_zero_style_prompt(extra_instruction=InstructionFollow)
-        else:
-            raise ValueError(f"Invalid prompt style: {prompt_style}")
-
-        if prompt_style == "zero_style":
+            prompt = build_zero_style_prompt(prompt=question, extra_instruction=InstructionFollow)
             data = {
                 "data_source": data_source,
                 "prompt": [],  # no messages-like prompt. instead, use from-scratch raw_prompt
-                "raw_prompt": prompt.replace("{{prompt}}", question),
+                "raw_prompt": prompt,
                 "ability": "math",
                 "apply_chat_template": False,
                 "reward_model": {"style": "rule", "ground_truth": answer},
@@ -78,7 +74,7 @@ def make_map_fn(split: str, data_source: str, prompt_style: str="zero_style") ->
         else:
             raise ValueError(f"Invalid prompt style: {prompt_style}")
 
-        if idx == 0:
+        if idx == 0 or idx == 1:
             print(f"data_source: {data_source}, split: {split}, idx: {idx}")
             print("\n" + "=" * 100 + f"{data_source} {split} {idx}" + "=" * 10)
             print(data)

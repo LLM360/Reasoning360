@@ -140,8 +140,11 @@ class RLHFDataset(Dataset):
         dataframes = []
         for parquet_file in self.parquet_files:
             # read parquet files and cache
-            dataframe = pd.read_parquet(parquet_file)
-            dataframes.append(dataframe)
+            # Use pyarrow.parquet directly with to_pandas() to handle nested structures
+            import polars as pl
+            df = pl.read_parquet(parquet_file)
+            
+            dataframes.append(df)
         self.dataframe = pd.concat(dataframes)
 
         print(f"dataset len: {len(self.dataframe)}")

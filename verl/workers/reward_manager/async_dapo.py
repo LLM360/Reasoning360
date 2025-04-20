@@ -70,7 +70,7 @@ async def parallel_compute_score_async(compute_score_fn, data_sources, solutions
     return results
 
 
-class DAPORewardManager:
+class AsyncDAPORewardManager:
     """The reward manager.
     """
 
@@ -103,19 +103,19 @@ class DAPORewardManager:
             else:
                 return data.batch['rm_scores']
 
-        print(f"[DEBUG] data.batch['responses'] shape: {data.batch['responses'].shape}")
+        # print(f"[DEBUG] data.batch['responses'] shape: {data.batch['responses'].shape}")
         reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
-        print(f"[DEBUG] reward_tensor initial shape: {reward_tensor.shape}")
+        # print(f"[DEBUG] reward_tensor initial shape: {reward_tensor.shape}")
 
         # Add this to understand DataProto structure
-        print(f"[DEBUG] DataProto length: {len(data)}")
-        print(f"[DEBUG] DataProto batch keys: {list(data.batch.keys())}")
-        print(f"[DEBUG] DataProto non_tensor_batch keys: {list(data.non_tensor_batch.keys())}")
+        # print(f"[DEBUG] DataProto length: {len(data)}")
+        # print(f"[DEBUG] DataProto batch keys: {list(data.batch.keys())}")
+        # print(f"[DEBUG] DataProto non_tensor_batch keys: {list(data.non_tensor_batch.keys())}")
 
         reward_extra_info = defaultdict(list)
         already_print_data_sources = {}
 
-        print(f"[DEBUG] Processing {len(data)} items")
+        # print(f"[DEBUG] Processing {len(data)} items")
 
         # Count data sources
         data_source_counts = defaultdict(int)
@@ -123,17 +123,19 @@ class DAPORewardManager:
             data_source = data[i].non_tensor_batch[self.reward_fn_key]
             data_source_counts[data_source] += 1
         
-        print(f"[DEBUG] Data source distribution: {dict(data_source_counts)}")
+        # print(f"[DEBUG] Data source distribution: {dict(data_source_counts)}")
 
         # Check if any data is being filtered
         for i in range(len(data)):
             data_item = data[i]
             if self.reward_fn_key not in data_item.non_tensor_batch:
-                print(f"[DEBUG] Warning: Item {i} missing reward_fn_key '{self.reward_fn_key}'")
+                # print(f"[DEBUG] Warning: Item {i} missing reward_fn_key '{self.reward_fn_key}'")
+                pass
             
             # Check if ground truth exists
             if 'reward_model' not in data_item.non_tensor_batch or 'ground_truth' not in data_item.non_tensor_batch['reward_model']:
-                print(f"[DEBUG] Warning: Item {i} missing ground_truth")
+                # print(f"[DEBUG] Warning: Item {i} missing ground_truth")
+                pass
 
         # Prepare data for parallel processing
         data_sources = []
@@ -179,7 +181,7 @@ class DAPORewardManager:
 
         # Run parallel score computation
         try:
-            print(f"[DEBUG] Starting parallel score computation for {len(solutions)} items")
+            # print(f"[DEBUG] Starting parallel score computation for {len(solutions)} items")
             results = asyncio.run(
                 parallel_compute_score_async(
                     self.compute_score,
@@ -191,9 +193,9 @@ class DAPORewardManager:
                     num_processes=64
                 )
             )
-            print(f"[DEBUG] Parallel score computation completed")
+            # print(f"[DEBUG] Parallel score computation completed")
         except Exception as e:
-            print(f"[DEBUG] Error in parallel score computation: {e}")
+            # print(f"[DEBUG] Error in parallel score computation: {e}")
             # Fallback to zeros if computation fails
             results = [None] * len(solutions)
 
@@ -208,7 +210,7 @@ class DAPORewardManager:
                     score = result["score"]
                     # Store the information including original reward
                     for key, value in result.items():
-                        print(f"[DEBUG] in reward_extra_info, key: {key}, value: {value}")
+                        # print(f"[DEBUG] in reward_extra_info, key: {key}, value: {value}")
                         reward_extra_info[key].append(value)
                 else:
                     score = result
@@ -226,7 +228,7 @@ class DAPORewardManager:
                     reward_extra_info["overlong_reward"].append(overlong_reward)
                     reward_extra_info["overlong"].append(overlong_reward < 0)
 
-            print(f"[DEBUG] Item {i}, valid_response_length: {valid_response_length}, reward: {reward}")
+            # print(f"[DEBUG] Item {i}, valid_response_length: {valid_response_length}, reward: {reward}")
             reward_tensor[i, valid_response_length - 1] = reward
 
             if data_source not in already_print_data_sources:
@@ -243,9 +245,9 @@ class DAPORewardManager:
                 else:
                     print(f"[score]", score)
 
-        print(f"[DEBUG] Final reward_tensor shape: {reward_tensor.shape}")
-        print(f"[DEBUG] Non-zero elements in reward_tensor: {(reward_tensor != 0).sum().item()}")
-        print(f"[DEBUG] Unique data sources processed: {list(already_print_data_sources.keys())}")
+        # print(f"[DEBUG] Final reward_tensor shape: {reward_tensor.shape}")
+        # print(f"[DEBUG] Non-zero elements in reward_tensor: {(reward_tensor != 0).sum().item()}")
+        # print(f"[DEBUG] Unique data sources processed: {list(already_print_data_sources.keys())}")
 
         if return_dict:
             return {

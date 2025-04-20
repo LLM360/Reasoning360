@@ -29,6 +29,8 @@ def build_zero_style_prompt(
     extra_instruction: str = "",
     model_name: str = "Qwen/Qwen2.5-7B"
     ) -> str:
+    if extra_instruction:
+        extra_instruction = "\n" + extra_instruction
     if "Qwen" in model_name:
         replacements = {
             "{{START_TOKEN}}": START_TOKEN,
@@ -40,12 +42,8 @@ def build_zero_style_prompt(
             "{{prompt}}": prompt,
             "{{extra_instruction}}": extra_instruction,
         }
-
         for key, val in replacements.items():
             template = template.replace(key, val)
-
-        if extra_instruction:
-            template = template.replace("{{extra_instruction}}", " " + extra_instruction)
     else:
         raise ValueError(f"Unsupported model: {model_name}. Only Qwen is supported for now.")
     

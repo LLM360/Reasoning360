@@ -178,8 +178,8 @@ if __name__ == '__main__':
     test_dataset = test_dataset.map(function=process_test_fn, with_indices=True, num_proc=64)
 
     # Filter out examples where processing failed
-    train_dataset = train_dataset.filter(lambda x: x["data_source"] is not None)
-    test_dataset = test_dataset.filter(lambda x: x["data_source"] is not None)
+    train_dataset = train_dataset.filter(lambda x: x["data_source"] == data_source)
+    test_dataset = test_dataset.filter(lambda x: x["data_source"] == data_source)
 
     # Length filter
     try:

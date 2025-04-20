@@ -58,12 +58,12 @@ def make_map_fn(split, data_source, model_type):
             }
         elif model_type == 'base':
             # Use the build_zero_style_prompt function for base model
-            prompt = build_zero_style_prompt(extra_instruction=InstructionFollow)
+            prompt = build_zero_style_prompt(prompt=question, extra_instruction=InstructionFollow)
             
             data = {
                 "data_source": data_source,
                 "prompt": [],  # no messages-like prompt. instead, use from-scratch raw_prompt
-                "raw_prompt": prompt.replace("{{prompt}}", question),
+                "raw_prompt": prompt,
                 "ability": "logical_reasoning",
                 "reward_model": {
                         "style": "rule",
@@ -91,7 +91,7 @@ def make_map_fn(split, data_source, model_type):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--json_path', default='data/zebra_puzzles/zebra_puzzles.json', help='Path to json file')
-    parser.add_argument('--output_dir', default='../../../data', help='Directory to save processed data')
+    parser.add_argument('--output_dir', default='../../data', help='Directory to save processed data')
     parser.add_argument('--hdfs_dir', default=None, help='HDFS directory (optional)')
     parser.add_argument('--train_size', type=float, default=0.2, help='Proportion of data for train set')
     parser.add_argument('--test_size', type=float, default=0.02, help='Proportion of data for test set')

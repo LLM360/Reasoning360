@@ -184,7 +184,7 @@ if __name__ == '__main__':
     dataset = dataset.map(function=process_fn, with_indices=True, num_proc=64)
 
     # Filter out examples where processing failed
-    dataset = dataset.filter(lambda x: x["data_source"] is not None)
+    dataset = dataset.filter(lambda x: x["data_source"] == data_source)
 
     # Length filter
     try:

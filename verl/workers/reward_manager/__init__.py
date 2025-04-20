@@ -17,4 +17,5 @@ from .naive_parallel import NaiveParallelRewardManager
 from .prime import PrimeRewardManager
 from .batch import BatchRewardManager
 from .dapo import DAPORewardManager
+from .async_dapo import AsyncDAPORewardManager
 from .llm_judge import LLMJudgeRewardManager

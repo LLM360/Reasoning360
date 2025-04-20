@@ -68,28 +68,26 @@ def make_map_fn(split: str, data_source: str, prompt_style: str="zero_style") ->
     """
     def process_fn(example: Dict[str, Any], idx: int) -> Dict[str, Any]:
         question = example.pop("problem")
-        question = question + " " + InstructionFollow
-
         answer = example.pop("answer")
+        
         if isinstance(answer, list):
             answer = answer[0]  # minerva, olympiad_bench
             
         if prompt_style == "zero_style":
-            prompt = build_zero_style_prompt(extra_instruction=InstructionFollow)
+            prompt = build_zero_style_prompt(prompt=question, extra_instruction=InstructionFollow)
+            data = {
+                "data_source": data_source,
+                "prompt": [],
+                "raw_prompt": prompt,
+                "ability": "math",
+                "apply_chat_template": False,
+                "reward_model": {"style": "rule", "ground_truth": answer},
+                "extra_info": {"split": split, "index": idx},
+            }
         else:
             raise ValueError(f"Unknown prompt style: {prompt_style}")
-
-        data = {
-            "data_source": data_source,
-            "prompt": [],
-            "raw_prompt": prompt.replace("{{prompt}}", question),
-            "ability": "math",
-            "apply_chat_template": False,
-            "reward_model": {"style": "rule", "ground_truth": answer},
-            "extra_info": {"split": split, "index": idx},
-        }
         
-        if idx == 0:
+        if idx == 0 or idx == 1:
             print(f"data_source: {data_source}, split: {split}, idx: {idx}")
             print("\n" + "=" * 10 + f"{data_source} {split} {idx}" + "=" * 10)
             print(data)

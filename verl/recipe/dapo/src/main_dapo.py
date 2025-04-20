@@ -156,6 +156,9 @@ class TaskRunner:
         elif reward_manager_name == 'dapo':
             from verl.workers.reward_manager import DAPORewardManager
             reward_manager_cls = DAPORewardManager
+        elif reward_manager_name == 'async_dapo':
+            from verl.workers.reward_manager import AsyncDAPORewardManager
+            reward_manager_cls = AsyncDAPORewardManager
         else:
 
             raise NotImplementedError

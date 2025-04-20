@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=zhoujun-dapo-bigmath10k-codeio5k-tableqa2.3k
+#SBATCH --job-name=zhoujun-dapo-genie20k
 #SBATCH --partition=main
-#SBATCH --nodes=4
-#SBATCH --ntasks=4
+#SBATCH --nodes=8
+#SBATCH --ntasks=8
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=64
@@ -14,6 +14,7 @@
 
 
 # =================== Environment ===================
+# may vary from cluster to cluster, please check the environment variables
 export LD_LIBRARY_PATH=/usr/local/nccl-rdma-sharp-plugins/lib:$LD_LIBRARY_PATH \
        UCX_TLS=dc \
        UCX_NET_DEVICES=mlx5_ib0:1 \
@@ -44,7 +45,7 @@ declare -A pids
 for host in "${nodes[@]}"; do
     echo "Spawning GPU check on node: $host"
     srun --nodes=1 --ntasks=1 --nodelist="$host" \
-         ~/Reasoning360/scripts/check_gpu.sh &
+         ~/Reasoning360/scripts/tools/check_gpu.sh &
     pids["$host"]=$!
 done
 
@@ -77,31 +78,52 @@ export VLLM_USE_V1=0
 # export GLOO_SOCKET_IFNAME=ens10f0np0
 
 
-# =================== Data Mixture ===================
+# =================== Data Mixture (genie-20K)===================
 WORKING_DIR=${HOME}/Reasoning360
 TRAIN_DATA_DIR=${WORKING_DIR}/data/train
 TEST_DATA_DIR=${WORKING_DIR}/data/test
 # Math (train)
-bigmath_train_path=${TRAIN_DATA_DIR}/math__bigmath_filtered_mar21_10k.parquet
+deepscaler_train_path=${TRAIN_DATA_DIR}/math__deepscaler_preview_10k.parquet
 # Math (test)
 math_test_path=${TEST_DATA_DIR}/math__math_500.parquet
 aime_test_path=${TEST_DATA_DIR}/math__aime_repeated_8x_240.parquet
 amc_test_path=${TEST_DATA_DIR}/math__amc_repeated_4x_332.parquet
 # Code (train)
+leetcode2k_train_path=${TRAIN_DATA_DIR}/codegen__leetcode2k_2.4k.parquet
+livecodebench_train_path=${TRAIN_DATA_DIR}/codegen__livecodebench_599.parquet
 # Code (test)
+humaneval_test_path=${TEST_DATA_DIR}/codegen__humaneval_164.parquet
+mbpp_test_path=${TEST_DATA_DIR}/codegen__mbpp_500.parquet
+livecodebench_test_path=${TEST_DATA_DIR}/codegen__livecodebench_279.parquet
 # Logic (train)
+zebralogic_train_path=${TRAIN_DATA_DIR}/logic__zebralogic_2.2k.parquet
 # Logic (test)
+zebralogic_test_path=${TEST_DATA_DIR}/logic__zebralogic_300.parquet
 # Simulation (train)
-codeio_train_path=${TRAIN_DATA_DIR}/simulation__codeio-pyedu_5k.parquet
+codeio_train_path=${TRAIN_DATA_DIR}/simulation__codeio_2.5k.parquet
 # Simulation (test)
 codeio_test_path=${TEST_DATA_DIR}/simulation__codeio-pyedu_500.parquet
 # Table (train)
-multihier_train_path=${TRAIN_DATA_DIR}/tableqa__multihier_2.3k.parquet
+multihier_train_path=${TRAIN_DATA_DIR}/table__multihier_2.3k.parquet
 # Table (test)
-multihier_test_path=${TEST_DATA_DIR}/tableqa__multihier_267.parquet
+multihier_test_path=${TEST_DATA_DIR}/table__multihier_267.parquet
 
-train_files="['$bigmath_train_path','$codeio_train_path','$multihier_train_path']"
-test_files="['${math_test_path}','${aime_test_path}','${amc_test_path}','${codeio_test_path}','${multihier_test_path}']"
+train_files="['${deepscaler_train_path}',\
+'${leetcode2k_train_path}',\
+'${livecodebench_train_path}',\
+'${zebralogic_train_path}',\
+'${codeio_train_path}',\
+'${multihier_train_path}']"
+
+test_files="['${math_test_path}',\
+'${aime_test_path}',\
+'${amc_test_path}',\
+'${humaneval_test_path}',\
+'${mbpp_test_path}',\
+'${livecodebench_test_path}',\
+'${zebralogic_test_path}',\
+'${codeio_test_path}',\
+'${multihier_test_path}']"
 
 
 # =================== Model ===================
@@ -158,7 +180,7 @@ overlong_penalty_factor=1.0
 
 loss_agg_mode="token-mean"
 
-enable_filter_groups=True
+enable_filter_groups=False
 filter_groups_metric=acc
 max_num_gen_batches=10
 train_prompt_bsz=512  # grad accum bsz; real grad accum bsz: train_prompt_bsz * rollout.n
@@ -258,8 +280,8 @@ offload=True
     trainer.n_gpus_per_node=8 \
     trainer.nnodes="${NNODES}" \
     trainer.nnodes=$worker_num \
-    trainer.save_freq=20 \
-    trainer.test_freq=4 \
-    trainer.total_epochs=4 \
+    trainer.save_freq=5 \
+    trainer.test_freq=5 \
+    trainer.total_epochs=5 \
     +trainer.val_generations_to_log_to_wandb=50 \
     trainer.resume_mode=auto
