@@ -10,12 +10,12 @@ DATA_DIR=${WORKING_DIR}/data
 # train_files="['$bigmath_train_path']"
 # test_files="['$math_test_path']"
 
-test_files="['data/test/logic__graph_logical_dataset_201.parquet', 'data/test/logic__ordering_puzzle_dataset_200.parquet', 'data/test/logic__zebra_puzzle_dataset_200.parquet']"
-train_files="['data/train/logic__graph_logical_dataset_2.0k.parquet', 'data/train/logic__ordering_puzzle_dataset_2k.parquet', 'data/train/logic__zebra_puzzle_dataset_2k.parquet']"
+test_files="['data/test/logic__graph_logical_dataset_201.parquet', 'data/test/logic__ordering_puzzle_dataset_200.parquet', 'data/test/logic__zebra_puzzle_dataset_200.parquet', 'data/test/math__math_500.parquet']"
+train_files="['data/train/logic__graph_logical_dataset_2.0k.parquet', 'data/train/logic__ordering_puzzle_dataset_2k.parquet', 'data/train/logic__zebra_puzzle_dataset_2k.parquet', 'data/train/math__bigmath_filtered_mar21_10k.parquet']"
 
 # first download the model from huggingface
 # huggingface-cli download Qwen/Qwen2.5-3B --local-dir ~/hf_models/Qwen2.5-3B
-BASE_MODEL=${HOME}/hf_models/Qwen2.5-3B
+BASE_MODEL=${HOME}/hf_models/Qwen2.5-7B
 
 WANDB_PROJECT=Reasoning360
 WANDB_EXPERIMENT_NAME=${BASE_MODEL##*/}-Logic
@@ -60,4 +60,5 @@ export VLLM_USE_V1=0
     trainer.nnodes=1 \
     trainer.save_freq=1 \
     trainer.test_freq=10 \
+    trainer.val_generations_to_log_to_wandb=50 \
     trainer.total_epochs=15 $@
