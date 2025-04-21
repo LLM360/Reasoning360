@@ -96,13 +96,13 @@ humaneval_test_path=${TEST_DATA_DIR}/codegen__humaneval_164.parquet
 mbpp_test_path=${TEST_DATA_DIR}/codegen__mbpp_500.parquet
 livecodebench_test_path=${TEST_DATA_DIR}/codegen__livecodebench_279.parquet
 # Logic (train)
-zebralogic_train_path=${TRAIN_DATA_DIR}/logic__zebralogic_2.2k.parquet
+zebralogic_train_path=${TRAIN_DATA_DIR}/logic__zebra_puzzle_dataset_2.2k.parquet
 # Logic (test)
-zebralogic_test_path=${TEST_DATA_DIR}/logic__zebralogic_300.parquet
+zebralogic_test_path=${TEST_DATA_DIR}/logic__zebra_puzzle_dataset_300.parquet
 # Simulation (train)
 codeio_train_path=${TRAIN_DATA_DIR}/simulation__codeio_2.5k.parquet
 # Simulation (test)
-codeio_test_path=${TEST_DATA_DIR}/simulation__codeio-pyedu_500.parquet
+codeio_test_path=${TEST_DATA_DIR}/simulation__codeio_500.parquet
 # Table (train)
 multihier_train_path=${TRAIN_DATA_DIR}/table__multihier_2.3k.parquet
 # Table (test)
@@ -268,7 +268,7 @@ offload=True
     +actor_rollout_ref.model.override_config.embd_pdrop=0. \
     +actor_rollout_ref.model.override_config.resid_pdrop=0. \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
-    reward_model.reward_manager=dapo \
+    reward_model.reward_manager=async_dapo \
     reward_model.reward_metric=dapo \
     reward_model.overlong_buffer.enable=${enable_overlong_buffer} \
     reward_model.overlong_buffer.len=${overlong_buffer_len} \
@@ -280,7 +280,7 @@ offload=True
     trainer.n_gpus_per_node=8 \
     trainer.nnodes="${NNODES}" \
     trainer.nnodes=$worker_num \
-    trainer.save_freq=5 \
+    trainer.save_freq=20 \
     trainer.test_freq=5 \
     trainer.total_epochs=5 \
     +trainer.val_generations_to_log_to_wandb=50 \
