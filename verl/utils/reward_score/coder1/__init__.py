@@ -288,4 +288,4 @@ def compute_score(
         + f"Final Rward = {score}"
         + marker * 16
     )
-    return score
+    return {"score": score, "acc": score}

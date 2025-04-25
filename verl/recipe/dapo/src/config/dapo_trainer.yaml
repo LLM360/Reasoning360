@@ -176,7 +176,7 @@ reward_model:
     enable: False # We try to avoid forgetting to set enable
     len: 0
     penalty_factor: 0.0
-    log: False
+    log: True
 
 custom_reward_function:
   path: null
