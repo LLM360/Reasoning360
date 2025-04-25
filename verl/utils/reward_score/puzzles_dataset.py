@@ -98,7 +98,7 @@ def compute_score(solution_str, ground_truth, method='strict', timeout: float = 
             predicted_arrangement = extract_solution(solution_str=solution_str)
             
             if predicted_arrangement is None:
-                return 0
+                score = 0.0
 
             # Evaluate equation
             try:
@@ -107,18 +107,19 @@ def compute_score(solution_str, ground_truth, method='strict', timeout: float = 
                     max_possible_dist = max(len(predicted_arrangement), len(target))
                 result = predicted_arrangement == target
                 if result:
-                    return 1
+                    score = 1.0
                 elif method != 'strict':
-                    reward = max(1.0 - (edit_distance / max_possible_dist))
-                    return reward
+                    score = max(1.0 - (edit_distance / max_possible_dist))
                 else:
-                    return 0
+                    score = 0.0
             except Exception as e:
-                return 0
+                score = 0.0
 
     except TimeoutException:
         print("Computation timed out in puzzles_dataset")
-        return 0.0
+        score = 0.0
     except Exception as e:
         print(f"Error in compute_score in puzzles_dataset: {e}")
-        return 0.0
+        score = 0.0
+
+    return {"score": score, "acc": score}

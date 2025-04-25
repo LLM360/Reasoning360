@@ -52,20 +52,22 @@ def compute_score(solution_str, ground_truth, timeout: float = 10.0):
             if solution:
                 solution = solution.lower()
             else:
-                return 0.0
+                score = 0.0
 
             try:
                 if target == solution:
-                    return 1.0
+                    score = 1.0
                 else:
-                    return 0.0
+                    score = 0.0
 
             except Exception as e:
-                return 0.0
+                score = 0.0
 
     except TimeoutException:
         print("Computation timed out in graph_dataset")
-        return 0.0
+        score = 0.0 
     except Exception as e:
         print(f"Error in compute_score in graph_dataset: {e}")
-        return 0.0
+        score = 0.0
+
+    return {"score": score, "acc": score}

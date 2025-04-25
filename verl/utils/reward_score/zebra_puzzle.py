@@ -73,17 +73,19 @@ def compute_score(solution_str, ground_truth, method='strict', timeout: float = 
             predicted_arrangement = extract_solution(solution_str)
 
             if predicted_arrangement is None:
-                return 0.0
-
-            try:
-                accuracy = compute_accuracy(predicted_arrangement, ground_truth)
-                return accuracy
-            except Exception as e:
-                return 0.0
+                score = 0.0
+            else:
+                try:
+                    accuracy = compute_accuracy(predicted_arrangement, ground_truth)
+                    score = accuracy
+                except Exception as e:
+                    score = 0.0
 
     except TimeoutException:
         print("Computation timed out in zebra_puzzle")
-        return 0.0
+        score = 0.0
     except Exception as e:
         print(f"Error in compute_score in zebra_puzzle: {e}")
-        return 0.0
+        score = 0.0
+
+    return {"score": score, "acc": score}

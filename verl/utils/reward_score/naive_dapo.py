@@ -518,11 +518,8 @@ def compute_score(solution_str: str,
     reward = 1.0 if correct else 0.
     acc = correct
 
-    # Commented out as it cause unaligned reward_extra_info shape for multi-tasks, and we dont need non-score data now.
-    # return {
-    #     "score": reward,
-    #     "acc": acc,
-    #     "pred": pred,
-    # }
-
-    return reward
+    return {
+        "score": reward,
+        "acc": acc,
+        "pred": pred,
+    }

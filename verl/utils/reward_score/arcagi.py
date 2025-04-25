@@ -89,4 +89,4 @@ def compute_score(model_output: str, ground_truth: np.ndarray) -> float:
     model_output = str(model_output)
     final_answer = extract_solution(model_output)
     is_correct, correct_percentage = compare_solutions_with_padding(final_answer, ground_truth)
-    return is_correct
+    return {"score": is_correct, "acc": is_correct}
