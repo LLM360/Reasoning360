@@ -215,14 +215,14 @@ def _compute_score(
         else:  # pytest
             succ, output = code_exec(solution_code, pytest=ground_truth["pytest"])
         if not succ:
-            reward_log.append(
-                "!" * 16
-                + f"⚠️ Test Execution Failed in {time.time() - t_start:.1f}s"
-                + "!" * 16
-            )
-            reward_log.append(output[:_MAX_CHAR_DISPLAY])
-            reward_log.append("-" * 16 + "Failed Prompt" + "-" * 16)
-            reward_log.append(extra_info["original_prompt"].replace("\n\n", "\n"))
+            # reward_log.append(
+            #     "!" * 16
+            #     + f"⚠️ Test Execution Failed in {time.time() - t_start:.1f}s"
+            #     + "!" * 16
+            # )
+            # reward_log.append(output[:_MAX_CHAR_DISPLAY])
+            # reward_log.append("-" * 16 + "Failed Prompt" + "-" * 16)
+            # reward_log.append(extra_info["original_prompt"].replace("\n\n", "\n"))
             return format_reward, "\n".join(reward_log)
     elif "inputs" in ground_truth and "outputs" in ground_truth:
         stdin_list: str = ground_truth["inputs"]
@@ -241,18 +241,18 @@ def _compute_score(
                 succ, output, stdin, stdout = future.result()
                 if not succ or not fuzzy_equal(output.strip(), stdout.strip()):
                     output = output[:_MAX_CHAR_DISPLAY]  # truncate output to print
-                    reward_log.append(
-                        "!" * 16
-                        + f"⚠️ Test Execution Failed in {time.time() - t_start:.1f}s"
-                        + "!" * 16
-                    )
-                    reward_log.append(f"🔎Input: {repr(stdin)}")
-                    reward_log.append(f"✅Expected: {repr(stdout.strip())}")
-                    reward_log.append(
-                        f"❌Actual: {output if output.startswith(_ERROR_MSG_PREFIX) else repr(output.strip())}"
-                    )
-                    reward_log.append("-" * 16 + "Failed Prompt" + "-" * 16)
-                    reward_log.append(extra_info["original_prompt"].replace("\n\n", "\n"))
+                    # reward_log.append(
+                    #     "!" * 16
+                    #     + f"⚠️ Test Execution Failed in {time.time() - t_start:.1f}s"
+                    #     + "!" * 16
+                    # )
+                    # reward_log.append(f"🔎Input: {repr(stdin)}")
+                    # reward_log.append(f"✅Expected: {repr(stdout.strip())}")
+                    # reward_log.append(
+                    #     f"❌Actual: {output if output.startswith(_ERROR_MSG_PREFIX) else repr(output.strip())}"
+                    # )
+                    # reward_log.append("-" * 16 + "Failed Prompt" + "-" * 16)
+                    # reward_log.append(extra_info["original_prompt"].replace("\n\n", "\n"))
                     return format_reward, "\n".join(reward_log)
     else:
         raise ValueError(

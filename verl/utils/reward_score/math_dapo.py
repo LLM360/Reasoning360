@@ -291,5 +291,4 @@ def compute_score(solution_str: str,
     return {
         "score": reward,
         "acc": acc,
-        "pred": pred,
     }
