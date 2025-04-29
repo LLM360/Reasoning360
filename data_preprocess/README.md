@@ -68,6 +68,12 @@ python data_preprocess/logic/puzzle_gen.py --test True --num_puzzles <num_puzzle
 python data_preprocess/logic/process_puzzles_dataset.py
 ```
 
+**folio and logicNLI dataset**
+```bash
+python data_preprocess/logic/folio.py
+python data_preprocess/logic/logicNLI.py
+```
+
 ## Simulation
 ```bash
 python data_preprocess/simulation/codeio.py --train-sample-size <train_sample_size> --test-sample-size <test_sample_size>
