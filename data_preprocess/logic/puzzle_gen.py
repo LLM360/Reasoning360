@@ -9,6 +9,7 @@ import gen_proof as gen_proof
 import csv
 import argparse
 import json
+import copy
 
 @dataclass
 class Constraint:
@@ -37,18 +38,21 @@ class Constraint:
         return False
 
 class BirdPuzzleGenerator:
-    def __init__(self, objects: List[str]):
-        self.birds = objects
+    def __init__(self, objects: List[str], object_type : str):
+        self.objects = objects
         self.num_positions = len(objects)
         # Encode birds as integers (0 to n-1)
-        self.bird_encoding = {bird: i for i, bird in enumerate(objects)}
-        self.bird_decoding = {i: bird for i, bird in enumerate(objects)}
+        self.object_encoding = {obj: i for i, obj in enumerate(objects)}
+        self.object_decoding = {i: obj for i, obj in enumerate(objects)}
         
+        self.object_type = object_type
+        self.object_type_plural = "people" if object_type == "person" else f"{object_type}s"
+
         # Generate ground truth
         self.ground_truth_birds = list(objects)
         random.shuffle(self.ground_truth_birds)
         # Store encoded ground truth positions
-        self.ground_truth = [self.bird_encoding[bird] for bird in self.ground_truth_birds]
+        self.ground_truth = [self.object_encoding[bird] for bird in self.ground_truth_birds]
         
     def generate_all_constraints(self) -> List[Constraint]:
         """Generate all possible true constraints based on ground truth."""
@@ -56,25 +60,25 @@ class BirdPuzzleGenerator:
         relative_constraints = []
         # Generate all types of constraints
         for i in range(self.num_positions):
-            bird1_code = self.ground_truth[i]
-            bird1_name = self.bird_decoding[bird1_code]
-            
+            obj1_code = self.ground_truth[i]
+            obj1_name = self.object_decoding[obj1_code]
+            article1 = "" if self.object_type == "person" else "The "
             # Absolute position constraints
             pos_suffix = lambda n: 'th' if 11 <= n % 100 <= 13 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
             left_pos = i + 1
             right_pos = self.num_positions - i
             
             absolute_constraints.append(Constraint(
-                text=f"The {bird1_name} is the {left_pos}{pos_suffix(left_pos)} from the left",
-                object1=bird1_code,
+                text=f"{article1}{obj1_name} is the {left_pos}{pos_suffix(left_pos)} from the left",
+                object1=obj1_code,
                 object2=None,
                 constraint_type="absolute_position_left",
                 value=left_pos
             ))
             
             absolute_constraints.append(Constraint(
-                text=f"The {bird1_name} is the {right_pos}{pos_suffix(right_pos)} from the right",
-                object1=bird1_code,
+                text=f"{article1}{obj1_name} is the {right_pos}{pos_suffix(right_pos)} from the right",
+                object1=obj1_code,
                 object2=None,
                 constraint_type="absolute_position_right",
                 value=right_pos
@@ -82,22 +86,23 @@ class BirdPuzzleGenerator:
             
             # Relative position constraints
             for j in range(i + 1, self.num_positions):
-                bird2_code = self.ground_truth[j]
-                bird2_name = self.bird_decoding[bird2_code]
-                
+                obj2_code = self.ground_truth[j]
+                obj2_name = self.object_decoding[obj2_code]
+                article2 = "" if self.object_type == "person" else "the "
+
                 # Left/Right relationships
                 relative_constraints.append(Constraint(
-                    text=f"The {bird1_name} is to the left of the {bird2_name}",
-                    object1=bird1_code,
-                    object2=bird2_code,
+                    text=f"{article1}{obj1_name} is to the left of {article2}{obj2_name}",
+                    object1=obj1_code,
+                    object2=obj2_code,
                     constraint_type="left_of",
                     value=None
                 ))
                 
                 relative_constraints.append(Constraint(
-                    text=f"The {bird2_name} is to the right of the {bird1_name}",
-                    object1=bird2_code,
-                    object2=bird1_code,
+                    text=f"{article1}{obj2_name} is to the right of {article2}{obj1_name}",
+                    object1=obj2_code,
+                    object2=obj1_code,
                     constraint_type="right_of",
                     value=None
                 ))
@@ -105,11 +110,11 @@ class BirdPuzzleGenerator:
                 # Birds between
                 birds_between = j - i - 1
                 if birds_between > 0:
-                    plural = "s" if birds_between > 1 else ""
+                    plural = self.object_type_plural if birds_between > 1 else self.object_type
                     relative_constraints.append(Constraint(
-                        text=f"There {['is', 'are'][birds_between > 1]} {birds_between} bird{plural} between the {bird1_name} and the {bird2_name}",
-                        object1=bird1_code,
-                        object2=bird2_code,
+                        text=f"There {['is', 'are'][birds_between > 1]} {birds_between} {plural} between {article1.lower()}{obj1_name} and {article2}{obj2_name}",
+                        object1=obj1_code,
+                        object2=obj2_code,
                         constraint_type="birds_between",
                         value=birds_between
                     ))
@@ -117,83 +122,271 @@ class BirdPuzzleGenerator:
                 # Adjacent relationships
                 if birds_between == 0:
                     relative_constraints.append(Constraint(
-                        text=f"The {bird1_name} is immediately to the left of the {bird2_name}",
-                        object1=bird1_code,
-                        object2=bird2_code,
+                        text=f"{article1}{obj1_name} is immediately to the left of {article2}{obj2_name}",
+                        object1=obj1_code,
+                        object2=obj2_code,
                         constraint_type="adjacent_left",
                         value=None
                     ))
                     
                     relative_constraints.append(Constraint(
-                        text=f"The {bird2_name} is immediately to the right of the {bird1_name}",
-                        object1=bird2_code,
-                        object2=bird1_code,
+                        text=f"{article1}{obj2_name} is immediately to the right of {article2}{obj1_name}",
+                        object1=obj2_code,
+                        object2=obj1_code,
                         constraint_type="adjacent_right",
                         value=None
                     ))
         
         return absolute_constraints, relative_constraints
 
+
+    def apply_constraint(self, constraint : Constraint, domains: List[Set[int]]) -> bool:
+        """Apply a constraint to the domains and return whether any domain was modified"""
+        modified = False
+
+        if constraint.constraint_type == "absolute_position_left":
+            # Bird must be at the specific position
+            obj = constraint.object1
+            position = constraint.value - 1
+            if position in domains[obj]:
+                prev_domain = domains[obj].copy()
+                domains[obj] = {position}
+                modified = prev_domain != domains[obj]
+
+        elif constraint.constraint_type == "absolute_position_right":
+            # Bird must be at the specific position from right
+            obj = constraint.object1
+            position = self.num_positions - constraint.value
+            if position in domains[obj]:
+                prev_domain = domains[obj].copy()
+                domains[obj] = {position}
+                modified = prev_domain != domains[obj]
+
+        elif constraint.constraint_type == "left_of":
+            # Bird1 must be to the left of Bird2
+            obj1, obj2 = constraint.object1, constraint.object2
+            # Remove positions from bird1 that wouldn't allow this constraint
+            max_pos = max(domains[obj2]) - 1 if domains[obj2] else self.num_positions - 2
+            prev_domain = domains[obj1].copy()
+            domains[obj1] = {pos for pos in domains[obj1] if pos <= max_pos}
+            modified |= prev_domain != domains[obj1]
+            
+            # Remove positions from bird2 that wouldn't allow this constraint
+            min_pos = min(domains[obj1]) + 1 if domains[obj1] else 1
+            prev_domain = domains[obj2].copy()
+            domains[obj2] = {pos for pos in domains[obj2] if pos >= min_pos}
+            modified |= prev_domain != domains[obj2]
+
+        
+        elif constraint.constraint_type == "right_of":
+            # Bird1 must be to the right of Bird2
+            obj1, obj2 = constraint.object1, constraint.object2
+            # Remove positions from bird1 that wouldn't allow this constraint
+            min_pos = min(domains[obj2]) + 1 if domains[obj2] else 1
+            prev_domain = domains[obj1].copy()
+            domains[obj1] = {pos for pos in domains[obj1] if pos >= min_pos}
+            modified |= prev_domain != domains[obj1]
+            
+            # Remove positions from bird2 that wouldn't allow this constraint
+            max_pos = max(domains[obj1]) - 1 if domains[obj1] else self.num_positions - 2
+            prev_domain = domains[obj2].copy()
+            domains[obj2] = {pos for pos in domains[obj2] if pos <= max_pos}
+            modified |= prev_domain != domains[obj2]
+
+        elif constraint.constraint_type == "adjacent_left":
+            # Bird1 must be immediately to the left of Bird2
+            obj1, obj2 = constraint.object1, constraint.object2
+            # Remove positions from bird1 that wouldn't allow this constraint
+            prev_domain = domains[obj1].copy()
+            possible_positions = {pos for pos in domains[obj1] if pos + 1 in domains[obj2]}
+            domains[obj1] = possible_positions
+            modified |= prev_domain != domains[obj1]
+            
+            # Remove positions from bird2 that wouldn't allow this constraint
+            prev_domain = domains[obj2].copy()
+            possible_positions = {pos for pos in domains[obj2] if pos - 1 in domains[obj1]}
+            domains[obj2] = possible_positions
+            modified |= prev_domain != domains[obj2]
+
+        elif constraint.constraint_type == "adjacent_right":
+            # Bird1 must be immediately to the right of Bird2
+            obj1, obj2 = constraint.object1, constraint.object2
+            # Remove positions from bird1 that wouldn't allow this constraint
+            prev_domain = domains[obj1].copy()
+            possible_positions = {pos for pos in domains[obj1] if pos - 1 in domains[obj2]}
+            domains[obj1] = possible_positions
+            modified |= prev_domain != domains[obj1]
+            
+            # Remove positions from bird2 that wouldn't allow this constraint
+            prev_domain = domains[obj2].copy()
+            possible_positions = {pos for pos in domains[obj2] if pos + 1 in domains[obj1]}
+            domains[obj2] = possible_positions
+            modified |= prev_domain != domains[obj2]
+
+        elif constraint.constraint_type == "birds_between":
+            # There must be exactly value birds between bird1 and bird2
+            obj1, obj2 = constraint.object1, constraint.object2
+            value = constraint.value
+            
+            # For each possible position of bird1, check if there's a valid position for bird2
+            valid_pos1 = set()
+            for pos1 in domains[obj1]:
+                left_pos = pos1 - value - 1
+                right_pos = pos1 + value + 1
+                if (left_pos in domains[obj2]) or (right_pos in domains[obj2]):
+                    valid_pos1.add(pos1)
+            
+            prev_domain = domains[obj1].copy()
+            domains[obj1] = valid_pos1
+            modified |= prev_domain != domains[obj1]
+
+            # For each possible position of bird2, check if there's a valid position for bird1
+            valid_pos2 = set()
+            for pos2 in domains[obj2]:
+                left_pos = pos2 - value - 1
+                right_pos = pos2 + value + 1
+                if (left_pos in domains[obj1]) or (right_pos in domains[obj1]):
+                    valid_pos2.add(pos2)
+            
+            prev_domain = domains[obj2].copy()
+            domains[obj2] = valid_pos2
+            modified |= prev_domain != domains[obj2]
+        
+        return modified
+
+    def propagate_constraints(self, constraints: List[Constraint], domains: List[Set[int]]) -> bool:
+        """Propagate constraints until no more changes or inconsistency is detected"""
+        changed = True
+        consistent = True
+
+        while changed and consistent:
+            changed = False
+            for constraint in constraints:
+                changed_in_loop = self.apply_constraint(constraint, domains)
+                changed |= changed_in_loop
+            
+            # Check if any domain became empty (inconsistent)
+            for domain in domains:
+                if not domain:
+                    consistent = False
+                    break
+            
+            # Apply alldiff constraint - once a position is assigned to a bird, remove it from others
+            for i, domain in enumerate(domains):
+                if len(domain) == 1:  # If bird has only one possible position
+                    pos = next(iter(domain))
+                    for j, other_domain in enumerate(domains):
+                        if i != j and pos in other_domain:
+                            other_domain.remove(pos)
+                            changed = True
+                            if not other_domain:  # Domain became empty
+                                consistent = False
+                                break
+        return consistent
+
+
+    def has_unique_solution(self, constraints: List[Constraint]) -> bool:
+        """Check if the constraints lead to a unique solution matching ground truth"""
+        # Initialize domains - all birds can be at any position initially
+        domains = [set(range(self.num_positions)) for _ in range(self.num_positions)]
+        
+        # Propagate constraints
+        consistent = self.propagate_constraints(constraints, domains)
+        if not consistent:
+            return False
+        
+        # Check if we have a unique solution
+        is_unique = all(len(domain) == 1 for domain in domains)
+        if not is_unique:
+            return False
+        
+        # Extract the solution
+        solution = [0] * self.num_positions
+        for bird, domain in enumerate(domains):
+            position = next(iter(domain))
+            solution[position] = bird
+        
+        # Check if solution matches ground truth
+        return solution == self.ground_truth
+
+
+
     def verify_arrangement(self, constraints: List[Constraint], test_arrangement: List[int]) -> bool:
         """Verify if a given arrangement satisfies all constraints using mathematical evaluation."""
         return all(constraint.evaluate(test_arrangement) for constraint in constraints)
 
-    def find_minimal_constraints(self) -> List[Constraint]:
-        """Find a minimal set of constraints that uniquely determines the ground truth.
-        Uses incremental constraint addition until solution space reduces to one arrangement."""
+
+    def find_minimal_constraints(self, reduce_constraints=True) -> List[Constraint]:
+        """Find a minimal set of constraints using constraint propagation"""
         absolute_constraints, relative_constraints = self.generate_all_constraints()
-        # Shuffle constraints to randomize selection order
-        abs_constraints = list(absolute_constraints)
-        random.shuffle(abs_constraints)
-        rel_constraints = list(relative_constraints)
-        random.shuffle(rel_constraints)
-        
+
+        # Shuffle constraints to randomize selection
+        all_constraints = list(relative_constraints)
+        random.shuffle(all_constraints)
+
         selected_constraints = []
+        current_domains = [set(range(self.num_positions)) for _ in range(self.num_positions)]
 
-        # num_absolute = random.randint(0, int(self.num_positions*0.4))
-        num_absolute = 0
-        while len(selected_constraints) < num_absolute:
-            selected_constraints.append(abs_constraints.pop(0))
-        
-        while rel_constraints and len(selected_constraints) < len(rel_constraints):
-            # Take the next constraint
-            current_constraint = rel_constraints.pop(0)
-            selected_constraints.append(current_constraint)
-            
-            # Find all valid arrangements given current constraints
-            valid_arrangements = []
-            for perm in permutations(range(self.num_positions)):
-                if self.verify_arrangement(selected_constraints, list(perm)):
-                    valid_arrangements.append(list(perm))
-                    # if len(valid_arrangements) > 1:
-                    #     break
-            
-            # If we've found a unique solution matching ground truth
-            if len(valid_arrangements) == 1:
-                if valid_arrangements[0] == self.ground_truth:
-                    print("Found minimal constraint set!")
-                    return selected_constraints
-                else:
-                    # Our constraints led to a wrong unique solution
-                    print("Warning: Constraints led to incorrect unique solution.")
-                    # Remove the last constraint and try a different one
-                    selected_constraints.pop()
-                    continue
-            
-            # If we have no valid arrangements, the last constraint was incompatible
-            if len(valid_arrangements) == 0:
-                print("Warning: No valid arrangements with these constraints.")
-                # Remove the incompatible constraint and continue
-                selected_constraints.pop()
+        for constraint in all_constraints:
+            # Create test domains to see if this constraint changes anything
+            test_domains = copy.deepcopy(current_domains)
+            changed = self.apply_constraint(constraint, test_domains)
+
+            if not changed:
                 continue
-        
-        print("Warning: Could not find a minimal constraint set.")
-        return selected_constraints
 
-    def generate_puzzle(self) -> Tuple[List[Constraint], List[List[int]]]:
-        """Generate a puzzle with constraints and wrong arrangements."""
-        constraints = self.find_minimal_constraints()
-        return constraints
+            test_constraints = selected_constraints + [constraint]
+            test_domains = copy.deepcopy(current_domains)
+
+            consistent = self.propagate_constraints(test_constraints, test_domains)
+            if not consistent:
+                continue
+
+            # Check if we have a unique solution
+            is_unique = all(len(domain) == 1 for domain in test_domains)
+
+            if is_unique:
+                # Check if the solution matches ground truth
+                solution = [0] * self.num_positions
+                for bird, domain in enumerate(test_domains):
+                    position = next(iter(domain))
+                    solution[position] = bird
+                
+                if solution == self.ground_truth:
+                    selected_constraints.append(constraint)
+                    print(f"Found minimal constraint set with {len(selected_constraints)} constraints!")
+                    if reduce_constraints:
+                        return self.minimize_constraint_set(selected_constraints)
+                    else:
+                        return selected_constraints
+
+            # Add constraint and update domains since it made a difference
+            selected_constraints.append(constraint)
+            current_domains = test_domains
+
+        print(f"Found constraint set with {len(selected_constraints)} constraints")
+        if reduce_constraints:
+            return self.minimize_constraint_set(selected_constraints)
+        else:
+            return selected_constraints
+
+
+    def minimize_constraint_set(self, constraints: List[Constraint]) -> List[Constraint]:
+        """Minimize the set of constraints to the smallest set that still leads to a unique solution"""
+        reduced = True
+        minimal_constraints = constraints.copy()
+        while reduced:
+            reduced = False
+            for i in range(len(minimal_constraints)):
+                test_constraints = minimal_constraints.copy()
+                removed_constraint = test_constraints.pop(i)
+                if self.has_unique_solution(test_constraints):
+                    minimal_constraints = test_constraints
+                    reduced = True
+                    print(f"Reduced constraints set to {len(minimal_constraints)} constraints")
+                    break
+        return minimal_constraints
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate ordering puzzles for evaluating reasoning in LLMs")
@@ -201,6 +394,7 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", type=str, default="data/raw", help="Output directory for generated puzzles")
     parser.add_argument("--output_file", type=str, default="puzzles_dataset.json", help="Output filename for generated puzzles")
     parser.add_argument("--test", type=bool, default=False, help="Generate set without solution traces")
+    parser.add_argument("--num_objects", type=int, default=0, help="Number of objects to include in the puzzle (0 for random)")
     args = parser.parse_args()
 
     birds = ["hawk", "hummingbird", "quail", "owl", "crow", "robin", "cardinal", "sparrow", "bluejay", "pigeon", 
@@ -247,12 +441,12 @@ if __name__ == "__main__":
                 "Imani", "Alejandro", "Divya", "Kenji", "Chioma", "Paulo", "Ananya", 
                 "Hassan", "Valentina", "Kofi", "Sakura", "Amir"]
 
+    max_num_objects = min(len(birds), len(mammals), len(fruits), len(vehicles), len(instruments), len(gemstones), len(people))
     random.seed(42)
     num_puzzles = args.num_puzzles
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # Create the "generated_QAs" folder at the same level as the Python file if it doesn't exist
-    # output_folder = os.path.join(base_dir, args.output_dir)
+    
     output_folder = args.output_dir
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
@@ -275,18 +469,32 @@ if __name__ == "__main__":
         'gemstones': gemstones,
         'people': people
     }
+
+    object_type_singular = {
+        'birds': 'bird',
+        'mammals': 'mammal',
+        'fruits': 'fruit',
+        'vehicles': 'vehicle', 
+        'instruments': 'instrument',
+        'gemstones': 'gemstone',
+        'people': 'person'
+    }
     for id in range(num_puzzles):
-        num_objects = random.randint(3, 7)
-        
+        import time
+        t1 = time.monotonic()
+        num_objects = args.num_objects if (hasattr(args, 'num_objects') and args.num_objects >0) else random.randint(3, max_num_objects)
+        print(f"Generating puzzle {id} with {num_objects} objects")
         type_name = random.choice(list(object_types.keys()))
         type_objects = object_types[type_name]
         curr_birds = random.sample(type_objects, num_objects)
         birds_str = ", ".join(curr_birds)
         instruction = f"Solve the following puzzle to determine the order of the {type_name} from left to right. The {type_name} are {birds_str}."
-        generator = BirdPuzzleGenerator(curr_birds)
+        generator = BirdPuzzleGenerator(curr_birds, object_type_singular[type_name])
         
-        constraints = generator.generate_all_constraints()
-        constraints = generator.generate_puzzle()
+        constraints = generator.find_minimal_constraints()
+        t2 = time.monotonic()
+        print(f"Puzzle {id} generated in {t2 - t1:.6f} seconds")
+
         input = ""
         input_constraints = []
         for i, constraint in enumerate(constraints, 1):
