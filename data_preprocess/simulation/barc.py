@@ -1,17 +1,13 @@
-"""Downloads, processes, and saves Abstraction and Reasoning Corpus for Artificial General Intelligence v2 (ARC-AGI-2) datasets."""
+"""Downloads, processes, and saves BARC (Bootstrapping ARC: Synthetic Problem Generation for ARC Visual Reasoning Tasks) datasets."""
 
 import os
 import argparse
-import json
 import datasets
-from datasets import Dataset
-import subprocess
-
+import numpy as np
 from verl.utils.data_process.utils import set_seed, sample_dataset, save_dataset
 from verl.utils.data_process.filter import LengthFilter
 
 import transformers
-
 
 
 RawARCPrompt = """You are a world-class puzzle solver with exceptional pattern recognition skills. Your task is to analyze puzzles, spot patterns, and provide direct solutions.
@@ -27,43 +23,21 @@ What is the output grid? Please put your answer within <answer> and </answer> ta
 """
 
 
-def get_datasets(cache_dir, name, download=False):
+def get_datasets(cache_dir, N_samples=10000):
     """
     Downloads (if specified) and loads the ARC-AGI-1 and ARC-AGI-2 datasets.
     """
-    # Download the dataset
-    if name == "arcagi1":
-        dir_path = os.path.join(cache_dir, "ARC-AGI-1/")
-        url = "https://github.com/fchollet/ARC-AGI.git"
-    elif name == "arcagi2":
-        dir_path = os.path.join(cache_dir, "ARC-AGI-2/")
-        url = "https://github.com/arcprize/ARC-AGI-2.git"
-    if download: 
-        if os.path.isdir(dir_path):
-            pass
-        else:
-            try:
-                subprocess.run(["git", "clone", url, str(dir_path)], check=True)
-            except subprocess.CalledProcessError as e:
-                print("Error occurred while cloning the repo:", e)
-                
-    # Build the dataset.
-    train_dataset, test_dataset = [], []
-    data_dir = dir_path
-    train_dir = os.path.join(data_dir, "data/training/")
-    for data_path in os.listdir(train_dir):
-        with open(os.path.join(train_dir, data_path), 'r') as f:
-            data = json.load(f)
-            train_dataset.append(data)
-    test_dir = os.path.join(data_dir, "data/evaluation/")
-    for data_path in os.listdir(test_dir):
-        with open(os.path.join(test_dir, data_path), 'r') as f:
-            data = json.load(f)
-            test_dataset.append(data)
+    # Load the dataset
+    ds = datasets.load_dataset("barc0/200k_HEAVY_gpt4o-description-gpt4omini-code_generated_problems", 
+                  split="train", cache_dir=cache_dir) # only have train split, no test split, max 200k samples
+    
+    ds = ds.select(range(min(N_samples, len(ds))))
+    split_dataset = ds.train_test_split(test_size=0.2)
+    train_dataset = split_dataset["train"]
+    test_dataset = split_dataset["test"]
 
-    print(f"Training {len(train_dataset)} samples.")
-    print(f"Evaluation {len(test_dataset)} samples.")
-    return Dataset.from_list(train_dataset), Dataset.from_list(test_dataset)
+    return train_dataset, test_dataset
+
 
 
 
@@ -80,18 +54,25 @@ def make_map_fn(split: str, data_source: str, prompt_style: str="zero_style") ->
         A callable function that takes an example and index, and returns the processed data.
     """
     def process_fn(example, idx):
+        """
+        BARC dataset contains multiple examples, we only use the maximum 6 examples as the training examples.
+        """
         max_examples = 6 # max number of examples to show in the prompt
-        train_data = example.pop("train")
-        N_pairs = len(train_data)
+        train_data = example.pop("examples")
+        N_pairs = min(len(train_data)-1, max_examples)
         training_data_prompt = ""
-        for i in range(min(N_pairs, max_examples)):
+        for i in range(N_pairs):
             pair = train_data[i]
             training_data_prompt += f"Example {i+1}\n"
-            training_data_prompt += f"Input: {pair['input']}\nOutput: {pair['output']}\n\n"
+            input_data = [[int(float(x)) for x in row] for row in pair[0]]
+            output_data = [[int(float(x)) for x in row] for row in pair[1]]
+            training_data_prompt += f"Input: {input_data}\nOutput: {output_data}\n\n"
         raw_prompt = RawARCPrompt.replace("{{training_data}}", training_data_prompt)
-        test_data = example.pop("test")
-        raw_prompt = raw_prompt.replace("{{input_test_data}}", str(test_data[0]["input"]))
-        answer = test_data[0]["output"]
+        test_pair = train_data[N_pairs]
+        input_test_data = [[int(float(x)) for x in row] for row in test_pair[0]]
+        output_test_data = [[int(float(x)) for x in row] for row in test_pair[1]]
+        raw_prompt = raw_prompt.replace("{{input_test_data}}", str(input_test_data))
+        answer = np.array(output_test_data)
         data = {
             "data_source": data_source,
             "prompt": [{
@@ -114,13 +95,15 @@ def make_map_fn(split: str, data_source: str, prompt_style: str="zero_style") ->
 
 
 
+
+
 if __name__ == "__main__":
     """Main script execution: parse args, load, process, and save datasets."""
     parser = argparse.ArgumentParser(description="Download, process, and save ARC-AGI-2 datasets.")
     parser.add_argument('--data-dir', default='data',
                         help='Base directory to save the processed data files.')
     parser.add_argument('--domain', default="simulation", help='Domain of the dataset.')
-    parser.add_argument('--name', default="arcagi1", choices=['arcagi1', 'arcagi2'], help='Name of the dataset.')
+    parser.add_argument('--name', default="barc", help='Name of the dataset.')
     parser.add_argument('--train-sample-size', type=int, default=None,
                         help='Number of samples to use from training dataset. If None, use all samples.')
     parser.add_argument('--test-sample-size', type=int, default=None,
@@ -141,7 +124,7 @@ if __name__ == "__main__":
 
     # Download the dataset from Github, but still saving to HF_datasets_cache
     cache_dir = datasets.config.HF_DATASETS_CACHE
-    train_dataset, test_dataset = get_datasets(cache_dir, args.name, download=True)
+    train_dataset, test_dataset = get_datasets(cache_dir)
 
      # Process the dataset
     process_train_fn = make_map_fn('train', data_source, args.prompt_style)
