@@ -63,7 +63,7 @@ def make_map_fn(split: str, data_source: str) -> callable:
             "reward_model": {
                 "style": "rule",
                 "ground_truth": json.dumps({
-                    "functional": example["output"]
+                    "functional": example['code'].strip()
                 }),
             },
             "extra_info": {
@@ -71,7 +71,7 @@ def make_map_fn(split: str, data_source: str) -> callable:
                 "index": idx,
                 "reference": example["output"],  # Include the canonical solution as reference
                 "original_prompt": prompt,
-                "dataset": "cruxeval-o",
+                "dataset": "cruxeval-i",
                 "task_id": task_id,
             },
         }
@@ -92,7 +92,7 @@ if __name__ == '__main__':
                         help='Base directory to save the processed data files.')
     parser.add_argument('--domain', default="simulation",
                         help='Domain of the dataset.')
-    parser.add_argument('--name', default="cruxeval-o",
+    parser.add_argument('--name', default="cruxeval-i",
                         help='Name of the dataset.')
     parser.add_argument('--sample-size', type=int, default=None,
                         help='Number of samples to use from dataset. If None, use all samples.')
