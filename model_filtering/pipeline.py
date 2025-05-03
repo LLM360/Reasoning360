@@ -22,7 +22,7 @@ import traceback
 from model_filtering.utils import console, json_default, custom_collate_fn
 
 class DifficultyFilterPipeline:
-    def __init__(self, args):
+    def __init__(self, args, dataset=None):
         self.args = args
         self.tokenizer = None
         self.model = None
@@ -30,6 +30,7 @@ class DifficultyFilterPipeline:
 
         self.start_time = time.time()
         self.gen_times = []
+        self.dataset = dataset
 
     @staticmethod
     def format_time(seconds):
@@ -68,16 +69,9 @@ class DifficultyFilterPipeline:
     # ------------- dataset -------------------------------------------------- #
     def prepare_dataset(self):
         console.print(f"📂 Loading dataset from [highlight]{self.args.dataset_parquet_path}[/highlight]...")
-        if "livecodebench" in self.args.dataset_parquet_path:
-            # livecodebench is too long so we need a different way to load it
-            import polars as pl
-            console.print(f"🐞 [DEBUG] Loading livecodebench dataset using polars")
-            pd_data = pl.read_parquet(self.args.dataset_parquet_path).to_pandas()
-            dataset = Dataset.from_pandas(pd_data)
-        else:
-            dataset = Dataset.from_parquet(self.args.dataset_parquet_path)
-        
-        console.print(f"🐞 [DEBUG] Dataset loaded with [highlight]{len(dataset)}[/highlight] samples")
+        console.print(f"🐞 [DEBUG] Dataset loaded with [highlight]{len(self.dataset)}[/highlight] samples")
+
+        assert self.dataset is None
 
         # TODO: replace None values with empty strings in dataset columns and nested dictionaries
         # TODO: Below sometimes causes stucks in the process
@@ -104,22 +98,8 @@ class DifficultyFilterPipeline:
             
         # ── debug slice
         if self.args.debug:
-            dataset = dataset.select(range(min(48, len(dataset))))
-            console.print(f"🐞 [DEBUG] Using first [highlight]{len(dataset)}[/highlight] samples")
-
-        # ── DP split
-        if self.args.dp_size > 1:
-            total = len(dataset)
-            per_rank = total // self.args.dp_size
-            start = self.args.dp_rank * per_rank
-            end = start + per_rank if self.args.dp_rank != self.args.dp_size - 1 else total
-            dataset = dataset.select(range(start, end))
-            console.print(
-                f"🔢 DP rank [highlight]{self.args.dp_rank}[/highlight] "
-                f"processing [highlight]{len(dataset)}[/highlight] / {total}"
-            )
-        else:
-            console.print(f"📊 Dataset loaded with [highlight]{len(dataset)}[/highlight] samples")
+            self.dataset = self.dataset.select(range(min(48, len(self.dataset))))
+            console.print(f"🐞 [DEBUG] Using first [highlight]{len(self.dataset)}[/highlight] samples")
 
         # ── KEEP-ONLY columns actually referenced downstream ---------------- #
         required_cols = {
@@ -129,12 +109,11 @@ class DifficultyFilterPipeline:
             "data_source",
             "extra_info",
         }
-        cols_to_drop = [c for c in dataset.column_names if c not in required_cols]
+        cols_to_drop = [c for c in self.dataset.column_names if c not in required_cols]
         if cols_to_drop:
-            dataset = dataset.remove_columns(cols_to_drop)
+            self.dataset = self.dataset.remove_columns(cols_to_drop)
             console.print(f"🧹 Dropped {len(cols_to_drop)} column(s) for easier processing: {', '.join(cols_to_drop)}")
 
-        return dataset
 
     # ------------- checkpoint paths / I-O ------------------------------ #
     def get_checkpoint_path(self):
@@ -350,10 +329,10 @@ class DifficultyFilterPipeline:
     # ------------- main loop ------------------------------------------------ #
     def run_inference(self):
         self.initialize_components()
-        dataset = self.prepare_dataset()
+        self.prepare_dataset()
 
         dataloader = DataLoader(
-            dataset,
+            self.dataset,
             batch_size=self.args.batch_size,
             pin_memory=True,
             num_workers=min(4, os.cpu_count() // max(1, self.args.dp_size)),
