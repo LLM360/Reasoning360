@@ -144,15 +144,17 @@ def main():
                 per_rank = total // args.dp_size
                 start = global_rank * per_rank
                 end = start + per_rank if global_rank != args.dp_size - 1 else total
-                dataset = dataset.select(range(start, end))
+                console.print("start:", start)
+                console.print("end:",end)
+                dp_dataset = dataset.select(range(start, end))
                 console.print(
                     f"🔢 DP rank [highlight]{global_rank}[/highlight] "
-                    f"processing [highlight]{len(dataset)}[/highlight] / {total}"
+                    f"processing [highlight]{len(dp_dataset)}[/highlight] / {total}"
                 )
             else:
                 console.print(f"📊 Dataset loaded with [highlight]{len(dataset)}[/highlight] samples")
 
-            p = Process(target=run_dp_worker, args=(args, global_rank, args.dp_size, dataset))
+            p = Process(target=run_dp_worker, args=(args, global_rank, args.dp_size, dp_dataset))
             p.start()
             procs.append(p)
 
