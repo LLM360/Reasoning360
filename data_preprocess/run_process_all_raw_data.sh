@@ -40,4 +40,7 @@ python data_preprocess/simulation/arcagi.py --name arcagi2
 python data_preprocess/table/multihier.py
 python data_preprocess/table/hitab.py
 
+# Stem datasets
+python data_preprocess/stem_web/stem.py --parquet_out data/raw
+
 echo "All data preprocessing complete!"
