@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
-
+import traceback
 # Local imports
 from model_filtering.utils import console, json_default, custom_collate_fn
 
@@ -37,15 +37,15 @@ class DifficultyFilterPipeline:
 
     # ------------- component init ------------------------------------------ #
     def initialize_components(self):
-        console.print(f"🔄 [DP-{self.args.dp_rank}] Loading tokenizer from [highlight]{self.args.model_path}[/highlight]...")
+        console.print(f"🔄 Loading tokenizer from [highlight]{self.args.model_path}[/highlight]...")
         self.tokenizer = AutoTokenizer.from_pretrained(self.args.model_path)
 
         console.print(
-            f"🚀 [DP-{self.args.dp_rank}] Initializing model from [highlight]{self.args.model_path}[/highlight] "
+            f"🚀 Initializing model from [highlight]{self.args.model_path}[/highlight] "
             f"with TP={self.args.tp_size}..."
         )
-        console.print(f"[DP-{self.args.dp_rank}] Warning: enable_expert_parallel is set to {self.args.enable_expert_parallel}")
-        console.print("[DP-{self.args.dp_rank}] If you are using MOE models, set enable_expert_parallel to True")
+        console.print(f"Warning: enable_expert_parallel is set to {self.args.enable_expert_parallel}")
+        console.print("If you are using MOE models, set enable_expert_parallel to True")
         
         self.model = LLM(
             self.args.model_path,
@@ -53,7 +53,6 @@ class DifficultyFilterPipeline:
             enable_expert_parallel=self.args.enable_expert_parallel,
             enforce_eager=True,
         )
-
         self.sampling_params = SamplingParams(
             n=self.args.n,
             max_tokens=self.args.max_new_tokens,
@@ -62,8 +61,9 @@ class DifficultyFilterPipeline:
             temperature=self.args.temperature,
             repetition_penalty=self.args.repetition_penalty,
             skip_special_tokens=True,
+            truncate_prompt_tokens=self.args.max_prompt_length
         )
-        console.print(f"✅ [DP-{self.args.dp_rank}] Model initialization [success]complete[/success].")
+        console.print("✅ Model initialization [success]complete[/success].")
 
     # ------------- dataset -------------------------------------------------- #
     def prepare_dataset(self):
@@ -198,26 +198,61 @@ class DifficultyFilterPipeline:
     # ------------- batch serialization  ------------------------------------ #
     def process_batch_outputs(self, outputs, batch_dict):
         batch_results = {}
+        console.print(f"DP{self.args.dp_rank} Begin to process {len(outputs)} samples")
+
+        tokenizer = self.model.get_tokenizer()
+        MAX_LEN = self.args.max_prompt_length
 
         for i in range(len(outputs)):
-            # full model outputs
-            full_responses = [r.text for r in outputs[i].outputs]
+            messages = batch_dict["prompt"][i]
+            text = "".join(m["content"] for m in messages)
+            token_len = len(tokenizer(text).input_ids)
 
-            data_source   = batch_dict["data_source"][i]
-            ground_truth  = batch_dict["reward_model"]["ground_truth"][i]
-            messages      = batch_dict["prompt"][i]
-            question      = next((m["content"] for m in messages if m["role"] == "user"), "No question found")
-            extra_info    = {k: batch_dict["extra_info"][k][i] for k in batch_dict["extra_info"]}
+            # build extra_info, adding flags and lengths
+            extra_info = {k: batch_dict["extra_info"][k][i]
+                        for k in batch_dict["extra_info"]}
+            extra_info["too_long"] = (token_len > MAX_LEN)
+            extra_info["token_length"] = token_len
 
-            batch_results[i] = {
-                "messages":    messages,
-                "question":    question,
-                "ground_truth": ground_truth,
-                "source":      data_source,
-                "responses":   full_responses,
-                "extra_info":  extra_info,
-            }
+            try:
+                # collect model outputs
+                full_responses = [r.text for r in outputs[i].outputs]
 
+                # compute mean response length in tokens
+                if full_responses:
+                    resp_token_counts = [
+                        len(tokenizer(resp).input_ids) for resp in full_responses
+                    ]
+                    mean_resp_len = sum(resp_token_counts) / len(resp_token_counts)
+                else:
+                    mean_resp_len = 0.0
+                extra_info["response_mean_length"] = mean_resp_len
+
+                data_source  = batch_dict["data_source"][i]
+                if "zebra" in self.args.dataset_parquet_path:
+                    ground_truth = ""
+                else:
+                    ground_truth = batch_dict["reward_model"]["ground_truth"][i]
+                question     = next((m["content"] for m in messages if m["role"] == "user"),
+                                    "No question found")
+
+                batch_results[i] = {
+                    "messages":     messages,
+                    "question":     question,
+                    "ground_truth": ground_truth,
+                    "source":       data_source,
+                    "responses":    full_responses,
+                    "extra_info":   extra_info,
+                }
+
+                if token_len > MAX_LEN:
+                    console.print(f"⚠️ Sample {i} is over-length ({token_len} tokens); marked in extra_info.")
+
+            except Exception as e:
+                console.print(f"❌ Error processing sample {i}: {e}")
+                console.print(traceback.format_exc())
+
+        console.print(f"✅ Finished processing. Kept {len(batch_results)} / {len(outputs)} samples.")
         return batch_results
 
     # ------------- progress ------------------------------------------------- #
