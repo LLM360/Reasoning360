@@ -47,15 +47,18 @@ def _default_compute_score(data_source, solution_str, ground_truth, extra_info=N
         # TODO: tmp placeholder using math_verify
         from . import tablereason
         res = tablereason.compute_score(solution_str, ground_truth)
-    elif data_source in ["logic__zebra_puzzle_dataset"]:
+    elif data_source in ["zebra_puzzle_dataset"]:
         from . import zebra_puzzle
         res = zebra_puzzle.compute_score(solution_str, ground_truth)
-    elif data_source in ['logic__ordering_puzzle_dataset']:
+    elif data_source in ['ordering_puzzle_dataset']:
         from . import puzzles_dataset
         res = puzzles_dataset.compute_score(solution_str, ground_truth)
-    elif data_source in ['logic__graph_logical_dataset']:
+    elif data_source in ['graph_logical_dataset']:
         from . import graph_dataset
         res = graph_dataset.compute_score(solution_str, ground_truth)
+    elif data_source in ['WebInstruct-le30'] :
+        from . import stem_llm_judge
+        res = stem_llm_judge.compute_score(data_source=data_source, model_output=solution_str, ground_truth=ground_truth, extra_info=extra_info)
     else:
         raise NotImplementedError(f"Reward function is not implemented for {data_source=}")
 

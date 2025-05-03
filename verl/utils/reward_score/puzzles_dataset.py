@@ -94,7 +94,7 @@ def compute_score(solution_str, ground_truth, method='strict', timeout: float = 
     """
     try:
         with time_limit(timeout):
-            target = ground_truth.tolist()
+            target = ground_truth.tolist() if not isinstance(ground_truth,list) else ground_truth
             predicted_arrangement = extract_solution(solution_str=solution_str)
             
             if predicted_arrangement is None:
