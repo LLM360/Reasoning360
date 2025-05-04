@@ -101,7 +101,6 @@ def _last_boxed_only_string(string):
 
 def match_answer(response):
     is_matched = False
-    response = response.split("</think>")[-1]
 
     # Find boxed
     ans_boxed = _last_boxed_only_string(response)
