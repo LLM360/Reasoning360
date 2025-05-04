@@ -14,6 +14,7 @@ from rich.panel import Panel
 from model_filtering.utils import console
 from model_filtering.pipeline import DifficultyFilterPipeline
 from datasets import Dataset
+
 # --------------------------------------------------------------------------- #
 # Data-parallel worker                                                        #
 # --------------------------------------------------------------------------- #
@@ -71,7 +72,7 @@ def main():
     parser.add_argument("--dataset_parquet_path", type=str, required=True)
     parser.add_argument("--output_dir", type=str, default="./diff_filter_output")
 
-    parser.add_argument("--max_prompt_length", type=int, default=2048)
+    parser.add_argument("--max_prompt_length", type=int, default=4096)
     parser.add_argument(
         "--truncation", type=str, default="error", choices=["left", "right", "error"]
     )
@@ -92,6 +93,9 @@ def main():
 
     parser.add_argument("--force_regenerate", action="store_true",
                         help="Force regeneration of outputs for all data, ignoring previously saved results")
+
+    parser.add_argument("--skip_percentage", type=float, default=0.0,
+                        help="Skip to this percentage (0.0-1.0) of the dataset (e.g., 0.6 for 60%)")
 
     parser.add_argument("--dp_size", type=int, default=1)
     parser.add_argument("--tp_size", type=int, default=1)

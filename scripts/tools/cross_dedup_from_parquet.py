@@ -5,6 +5,7 @@ from functools import partial
 from typing import List, Tuple, Callable, Any, Dict
 import argparse
 import os
+import pandas as pd
 
 from verl.utils.data_process.utils import save_dataset
 
@@ -72,6 +73,8 @@ def deduplicate_datasets(
             dataframe = pl.read_parquet(data_path).to_pandas()
             dataset = datasets.Dataset.from_pandas(dataframe)
             print(f"Loaded {data_name} from {data_path}, with {len(dataset)} items")
+            
+        
         if dataset[0]['extra_info'].get("original_question"):
             # math
             contents = [item['extra_info']['original_question'].lower().strip() for item in dataset]
@@ -107,12 +110,13 @@ def deduplicate_datasets(
 
     return deduplicated_datasets
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_dir", type=str, default="data/train")
     parser.add_argument("--input_data_names", type=str, nargs="+")
     parser.add_argument("--equal_func_name", type=str, default="contain", choices=["contain"])
-    parser.add_argument("--domain", type=str, default="codegen", choices=["math", "code"])
+    parser.add_argument("--domain", type=str, default="math", choices=["math", "code"])
     parser.add_argument("--output_data_name", type=str, default="merged_deduped")
     parser.add_argument("--merge_data", type=bool, default=False)
     args = parser.parse_args()
@@ -121,12 +125,12 @@ if __name__ == "__main__":
     # data_parquet_paths = args.data_parquet_paths
     input_data_names = [
         # f"math__bigmath_preview_filtered_mar21_157.3k",
-        # f"math__deepscaler_preview_40.3k",
-        # f"math__merged_deduped_dapo_or1_dataset_117.2k",
-        f"codegen__leetcode2k_2.4k",
-        f"codegen__taco_11.2k",
-        f"codegen__primeintellect_11.4k",
-        f"codegen__livecodebench_599",
+        f"math__deepscaler_preview_40.3k",
+        f"math__merged_deduped_dapo_or1_dataset_117.2k",
+        # f"codegen__leetcode2k_2.4k",
+        # f"codegen__taco_11.2k",
+        # f"codegen__primeintellect_11.4k",
+        # f"codegen__livecodebench_599",
     ]
     equal_func_maps = {
         "contain": lambda x, y: x in y or y in x
@@ -148,6 +152,7 @@ if __name__ == "__main__":
         single_deduped_dataset = dataset.filter(lambda x: x['is_unique'])
         total_unique_items += len(single_deduped_dataset)
         deduped_dataset.append(single_deduped_dataset)
+        print(len(single_deduped_dataset))
         if not args.merge_data:
             deduped_dataset_path = save_dataset(
                 dataset=single_deduped_dataset,
@@ -155,15 +160,22 @@ if __name__ == "__main__":
                 filename_prefix=f"{args.domain}__deduped_{data_name.split('__')[1]}",
                 sample_size=None
             )
+            print(f"Saved deduplicated dataset to {deduped_dataset_path}")
 
     if args.merge_data:
-        deduped_dataset = datasets.concatenate_datasets(deduped_dataset)
+        # Merge into one dataset, but don't use concatenate_datasets
+        merged_dataset = []
+        for dataset in deduped_dataset:
+            print(len(dataset))
+            merged_dataset.extend(dataset)
+        merged_dataset = datasets.Dataset.from_pandas(pd.DataFrame(merged_dataset))
         deduped_dataset_path = save_dataset(
-            dataset=deduped_dataset,
+            dataset=merged_dataset,
             output_dir=args.data_dir,
             filename_prefix=f"{args.domain}__{args.output_data_name}",
             sample_size=None
         )
+        print(f"Saved deduplicated dataset to {deduped_dataset_path}")
     print(f"Total items: {total_items}")
     print(f"Total unique items: {total_unique_items}")
     print(f"Deduplication ratio: {total_unique_items / total_items}")
