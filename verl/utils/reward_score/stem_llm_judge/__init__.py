@@ -26,18 +26,12 @@ Student Answer:
 {STUDENT_ANSWER}
 
 Carefully think and check whether the student answer is equivalent to the reference answer. 
+You only need to refer to the reference answer to grade the student's answer. Sometimes the student's answer is expressed in a different way from the reference answer, but the meaning is the same, and you should still consider it correct. If they are not equivalent in mathematical sense, you should consider it incorrect.
 
 <Final Grade>: CORRECT or INCORRECT
 
 """
 
-# ------------ Helper: boxed{…} extraction -----------------------------------
-_BOX_RE = re.compile(r"\\boxed\{([^}]+)\}")
-
-def _extract(ans: str) -> str:
-    """Return content inside \boxed{...} if present, else original string."""
-    m = _BOX_RE.search(ans)
-    return m.group(1).strip() if m else ans.strip()
 
 # ------------ Core LLM call --------------------------------------------------
 def _llm_judge(question: str, student: str, reference: str) -> bool:
@@ -63,10 +57,8 @@ def _llm_judge(question: str, student: str, reference: str) -> bool:
     resp.raise_for_status()
     data = resp.json()
 
-    # 提取回复文本
     text = data["choices"][0]["message"]["content"]
 
-    # 如果开启 DEBUG，就打印完整的 JSON 和最终文本
     if False:
         print("=== LLM Judge RAW RESPONSE ===")
         import json as _json
@@ -76,6 +68,50 @@ def _llm_judge(question: str, student: str, reference: str) -> bool:
         print("=== End of LLM Judge Reply ===\n")
 
     return "<Final Grade>: CORRECT" in text
+
+def _last_boxed_only_string(string):
+    idx = string.rfind("\\boxed")
+    if idx < 0:
+        idx = string.rfind("\\fbox")
+        if idx < 0:
+            return None
+
+    i = idx
+    left_brace_idx = None
+    right_brace_idx = None
+    num_left_braces_open = 0
+    while i < len(string):
+        if string[i] == "{":
+            num_left_braces_open += 1
+            if left_brace_idx is None:
+                left_brace_idx = i
+        elif string[i] == "}":
+            num_left_braces_open -= 1
+            if num_left_braces_open == 0:
+                right_brace_idx = i
+                break
+
+        i += 1
+
+    if left_brace_idx is None or right_brace_idx is None:
+        return None
+
+    return string[left_brace_idx + 1:right_brace_idx].strip()
+
+
+def match_answer(response):
+    is_matched = False
+    response = response.split("</think>")[-1]
+
+    # Find boxed
+    ans_boxed = _last_boxed_only_string(response)
+    if ans_boxed:
+        is_matched = True
+        response = ans_boxed
+    
+    return is_matched, response
+
+
 # ------------ Public API -----------------------------------------------------
 def compute_score(data_source: str,
                   model_output: str,
@@ -93,20 +129,21 @@ def compute_score(data_source: str,
     (is_correct, score, normalized_student_answer)
         score is 1.0 if correct, else 0.0
     """
-
-    student_ans = _extract(str(model_output))
+    model_output = str(model_output)
+    ground_truth = str(ground_truth)
+    is_matched, extracted_model_output = match_answer(model_output)
     question    = extra_info["question"]
-
-    try:
-        is_correct = _llm_judge(question, student_ans, str(ground_truth))
-    except Exception as e:
-        # 如果 LLM 服务失败，保守给错并打印日志
-        print(f"[judge-error] {e}")
-        is_correct = False
-
-    return float(is_correct)
-
-
+    if is_matched==False:
+        return 0.
+    else:
+        try:
+            is_correct = _llm_judge(question, extracted_model_output, ground_truth)
+            reward_log = ("answer: "+str(extracted_model_output)+"\n"+"gt: "+ground_truth+"\n"+"score: "+str(is_correct) +"\n"+"-"*50)
+            # print(reward_log)
+        except Exception as e:
+            print(f"[judge-error] {e}")
+            return 0.
+    
 # ---------------- Demo -------------------------------------------------------
 if __name__ == "__main__":
     demo_item = {
