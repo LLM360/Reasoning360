@@ -45,7 +45,7 @@ dependencies = [
     "ray[default]>=2.10",
     "torchdata",
     "transformers==4.51.0",
-    "vllm==0.8.2",
+    "vllm==0.8.5",
     'wandb',
     "math-verify[antlr4_9_3]==0.6.0",
     "nvitop",
