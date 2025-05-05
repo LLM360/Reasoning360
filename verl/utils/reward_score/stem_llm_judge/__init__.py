@@ -5,32 +5,32 @@ Prerequisite:
   - Set env var STEM_LLM_JUDGE_URL to an OpenAI-compatible /v1/chat/completions.
   - Launch the service with your preferred model beforehand, e.g.
 
-        vllm serve --model mistralai/Mistral-7B-Instruct-v0.2 --port 8000
+        vllm serve TIGER-Lab/general-verifier
         export STEM_LLM_JUDGE_URL=http://127.0.0.1:8000/v1/chat/completions
 """
 
 import os, re, requests
 from typing import Tuple
 
-# ------------ Prompt template ------------------------------------------------
-JUDGE_TEMPLATE = """\
-You are a strict grader for university-level STEM problems.
+# # ------------ Prompt template ------------------------------------------------
+# JUDGE_TEMPLATE = """\
+# You are a strict grader for university-level STEM problems.
 
-Question:
-{QUESTION}
+# Question:
+# {QUESTION}
 
-Reference Answer:
-{REFERENCE_ANSWER}
+# Reference Answer:
+# {REFERENCE_ANSWER}
 
-Student Answer:
-{STUDENT_ANSWER}
+# Student Answer:
+# {STUDENT_ANSWER}
 
-Carefully think and check whether the student answer is equivalent to the reference answer. 
-You only need to refer to the reference answer to grade the student's answer. Sometimes the student's answer is expressed in a different way from the reference answer, but the meaning is the same, and you should still consider it correct. If they are not equivalent in mathematical sense, you should consider it incorrect.
+# Carefully think and check whether the student answer is equivalent to the reference answer. 
+# You only need to refer to the reference answer to grade the student's answer. Sometimes the student's answer is expressed in a different way from the reference answer, but the meaning is the same, and you should still consider it correct. If they are not equivalent in mathematical sense, you should consider it incorrect.
 
-<Final Grade>: CORRECT or INCORRECT
+# <Final Grade>: CORRECT or INCORRECT
 
-"""
+# """
 
 
 # ------------ Core LLM call --------------------------------------------------
@@ -40,14 +40,23 @@ def _llm_judge(question: str, student: str, reference: str) -> bool:
         raise EnvironmentError("STEM_LLM_JUDGE_URL not set")
     url = url_base.rstrip("/") + "/v1/chat/completions"
 
-    prompt = JUDGE_TEMPLATE.format(
-        QUESTION=question,
-        STUDENT_ANSWER=student,
-        REFERENCE_ANSWER=reference,
+    # prompt = JUDGE_TEMPLATE.format(
+    #     QUESTION=question,
+    #     STUDENT_ANSWER=student,
+    #     REFERENCE_ANSWER=reference,
+    # )
+
+    prompt = (
+    f"User: ### Question: {question}\n\n"
+    f"### Ground Truth Answer: {reference}\n\n"
+    f"### Student Answer: {student}\n\n"
+    "For the above question, please verify if the student's answer is equivalent to the ground truth answer.\n"
+    "Do not solve the question by yourself; just check if the student's answer is equivalent to the ground truth answer.\n"
+    "If the student's answer is correct, output \"Final Decision: Yes\". If the student's answer is incorrect, output \"Final Decision: No\". Assistant:"
     )
 
     payload = {
-        "model": "Qwen/Qwen3-30B-A3B",
+        "model": "TIGER-Lab/general-verifier",
         "messages": [{"role": "user", "content": prompt}],
         "chat_template_kwargs": {"enable_thinking": False},
         "temperature": 0.0
@@ -58,16 +67,21 @@ def _llm_judge(question: str, student: str, reference: str) -> bool:
     data = resp.json()
 
     text = data["choices"][0]["message"]["content"]
+    score = float("Final Decision: Yes" in text)
 
-    if False:
-        print("=== LLM Judge RAW RESPONSE ===")
+    marker = "✅" if score == 1. else "❌"
+
+    if True:
+        print(marker*50 )
+        print("student answer: ", student)
+        print("gt: ", reference)
         import json as _json
         print(_json.dumps(data, indent=2, ensure_ascii=False))
-        print("=== LLM Judge CONTENT ===")
+        print(marker*16 + " LLM Judge CONTENT " + marker*16 )
         print(text)
-        print("=== End of LLM Judge Reply ===\n")
+        print(marker*16 + "End of LLM Judge Reply \n"+ marker*16 )
 
-    return "<Final Grade>: CORRECT" in text
+    return score
 
 def _last_boxed_only_string(string):
     idx = string.rfind("\\boxed")
@@ -137,11 +151,11 @@ def compute_score(data_source: str,
     else:
         try:
             is_correct = _llm_judge(question, extracted_model_output, ground_truth)
-            reward_log = ("answer: "+str(extracted_model_output)+"\n"+"gt: "+ground_truth+"\n"+"score: "+str(is_correct) +"\n"+"-"*50)
             # print(reward_log)
         except Exception as e:
             print(f"[judge-error] {e}")
             return 0.
+        return float(is_correct)
     
 # ---------------- Demo -------------------------------------------------------
 if __name__ == "__main__":
