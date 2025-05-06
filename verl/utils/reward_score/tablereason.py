@@ -1,4 +1,4 @@
-# from verl.utils.reward_score import prime_math
+from verl.utils.reward_score.prime_math.grader import math_equal
 from verl.utils.reward_score import math
 
 def compute_score(model_output: str, ground_truth: str) -> bool:
@@ -12,18 +12,17 @@ def compute_score(model_output: str, ground_truth: str) -> bool:
     else:
         answer = solution_str
 
-    print(f">>> {answer}, {ground_truth}")
+    # print(f">>> {answer}, {ground_truth}")
     if "|" not in ground_truth:
-        # Single answer
-        nanswer = answer.replace(",", "")
-                        .replace("%", " / 100")
-                        .replace("$", "")
-                        .replace(":", "/")
+        # Single numeric answer
         try:
+            nanswer = answer.replace(",", "").replace("%", " / 100").replace("$", "").replace(":", "/")
             nanswer = float(eval(nanswer))
+            score = math_equal(nanswer, ground_truth, tolerance=1e-3)
+        # If the answer is not a number, use the original answer for full string match
         except:
             nanswer = answer
-        score = math.is_equiv(answer, ground_truth)
+            score = math.is_equiv(nanswer, ground_truth)
     else:
         # Multiple answers, in format "ans1|ans2|ans3"
         try:
