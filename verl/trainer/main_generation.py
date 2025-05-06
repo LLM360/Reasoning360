@@ -18,6 +18,7 @@ import ray
 import numpy as np
 import hydra
 import os
+import json
 
 os.environ['NCCL_DEBUG'] = 'WARN'
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
@@ -146,6 +147,10 @@ def main_task(config):
     output_dir = os.path.dirname(config.data.output_path)
     makedirs(output_dir, exist_ok=True)
     dataset.to_parquet(config.data.output_path)
+    result_list = [{"prompt": chat, "response": output} for chat, output in zip(chat_lst, output_lst)]
+    model_name = config.model.path.split('/')[-1]
+    with open(config.data.output_path.replace('.parquet', f'_{model_name}.json'), 'w', encoding='utf-8') as f:
+        json.dump(result_list, f, indent=2, ensure_ascii=False)
 
     return output_text
 

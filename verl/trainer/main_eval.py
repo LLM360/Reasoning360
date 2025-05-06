@@ -19,7 +19,7 @@ The input is a parquet file that contains N generated sequences and (optional) t
 
 import hydra
 from verl.utils.fs import copy_to_local
-from verl.utils.reward_score import math, gsm8k, cruxeval, tablereason
+from verl.utils.reward_score import math, gsm8k, cruxeval, tablereason, naive_dapo, coder1, gpqa
 import pandas as pd
 import numpy as np
 
@@ -31,6 +31,14 @@ def select_reward_fn(data_source):
         return cruxeval.compute_score
     elif data_source.startswith('table'):
         return tablereason.compute_score
+    # math
+    elif data_source in ['aime_repeated_8x', 'math', 'olympiad_bench']:
+        return naive_dapo.compute_score
+    # code gen
+    elif data_source in ['codegen__humaneval', 'codegen__mbpp', 'codegen__livecodebench']:
+        return coder1.compute_score
+    elif data_source == 'stem__gpqa':
+        return gpqa.compute_score
     else:
         raise NotImplementedError
 
@@ -43,6 +51,7 @@ def main(config):
     responses = dataset[config.data.response_key]
     data_sources = dataset[config.data.data_source_key]
     reward_model_data = dataset[config.data.reward_model_key]
+    extra_info_data = dataset['extra_info']
 
     passes = 0
 
@@ -56,9 +65,10 @@ def main(config):
         reward_data = reward_model_data[i]
         reward_fn = select_reward_fn(data_source)
         ground_truth = reward_data['ground_truth']
+        extra_info = extra_info_data[i]
         score_lst = []
         for r in response_lst:
-            score = reward_fn(r, ground_truth)
+            score = reward_fn(r, ground_truth, extra_info)
             score_lst.append(score)
 
         max_score = np.max(score_lst)
