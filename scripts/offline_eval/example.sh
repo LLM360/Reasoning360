@@ -2,7 +2,10 @@ set -x
 
 data_path=./data/test/simulation__cruxeval-i_800.parquet
 save_path=./data/test/simulation__cruxeval-i_800_gen.parquet
-model_path=Qwen/Qwen2-7B-Instruct
+model_path=deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
+
+data_path=./data/test/simulation__cruxeval-o_800.parquet
+save_path=./data/test/simulation__cruxeval-o_800_gen.parquet
 
 python3 -m verl.trainer.main_generation \
     trainer.nnodes=1 \
@@ -12,12 +15,11 @@ python3 -m verl.trainer.main_generation \
     data.n_samples=1 \
     data.output_path=$save_path \
     model.path=$model_path \
-    +model.trust_remote_code=True \
-    rollout.temperature=1.0 \
+    rollout.temperature=0.6 \
     rollout.top_k=50 \
-    rollout.top_p=0.7 \
+    rollout.top_p=0.95 \
     rollout.prompt_length=2048 \
-    rollout.response_length=1024 \
+    rollout.response_length=4096 \
     rollout.tensor_model_parallel_size=2 \
     rollout.gpu_memory_utilization=0.8
 

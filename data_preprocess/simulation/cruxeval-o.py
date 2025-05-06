@@ -27,97 +27,83 @@ def get_datasets(cache_dir: str):
 
 def make_map_fn(split: str, data_source: str) -> callable:
     def process_fn(example, idx):
-        
+
         # Extract task ID and prompt
         task_id = example["id"]
 
         prompt = (
-            "You are given a Python function and an assertion containing an input to the function. Complete the assertion with a literal (no unsimplified expressions, no function calls) containing the output when executing the provided code on the given input, even if the function is incorrect or incomplete. Do NOT output any extra information. Execute the program step by step before arriving at an answer, and provide the full assertion with the correct output in [ANSWER] and [/ANSWER] tags, following the examples.\n\n"
-            "[PYTHON]\n"
-            "def f(s):\n"
-            "    s = s + s\n"
-            "    return 'b' + s + 'a'\n"
-            "assert f('hi') == ??\n"
-            "[/PYTHON]\n"
-            "[THOUGHT]\n"
-            "Let's execute the code step by step:\n"
-            "1. The function f is defined, which takes a single argument s.\n"
-            "2. The function is called with the argument 'hi', so within the function, s is initially 'hi'.\n"
-            "3. Inside the function, s is concatenated with itself, so s becomes 'hihi'.\n"
-            "4. The function then returns a new string that starts with 'b', followed by the value of s (which is now 'hihi'), and ends with 'a'.\n"
-            "5. The return value of the function is therefore 'bhihia'.\n"
-            "[/THOUGHT]\n"
-            "[ANSWER]\n"
-            "assert f('hi') == 'bhihia'\n"
-            "[/ANSWER]\n"
-            "[PYTHON]\n"
+            "You will be given a Python function and an assertion containing an input to the function. Complete the assertion with a literal (no unsimplified expressions, no function calls) containing the output when executing the provided code on the given input, even if the function is incorrect or incomplete. Do NOT output any extra information. Execute the program step by step before arriving at an answer, and provide the full assertion with the correct output in ```python and ``` tags, following the examples.\n\n"
+            "```python\n"
             f"{example['code'].strip()}\n"
             f"assert f({example['input']}) == ??\n"
-            "[/PYTHON]\n"
-            "[THOUGHT]\n"
+            "```\n"
         )
-        
 
         data = {
             "data_source": data_source,
-            "prompt": [
-                {"role": "user", "content": prompt}
-            ],
+            "prompt": [{"role": "user", "content": prompt}],
             "ability": "simulation",
             "apply_chat_template": True,
             "reward_model": {
                 "style": "rule",
-                "ground_truth": json.dumps({
-                    "functional": example["output"]
-                }),
+                "ground_truth": json.dumps({"functional": example["code"].strip()}),
             },
             "extra_info": {
                 "split": split,
                 "index": idx,
-                "reference": example["output"],  # Include the canonical solution as reference
+                "reference": example[
+                    "output"
+                ],  # Include the canonical solution as reference
                 "original_prompt": prompt,
                 "dataset": "cruxeval-o",
                 "task_id": task_id,
             },
         }
-        
+
         if idx == 0 or idx == 1:
             print("\n" + "=" * 10 + f"{data_source} {split} {idx}" + "=" * 10)
             print(data)
-            
+
         return data
 
     return process_fn
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     """Main script execution: parse args, load, process, and save datasets."""
     parser = argparse.ArgumentParser(description="Process and save HumanEval dataset.")
-    parser.add_argument('--data-dir', default='data',
-                        help='Base directory to save the processed data files.')
-    parser.add_argument('--domain', default="simulation",
-                        help='Domain of the dataset.')
-    parser.add_argument('--name', default="cruxeval-o",
-                        help='Name of the dataset.')
-    parser.add_argument('--sample-size', type=int, default=None,
-                        help='Number of samples to use from dataset. If None, use all samples.')
-    parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
+    parser.add_argument(
+        "--data-dir",
+        default="data",
+        help="Base directory to save the processed data files.",
+    )
+    parser.add_argument("--domain", default="simulation", help="Domain of the dataset.")
+    parser.add_argument("--name", default="cruxeval-o", help="Name of the dataset.")
+    parser.add_argument(
+        "--sample-size",
+        type=int,
+        default=None,
+        help="Number of samples to use from dataset. If None, use all samples.",
+    )
+    parser.add_argument(
+        "--seed", type=int, default=42, help="Random seed for reproducibility"
+    )
 
     args = parser.parse_args()
 
     set_seed(args.seed)
 
     data_source = f"{args.domain}__{args.name}"
-    test_output_dir = os.path.join(args.data_dir, 'test')
+    test_output_dir = os.path.join(args.data_dir, "test")
     os.makedirs(test_output_dir, exist_ok=True)
-    
+
     # Load the dataset
     cache_dir = datasets.config.HF_DATASETS_CACHE
     _, dataset = get_datasets(cache_dir=cache_dir)
 
     # Process the dataset
-    process_fn = make_map_fn('test', data_source)
-    
+    process_fn = make_map_fn("test", data_source)
+
     dataset = dataset.map(function=process_fn, with_indices=True)
 
     # Filter out examples where processing failed
@@ -134,15 +120,17 @@ if __name__ == '__main__':
 
     # Sample the dataset
     dataset = sample_dataset(dataset, args.sample_size)
-    
+
     # Save the dataset to test directory
     test_output_path = save_dataset(
         dataset=dataset,
         output_dir=test_output_dir,
         filename_prefix=data_source,
-        sample_size=len(dataset)
+        sample_size=len(dataset),
     )
 
-    print(f"\nDone! \n"
-          f"Data source: {data_source}\n"
-          f"Test data saved to {test_output_path} ({len(dataset)} samples)")
+    print(
+        f"\nDone! \n"
+        f"Data source: {data_source}\n"
+        f"Test data saved to {test_output_path} ({len(dataset)} samples)"
+    )
