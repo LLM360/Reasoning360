@@ -11,9 +11,18 @@ def compute_score(model_output: str, ground_truth: str) -> bool:
         answer = math.remove_boxed(answer_str)
     else:
         answer = solution_str
-        
+
+    print(f">>> {answer}, {ground_truth}")
     if "|" not in ground_truth:
         # Single answer
+        nanswer = answer.replace(",", "")
+                        .replace("%", " / 100")
+                        .replace("$", "")
+                        .replace(":", "/")
+        try:
+            nanswer = float(eval(nanswer))
+        except:
+            nanswer = answer
         score = math.is_equiv(answer, ground_truth)
     else:
         # Multiple answers, in format "ans1|ans2|ans3"

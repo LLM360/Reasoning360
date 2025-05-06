@@ -19,7 +19,7 @@ The input is a parquet file that contains N generated sequences and (optional) t
 
 import hydra
 from verl.utils.fs import copy_to_local
-from verl.utils.reward_score import math, gsm8k, cruxeval
+from verl.utils.reward_score import math, gsm8k, cruxeval, tablereason
 import pandas as pd
 import numpy as np
 
@@ -29,6 +29,8 @@ def select_reward_fn(data_source):
         return math.compute_score
     elif data_source.startswith('simulation__cruxeval'):
         return cruxeval.compute_score
+    elif data_source.startswith('table'):
+        return tablereason.compute_score
     else:
         raise NotImplementedError
 
@@ -60,7 +62,7 @@ def main(config):
             score_lst.append(score)
 
         max_score = np.max(score_lst)
-        print(f">>> {max_score}, {score_lst}")
+        # print(f">>> {max_score}, {score_lst}")
 
         if max_score['acc'] == 1:
             passes += 1
