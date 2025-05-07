@@ -78,10 +78,10 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
 
     # Group response lengths and rewards by data source
     data_source_response_lengths = defaultdict(list)
-    data_source_rewards = defaultdict(list)
+    data_source_scores = defaultdict(list)
     for i, data_source in enumerate(batch.non_tensor_batch['data_source']):
         data_source_response_lengths[data_source].append(response_length[i].item())
-        data_source_rewards[data_source].append(sequence_reward[i].item())
+        data_source_scores[data_source].append(sequence_score[i].item())
 
     metrics = {
         # score
@@ -152,13 +152,13 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
         })
 
     # Add data source specific reward metrics
-    for data_source, rewards in data_source_rewards.items():
-        rewards_tensor = torch.tensor(rewards)
+    for data_source, scores in data_source_scores.items():
+        scores_tensor = torch.tensor(scores)
         metrics.update({
-            f"critic/rewards/{data_source}/mean": torch.mean(rewards_tensor).item(),
-            f"critic/rewards/{data_source}/max": torch.max(rewards_tensor).item(),
-            f"critic/rewards/{data_source}/min": torch.min(rewards_tensor).item(),
-            f"critic/rewards/{data_source}/std": torch.std(rewards_tensor).item(),
+            f"critic/scores/{data_source}/mean": torch.mean(scores_tensor).item(),
+            f"critic/scores/{data_source}/max": torch.max(scores_tensor).item(),
+            f"critic/scores/{data_source}/min": torch.min(scores_tensor).item(),
+            f"critic/scores/{data_source}/std": torch.std(scores_tensor).item(),
         })
 
     return metrics
