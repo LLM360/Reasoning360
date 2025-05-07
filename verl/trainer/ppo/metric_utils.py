@@ -76,6 +76,13 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
         return_diff_var = torch.var(valid_returns - valid_values)
         return_var = torch.var(valid_returns)
 
+    # Group response lengths and rewards by data source
+    data_source_response_lengths = defaultdict(list)
+    data_source_rewards = defaultdict(list)
+    for i, data_source in enumerate(batch.non_tensor_batch['data_source']):
+        data_source_response_lengths[data_source].append(response_length[i].item())
+        data_source_rewards[data_source].append(sequence_reward[i].item())
+
     metrics = {
         # score
         "critic/score/mean":
@@ -133,6 +140,27 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
         "prompt_length/clip_ratio":
             torch.mean(torch.eq(prompt_length, max_prompt_length).float()).detach().item(),
     }
+
+    # Add data source specific response length metrics
+    for data_source, lengths in data_source_response_lengths.items():
+        lengths_tensor = torch.tensor(lengths)
+        metrics.update({
+            f"response_length/{data_source}/mean": torch.mean(lengths_tensor).item(),
+            f"response_length/{data_source}/max": torch.max(lengths_tensor).item(),
+            f"response_length/{data_source}/min": torch.min(lengths_tensor).item(),
+            f"response_length/{data_source}/clip_ratio": torch.mean(torch.eq(lengths_tensor, max_response_length).float()).item(),
+        })
+
+    # Add data source specific reward metrics
+    for data_source, rewards in data_source_rewards.items():
+        rewards_tensor = torch.tensor(rewards)
+        metrics.update({
+            f"critic/rewards/{data_source}/mean": torch.mean(rewards_tensor).item(),
+            f"critic/rewards/{data_source}/max": torch.max(rewards_tensor).item(),
+            f"critic/rewards/{data_source}/min": torch.min(rewards_tensor).item(),
+            f"critic/rewards/{data_source}/std": torch.std(rewards_tensor).item(),
+        })
+
     return metrics
 
 
@@ -285,7 +313,7 @@ def process_validation_metrics(data_sources: list[str], sample_inputs: list[str]
 def compute_difficulty_histogram_metrics(batch: DataProto, config) -> Dict[str, Any]:
     metrics = {}
     
-    with torch.no_grad():    
+    with torch.no_grad():
         num_rollout = config.actor_rollout_ref.rollout.n
         sequence_score = batch.batch['token_level_scores'].sum(-1)  # batch_size
         uids = batch.non_tensor_batch['uid']
@@ -295,19 +323,21 @@ def compute_difficulty_histogram_metrics(batch: DataProto, config) -> Dict[str, 
 
         batch_score = sequence_score.reshape([-1, num_rollout]) # batch_size, num_rollout
         
-        # To filter overlong reward in showing pass rate
-        is_overlong = batch.non_tensor_batch.get("is_overlong", None)
-        if is_overlong:
-            overlong_reward = batch.non_tensor_batch.get("overlong_reward", None)
-            assert overlong_reward is not None
-            batch_score -= overlong_reward
-
         avg_batch_score_per_batch = torch.mean(batch_score, dim=-1) # batch_size
         avg_batch_score_per_batch_np = avg_batch_score_per_batch.detach().cpu().numpy().reshape([-1])
 
         # group the score by batch.non_tensor_batch['data_source']
         data_source_score_dict = defaultdict(list)
-        for score, data_source in zip(avg_batch_score_per_batch_np, batch.non_tensor_batch['data_source']):
+        
+        # create data_source_list
+        # need to sort batch.non_tensor_batch['data_source'] by uid and deduplicate
+        batch_source_list = batch.non_tensor_batch['data_source']
+        unique_uids = np.unique(uids)
+        unique_sorted_indices = sorted(range(len(unique_uids)), key=lambda i: unique_uids[i])
+        data_source_from_uid = [batch_source_list[i] for i in unique_sorted_indices]
+        
+        # both are sorted by uid
+        for score, data_source in zip(avg_batch_score_per_batch_np, data_source_from_uid):
             data_source_score_dict[data_source].append(score)
 
         # add wandb histogram for each data source
