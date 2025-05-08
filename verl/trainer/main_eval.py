@@ -28,6 +28,7 @@ from verl.utils.reward_score import (
     coder1,
     gpqa,
     supergpqa,
+    arcagi,
 )
 import pandas as pd
 import numpy as np
@@ -41,7 +42,7 @@ def select_reward_fn(data_source):
     elif data_source.startswith("table"):
         return tablereason.compute_score
     # math
-    elif data_source in ["aime_repeated_8x", "math", "olympiad_bench"]:
+    elif data_source in ["aime_repeated_8x", "math", "olympiad_bench", "aime2025_repeated_8x"]:
         return naive_dapo.compute_score
     # code gen
     elif data_source in [
@@ -54,6 +55,8 @@ def select_reward_fn(data_source):
         return gpqa.compute_score
     elif data_source == "stem__supergpqa":
         return supergpqa.compute_score
+    elif data_source == "simulation__arcagi1":
+        return arcagi.compute_score
     else:
         raise NotImplementedError(f"Data source {data_source} not implemented")
 

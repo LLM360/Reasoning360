@@ -32,6 +32,7 @@ def get_datasets(cache_dir: str):
         "SDSB/amc_repeated_4x",
         "nanoverl/olympiad_bench",
         "nanoverl/math",
+        "nanoverl/aime2025_repeated_8x",
     ]
 
     print(f"Loading the {train_data_source} dataset...")
