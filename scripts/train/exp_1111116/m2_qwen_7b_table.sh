@@ -131,7 +131,7 @@ multihier_train_path=${TRAIN_DATA_DIR}/table__multihier_2.9k_l1e-5_h0.9_1.6k_sam
 multihier_test_path=${TEST_DATA_DIR}/table__multihier_300_sampled_200.parquet
 hitab_test_path=${TEST_DATA_DIR}/table__hitab_300_sampled_200.parquet
 # Stem (train)
-webinstruct_train_path=${TRAIN_DATA_DIR}/science__web_31.8k_l1e-5_h0.9_19.3k_sampled_2.5k.parquet
+webinstruct_train_path=${TRAIN_DATA_DIR}/stem__web_31.8k_l1e-5_h0.9_19.3k_sampled_2.5k.parquet
 # Stem (test)
 gpqa_diamond_test_path=${TEST_DATA_DIR}/stem__gpqa_198.parquet
 

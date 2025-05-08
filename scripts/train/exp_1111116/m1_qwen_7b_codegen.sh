@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=zhoujun-rl-guru15k-simulation2.5k
+#SBATCH --job-name=zhoujun-rl-guru15k-codegen2.5k
 #SBATCH --partition=main
 #SBATCH --nodes=4
 #SBATCH --ntasks=4
@@ -11,37 +11,37 @@
 #SBATCH --error=slurm/%j_%x.err
 #SBATCH --exclusive
 #SBATCH --time=24:00:00
-#SBATCH --qos=iq
-#SBATCH --exclude=fs-mbz-gpu-[088,317,440,497]
 
 
 # =================== Environment ===================
 # may vary from cluster to cluster, please check the environment variables
-# export LD_LIBRARY_PATH=/usr/local/nccl-rdma-sharp-plugins/lib:$LD_LIBRARY_PATH \
-#        UCX_TLS=dc \
-#        UCX_NET_DEVICES=mlx5_ib0:1 \
-#        CUDA_DEVICE_ORDER=PCI_BUS_ID \
-#        NCCL_SOCKET_IFNAME=eth0 \
-#        NCCL_DEBUG=WARN \
-#        NCCL_NET_GDR_LEVEL=5 \
-#        NCCL_MIN_NCHANNELS=32 \
-#        NCCL_TOPO_FILE=/mnt/users/runner/scripts/ndv5-topo.xml \
-#        OMPI_MCA_coll_hcoll_enable=0 \
-#        OMPI_MCA_plm_rsh_no_tree_spawn=1 \
-#        OMPI_MCA_plm_rsh_num_concurrent=800 \
-#        NCCL_IB_QPS_PER_CONNECTION=4 \
-#        NCCL_P2P_NET_CHUNKSIZE=$((512*1024)) \
-#        NCCL_PXN_DISABLE=1
+# === M1
+export LD_LIBRARY_PATH=/usr/local/nccl-rdma-sharp-plugins/lib:$LD_LIBRARY_PATH \
+       UCX_TLS=dc \
+       UCX_NET_DEVICES=mlx5_ib0:1 \
+       CUDA_DEVICE_ORDER=PCI_BUS_ID \
+       NCCL_SOCKET_IFNAME=eth0 \
+       NCCL_DEBUG=WARN \
+       NCCL_NET_GDR_LEVEL=5 \
+       NCCL_MIN_NCHANNELS=32 \
+       NCCL_TOPO_FILE=/mnt/users/runner/scripts/ndv5-topo.xml \
+       OMPI_MCA_coll_hcoll_enable=0 \
+       OMPI_MCA_plm_rsh_no_tree_spawn=1 \
+       OMPI_MCA_plm_rsh_num_concurrent=800 \
+       NCCL_IB_QPS_PER_CONNECTION=4 \
+       NCCL_P2P_NET_CHUNKSIZE=$((512*1024)) \
+       NCCL_PXN_DISABLE=1
 
-# export UCX_NET_DEVICES=mlx5_ib0:1,mlx5_ib1:1,mlx5_ib2:1,mlx5_ib3:1,mlx5_ib4:1,mlx5_ib5:1,mlx5_ib6:1,mlx5_ib7:1
-# export CUDA_DEVICE_MAX_CONNECTIONS=1
+export UCX_NET_DEVICES=mlx5_ib0:1,mlx5_ib1:1,mlx5_ib2:1,mlx5_ib3:1,mlx5_ib4:1,mlx5_ib5:1,mlx5_ib6:1,mlx5_ib7:1
+export CUDA_DEVICE_MAX_CONNECTIONS=1
 
-export NCCL_DEBUG=info
-export NCCL_ALGO=NVLSTree
-export NCCL_IBEXT_DISABLE=1
-export NCCL_NVLS_ENABLE=1
-export NCCL_IB_HCA=mlx5
-export UCX_NET_DEVICES=mlx5_0:1,mlx5_1:1,mlx5_2:1,mlx5_3:1,mlx5_4:1,mlx5_5:1,mlx5_6:1,mlx5_7:1
+# === M2 setup ===
+# export NCCL_DEBUG=info
+# export NCCL_ALGO=NVLSTree
+# export NCCL_IBEXT_DISABLE=1
+# export NCCL_NVLS_ENABLE=1
+# export NCCL_IB_HCA=mlx5
+# export UCX_NET_DEVICES=mlx5_0:1,mlx5_1:1,mlx5_2:1,mlx5_3:1,mlx5_4:1,mlx5_5:1,mlx5_6:1,mlx5_7:1
 
 # Get the list of allocated nodes
 nodes=( $(scontrol show hostnames "$SLURM_JOB_NODELIST") )
@@ -88,10 +88,9 @@ export VLLM_USE_V1=0
 
 
 # =================== Data Mixture (genie-25K)===================
-# WORKING_DIR=${HOME}/Reasoning360
-WORKING_DIR=/mnt/weka/home/zhuojun.cheng/leo/Reasoning360/
+WORKING_DIR=${HOME}/Reasoning360
 TRAIN_DATA_DIR=${WORKING_DIR}/data/train_guru15k
-TEST_DATA_DIR=${WORKING_DIR}/data/test
+TEST_DATA_DIR=${WORKING_DIR}/data/test/test
 # Math (train)
 math_train_path1=${TRAIN_DATA_DIR}/math__merged_deduped_l1e-5_h0.9_60.0k_sampled_2.2k.parquet
 math_train_path2=${TRAIN_DATA_DIR}/math__patch_merged_deduped_13.3k_l1e-5_h0.9_9.3k_sampled_334.parquet
@@ -136,7 +135,10 @@ webinstruct_train_path=${TRAIN_DATA_DIR}/stem__web_31.8k_l1e-5_h0.9_19.3k_sample
 gpqa_diamond_test_path=${TEST_DATA_DIR}/stem__gpqa_198.parquet
 
 
-train_files="['${codeio_train_path}']"
+train_files="['${leetcode_train_path}',\
+'${livecodebench_train_path}',\
+'${primeintellect_train_path}',\
+'${taco_train_path}']"
 
 test_files="['${math_test_path}',\
 '${aime_test_path}',\
