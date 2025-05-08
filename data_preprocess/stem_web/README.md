@@ -13,7 +13,6 @@ To run the verifier judge service:
 
 2. The script will:
    - Detect the node's IP address automatically
-   - Export the judge URL as STEM_LLM_JUDGE_URL
    - Launch a vLLM server running the TIGER-Lab/general-verifier model
 
 3. The service will be available at `http://<node-ip>:8000`
