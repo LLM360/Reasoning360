@@ -21,6 +21,33 @@ uv pip install -e .[gpu,math]
 Remember to process data and wandb and huggingface login before launching the experiments.
 
 ---
+## Experiment Run
+The ready-to-train data, called `guru15k` now (sampled 15k for data ablation), are now available on both M1 and M2 cluster.
+
+Make sure to run `tools/change_tokenizer_config.py` first to apply our customized chat template. Currently only the `Qwen` family is supported. See detailed usage in the argparse.
+
+### On M1 cluster
+```
+sbatch scripts/train/exp_1111116/m1_<xxdata>.sh
+```
+
+### On M2 cluster
+```
+sbatch scripts/train/exp_1111116/m2_<xxdata>.sh
+```
+
+The `exp_1111116` means training six single domain data separately and one mixture of 6 domain data, i.e., 7 runs in total. Specifcially, the `guru15k` consists of `math`, `codegen`, `logic`, `simulation`, `table`, `stem` domains, each with 2.5k data. We use the uniform distribution for initial experiments. New ablations would be under new directories.
+
+Note, for `codegen` and `mix` training, as M2 cluster has troubles in multiprocessing python program execution, try to train them on the M1 cluster. 
+
+Note, for `stem` and `mix` training, as both requires llm-as-judge, run `sbatch data_preprocess/run_verifier_judge.sh` first and `export STEM_LLM_JUDGE_URL="http://{node_ip}:8000` before training. It uses one GPU node to serve a 1.5B verifier now.
+
+
+---
+## Difficulty filtering
+See `model_filtering` for details
+
+---
 ## How to add the dataset
 
 ### Data preprocessing script
