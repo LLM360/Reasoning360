@@ -42,7 +42,7 @@ def select_reward_fn(data_source):
     elif data_source.startswith("table"):
         return tablereason.compute_score
     # math
-    elif data_source in ["aime_repeated_8x", "math", "olympiad_bench", "aime2025_repeated_8x"]:
+    elif data_source in ["aime_repeated_8x", "math", "olympiad_bench", "math__aime2025_repeated_8x"]:
         return naive_dapo.compute_score
     # code gen
     elif data_source in [
