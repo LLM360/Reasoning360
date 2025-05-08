@@ -4,6 +4,7 @@ import json
 import argparse
 import random
 import pprint
+import re
 
 from datasets import load_dataset, Dataset
 from transformers import AutoTokenizer
@@ -17,10 +18,10 @@ SYSTEM_MSG = (
 
 def make_prompt(question: str):
     return [
-        {"role": "user",   "content": SYSTEM_MSG + question.strip()}
+        {"role": "user", "content": SYSTEM_MSG + question.strip()}
     ]
 
-# ------------------ filter predicate ------------------ #
+# ------------------ filter predicates ------------------ #
 def keep_example(example, max_answer_len):
     return (
         example.get("category") != "Mathematics"
@@ -29,21 +30,36 @@ def keep_example(example, max_answer_len):
         and len(example.get("answer", "").split()) > 0
     )
 
+def has_too_many_decimal_places(s: str, max_decimals: int = 3) -> bool:
+    pattern = re.compile(r"\d+\.(\d{" + str(max_decimals+1) + r",})")
+    return bool(pattern.search(s))
+
 # --------------------------- main ------------------------------- #
 def main():
-    p = argparse.ArgumentParser()
-    p.add_argument("--json_out",    default="samples_le30.json")
-    p.add_argument("--parquet_out", default="webinstruct_le30.parquet")
-    p.add_argument("--dataset",     default="TIGER-Lab/WebInstruct-verified")
-    p.add_argument("--split",       default="train")
-    p.add_argument("--tokenizer",   default="Qwen/Qwen3-8B")
-    p.add_argument("--max_answer_len", type=int, default=30)
-    args = p.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--json_out",       default="stem_web.json")
+    parser.add_argument("--parquet_out",    default="stem_web.parquet")
+    parser.add_argument("--dataset",        default="TIGER-Lab/WebInstruct-verified")
+    parser.add_argument("--split",          default="train")
+    parser.add_argument("--tokenizer",      default="Qwen/Qwen3-8B")
+    parser.add_argument("--max_answer_len", type=int, default=30)
+    args = parser.parse_args()
 
-    # 1) load and filter
+    # 1) load and master filter
     ds = load_dataset(args.dataset, split=args.split)
-    ds = ds.filter(lambda ex: keep_example(ex, args.max_answer_len))
-    print(f"Filtered down to {len(ds)} examples before length check")
+
+    def master_filter(ex):
+        ans = ex.get("answer", "")
+        # 原有筛选条件
+        if not keep_example(ex, args.max_answer_len):
+            return False
+        # 如果答案中有超过 3 位小数，剔除
+        if has_too_many_decimal_places(ans, max_decimals=3):
+            return False
+        return True
+
+    ds = ds.filter(master_filter)
+    print(f"Filtered down to {len(ds)} examples after applying all criteria")
 
     # 2) tokenize answers and select by token length
     tok = AutoTokenizer.from_pretrained(args.tokenizer, trust_remote_code=True)
@@ -53,29 +69,33 @@ def main():
     print(f"{len(keep_idxs)} examples with answer ≤ {args.max_answer_len} tokens")
 
     # 3) build JSON samples
+    samples_q2idx = {}
     samples = []
     for i in keep_idxs:
         ex = dict(ds[i])
         ex["token_length"] = lengths[i]
+        prompt_str = make_prompt(ex["question"])[0]["content"]
+        samples_q2idx[prompt_str] = ex
         samples.append(ex)
 
     os.makedirs(os.path.dirname(args.json_out) or ".", exist_ok=True)
     with open(args.json_out, "w", encoding="utf-8") as f:
-        json.dump(samples, f, ensure_ascii=False, indent=2)
+        json.dump(samples_q2idx, f, ensure_ascii=False, indent=2)
     print(f"Saved {len(samples)} samples to {args.json_out}")
 
     # 4) wrap into chat‐template records
     processed = []
     for ex in samples:
         processed.append({
-            "data_source": "WebInstruct-le30",
-            "prompt": make_prompt(ex["question"]),
-            "raw_prompt": ex["question"],
-            "ability": "QA",
+            "data_source": "stem_web",
+            "prompt":      make_prompt(ex["question"]),
+            "raw_prompt":  ex["question"],
+            "ability":     "QA",
             "apply_chat_template": True,
-            "response": ex["answer"],
+            "response":    ex["answer"],
             "reward_model": {"ground_truth": ex["answer"]},
             "extra_info": {
+                "idx":          ex.get("id"),
                 "category":     ex.get("category"),
                 "difficulty":   ex.get("difficulty"),
                 "answer_type":  ex.get("answer_type"),
@@ -87,9 +107,9 @@ def main():
     print("\n*** Example prompts (3 random rows) ***")
     for row in random.sample(processed, k=min(3, len(processed))):
         pprint.pprint({
-            "prompt":      row["prompt"],
-            "response":    row["response"],
-            "extra_info":  row["extra_info"],
+            "prompt":     row["prompt"],
+            "response":   row["response"],
+            "extra_info": row["extra_info"],
         }, compact=True, width=120)
         print("-" * 80)
 
