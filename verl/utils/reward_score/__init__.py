@@ -18,34 +18,45 @@ def _default_compute_score(data_source, solution_str, ground_truth, extra_info=N
     
     reward_metric = extra_info.get("reward_metric", None)
     
+    # math
     if data_source.startswith("math"):
-        
         if reward_metric == "prime_math":
             from . import prime_math
             res = prime_math.compute_score(solution_str, ground_truth)
-
         elif reward_metric == "math_llm_judge":
             from . import math_llm_judge
             res = math_llm_judge.compute_score(
                 solution_str, ground_truth, extra_info=extra_info
             )
-
         else:
+            # Default
             from . import naive_dapo
             res = naive_dapo.compute_score(solution_str, ground_truth, extra_info=extra_info)
-    
+    # code generation
     elif data_source.startswith('codegen'):
         from . import coder1
         res = coder1.compute_score(solution_str, ground_truth, extra_info=extra_info)
-    elif data_source.startswith("simulation__arcagi") or data_source.startswith("simulation__barc"):
-        from . import arcagi
-        res = arcagi.compute_score(solution_str, ground_truth)
+    # simulation (code)
     elif data_source.startswith("simulation__codeio"):
         from . import codeio
         res = codeio.compute_score(solution_str, ground_truth)
     elif data_source.startswith("simulation__cruxeval"):
         from . import cruxeval
         res = cruxeval.compute_score(solution_str, ground_truth)
+    # logic
+    elif data_source.startswith("simulation__arcagi") or data_source.startswith("simulation__barc"):
+        from . import arcagi
+        res = arcagi.compute_score(solution_str, ground_truth)
+    elif data_source.startswith("logic__zebra_puzzle"):
+        from . import zebra_puzzle
+        res = zebra_puzzle.compute_score(solution_str, ground_truth)
+    elif data_source.startswith("logic__ordering_puzzle"):
+        from . import puzzles_dataset
+        res = puzzles_dataset.compute_score(solution_str, ground_truth)
+    elif data_source.startswith("logic__graph"):
+        from . import graph_dataset
+        res = graph_dataset.compute_score(solution_str, ground_truth)
+    # table
     elif data_source.startswith("table"):
         # TODO: tmp placeholder using math_verify
         from . import tablereason
@@ -59,7 +70,8 @@ def _default_compute_score(data_source, solution_str, ground_truth, extra_info=N
     elif data_source in ['graph_logical_dataset']:
         from . import graph_dataset
         res = graph_dataset.compute_score(solution_str, ground_truth)
-    elif data_source in ['stem__gpqa']:
+    elif data_source in ['stem__gpqa', 'stem__gpqa_diamond']:
+        # science
         from . import gpqa
         res = gpqa.compute_score(solution_str, ground_truth)
     elif data_source in ['stem_web'] :

@@ -65,10 +65,17 @@ def main_task(config):
         assert config.data.n_samples == 1, 'When temperature=0, n_samples must be 1.'
 
     # read dataset. Note that the dataset should directly contain chat template format (e.g., a list of dictionary)
-    dataset = pd.read_parquet(config.data.path)
-    chat_lst = dataset[config.data.prompt_key].tolist()
-
-    chat_lst = [chat.tolist() for chat in chat_lst]
+    is_polars_df = False
+    if 'livecodebench' in config.data.path:
+        import polars as pl
+        dataset = pl.read_parquet(config.data.path)
+        chat_lst = list(dataset[config.data.prompt_key])
+        chat_lst = [list(chat) for chat in chat_lst]
+        is_polars_df = True
+    else:
+        dataset = pd.read_parquet(config.data.path)
+        chat_lst = dataset[config.data.prompt_key].tolist()
+        chat_lst = [chat.tolist() for chat in chat_lst]
 
     tokenizer.padding_side = 'left'
     if tokenizer.pad_token is None:
@@ -141,12 +148,21 @@ def main_task(config):
     output_lst = np.transpose(output_lst, axes=(1, 0)).tolist()
 
     # add to the data frame
-    dataset[f'responses'] = output_lst
+    if is_polars_df:
+        dataset = dataset.with_columns(pl.Series("responses", output_lst))
+        # write to a new parquet
+        output_dir = os.path.dirname(config.data.output_path)
+        makedirs(output_dir, exist_ok=True)
+        # Save parquet - polars uses write_parquet with use_pyarrow=True for better compatibility
+        dataset.write_parquet(config.data.output_path, use_pyarrow=True)
+    else:
+        # For pandas, use standard bracket assignment
+        dataset['responses'] = output_lst
+        # write to a new parquet
+        output_dir = os.path.dirname(config.data.output_path)
+        makedirs(output_dir, exist_ok=True)
+        dataset.to_parquet(config.data.output_path)
 
-    # write to a new parquet
-    output_dir = os.path.dirname(config.data.output_path)
-    makedirs(output_dir, exist_ok=True)
-    dataset.to_parquet(config.data.output_path)
     result_list = [{"prompt": chat, "response": output} for chat, output in zip(chat_lst, output_lst)]
     model_name = config.model.path.split('/')[-1]
     with open(config.data.output_path.replace('.parquet', f'_{model_name}.json'), 'w', encoding='utf-8') as f:

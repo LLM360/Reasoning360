@@ -53,7 +53,7 @@ def extract_solution(solution_str, method='strict'):
     return final_answer
 
 
-def compute_score(solution_str, ground_truth, method='strict', format_score=0., score=1.):
+def compute_score(solution_str, ground_truth, method='strict', format_score=0., score=1., extra_info=None):
     """The scoring function for GPQA.
 
     Reference: Trung, Luong, et al. "Reft: Reasoning with reinforced fine-tuning." Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers). 2024.
@@ -70,6 +70,6 @@ def compute_score(solution_str, ground_truth, method='strict', format_score=0., 
         return {'score': 0, 'acc': 0}
     else:
         if answer == ground_truth:
-            return {'score': score, 'acc': score}
+            return {'score': score, 'acc': 1.}
         else:
-            return {'score': format_score, 'acc': format_score}
+            return {'score': format_score, 'acc': 0.}
