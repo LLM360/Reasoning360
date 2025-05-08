@@ -2,7 +2,7 @@ import re
 from verl.utils.reward_score.cruxeval.utils import check_correctness
 
 
-def compute_score(model_output: str, ground_truth: str) -> bool:
+def compute_score(model_output: str, ground_truth: str, extra_info: any = None) -> bool:
     model_output = str(model_output)
     # print(f">>> {model_output}")
     try:

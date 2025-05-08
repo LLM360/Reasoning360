@@ -19,31 +19,46 @@ The input is a parquet file that contains N generated sequences and (optional) t
 
 import hydra
 from verl.utils.fs import copy_to_local
-from verl.utils.reward_score import math, gsm8k, cruxeval, tablereason, naive_dapo, coder1, gpqa
+from verl.utils.reward_score import (
+    math,
+    gsm8k,
+    cruxeval,
+    tablereason,
+    naive_dapo,
+    coder1,
+    gpqa,
+    supergpqa,
+)
 import pandas as pd
 import numpy as np
 
 
 def select_reward_fn(data_source):
-    if data_source == 'lighteval/MATH':
+    if data_source == "lighteval/MATH":
         return math.compute_score
-    elif data_source.startswith('simulation__cruxeval'):
+    elif data_source.startswith("simulation__cruxeval"):
         return cruxeval.compute_score
-    elif data_source.startswith('table'):
+    elif data_source.startswith("table"):
         return tablereason.compute_score
     # math
-    elif data_source in ['aime_repeated_8x', 'math', 'olympiad_bench']:
+    elif data_source in ["aime_repeated_8x", "math", "olympiad_bench"]:
         return naive_dapo.compute_score
     # code gen
-    elif data_source in ['codegen__humaneval', 'codegen__mbpp', 'codegen__livecodebench']:
+    elif data_source in [
+        "codegen__humaneval",
+        "codegen__mbpp",
+        "codegen__livecodebench",
+    ]:
         return coder1.compute_score
-    elif data_source == 'stem__gpqa':
+    elif data_source == "stem__gpqa":
         return gpqa.compute_score
+    elif data_source == "stem__supergpqa":
+        return supergpqa.compute_score
     else:
-        raise NotImplementedError
+        raise NotImplementedError(f"Data source {data_source} not implemented")
 
 
-@hydra.main(config_path='config', config_name='evaluation', version_base=None)
+@hydra.main(config_path="config", config_name="evaluation", version_base=None)
 def main(config):
     local_path = copy_to_local(config.data.path)
     dataset = pd.read_parquet(local_path)
@@ -51,7 +66,7 @@ def main(config):
     responses = dataset[config.data.response_key]
     data_sources = dataset[config.data.data_source_key]
     reward_model_data = dataset[config.data.reward_model_key]
-    extra_info_data = dataset['extra_info']
+    extra_info_data = dataset["extra_info"]
 
     passes = 0
 
@@ -64,7 +79,7 @@ def main(config):
         prompt = prompts[i]
         reward_data = reward_model_data[i]
         reward_fn = select_reward_fn(data_source)
-        ground_truth = reward_data['ground_truth']
+        ground_truth = reward_data["ground_truth"]
         extra_info = extra_info_data[i]
         score_lst = []
         for r in response_lst:
@@ -74,11 +89,11 @@ def main(config):
         max_score = np.max(score_lst)
         # print(f">>> {max_score}, {score_lst}")
 
-        if max_score['acc'] == 1:
+        if max_score["acc"] == 1:
             passes += 1
 
-    print(f'pass@1: {passes / total}')
+    print(f"pass@1: {passes / total}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
