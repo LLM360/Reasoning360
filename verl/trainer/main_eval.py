@@ -32,12 +32,12 @@ def select_reward_fn(data_source):
     elif data_source.startswith('table'):
         return tablereason.compute_score
     # math
-    elif data_source in ['aime_repeated_8x', 'math', 'olympiad_bench']:
+    elif data_source in ['aime_repeated_8x', 'math', 'math__olympiad_bench']:
         return naive_dapo.compute_score
     # code gen
     elif data_source in ['codegen__humaneval', 'codegen__mbpp', 'codegen__livecodebench']:
         return coder1.compute_score
-    elif data_source == 'stem__gpqa':
+    elif data_source in ['stem__gpqa', 'stem__gpqa_diamond']:
         return gpqa.compute_score
     else:
         raise NotImplementedError
@@ -46,7 +46,11 @@ def select_reward_fn(data_source):
 @hydra.main(config_path='config', config_name='evaluation', version_base=None)
 def main(config):
     local_path = copy_to_local(config.data.path)
-    dataset = pd.read_parquet(local_path)
+    if 'livecodebench' in local_path:
+        import polars as pl
+        dataset = pl.read_parquet(local_path)
+    else:
+        dataset = pd.read_parquet(local_path)
     prompts = dataset[config.data.prompt_key]
     responses = dataset[config.data.response_key]
     data_sources = dataset[config.data.data_source_key]
@@ -68,7 +72,7 @@ def main(config):
         extra_info = extra_info_data[i]
         score_lst = []
         for r in response_lst:
-            score = reward_fn(r, ground_truth, extra_info)
+            score = reward_fn(r, ground_truth, extra_info=extra_info)
             score_lst.append(score)
 
         max_score = np.max(score_lst)

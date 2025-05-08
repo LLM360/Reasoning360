@@ -1,5 +1,5 @@
 """
-Preprocess the GPQA dataset to parquet format
+Preprocess the GPQA - Diamond dataset to parquet format
 """
 
 import os
@@ -14,11 +14,11 @@ from verl.utils.data_process.utils import set_seed, sample_dataset, save_dataset
 
 def get_datasets():
     """
-    Loads the GPQA dataset.
+    Loads the GPQA - Diamond dataset.
     """
     try:
-        dataset = load_dataset("Idavidrein/gpqa", "gpqa_main")["train"]
-        print(f"GPQA dataset: {len(dataset)} examples")
+        dataset = load_dataset("Idavidrein/gpqa", "gpqa_diamond")["train"]
+        print(f"GPQA - Diamond dataset: {len(dataset)} examples")
         return None, dataset
     except Exception as e:
         print(f"Error loading dataset: {e}")
@@ -94,12 +94,12 @@ def make_map_fn(split: str, data_source: str) -> callable:
 
 if __name__ == '__main__':
     """Main script execution: parse args, load, process, and save datasets."""
-    parser = argparse.ArgumentParser(description="Process and save GPQA dataset.")
+    parser = argparse.ArgumentParser(description="Process and save GPQA - Diamond dataset.")
     parser.add_argument('--data-dir', default='data',
                         help='Base directory to save the processed data files.')
     parser.add_argument('--domain', default="stem",
                         help='Domain of the dataset.')
-    parser.add_argument('--name', default="gpqa",
+    parser.add_argument('--name', default="gpqa_diamond",
                         help='Name of the dataset.')
     parser.add_argument('--sample-size', type=int, default=None,
                         help='Number of samples to use from dataset. If None, use all samples.')

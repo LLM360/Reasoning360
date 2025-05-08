@@ -59,7 +59,7 @@ def _default_compute_score(data_source, solution_str, ground_truth, extra_info=N
     elif data_source in ['graph_logical_dataset']:
         from . import graph_dataset
         res = graph_dataset.compute_score(solution_str, ground_truth)
-    elif data_source in ['stem__gpqa']:
+    elif data_source in ['stem__gpqa', 'stem__gpqa_diamond']:
         from . import gpqa
         res = gpqa.compute_score(solution_str, ground_truth)
     elif data_source in ['stem_web'] :

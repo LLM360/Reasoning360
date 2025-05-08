@@ -42,5 +42,6 @@ python data_preprocess/table/hitab.py
 # Stem datasets
 python data_preprocess/stem_web/stem.py --parquet_out data/raw
 python data_preprocess/stem/gpqa.py
+python data_preprocess/stem/gpqa_diamond.py
 
 echo "All data preprocessing complete!"
