@@ -8,7 +8,7 @@ To run the verifier judge service:
 
 1. Submit the job using sbatch:
    ```bash
-   sbatch stem_judge.sh
+   sbatch run_verifier_judge.sh
    ```
 
 2. The script will:
