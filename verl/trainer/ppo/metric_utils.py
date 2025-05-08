@@ -329,15 +329,14 @@ def compute_difficulty_histogram_metrics(batch: DataProto, config) -> Dict[str, 
         # group the score by batch.non_tensor_batch['data_source']
         data_source_score_dict = defaultdict(list)
         
-        # create data_source_list
-        # need to sort batch.non_tensor_batch['data_source'] by uid and deduplicate
+        # make batch_source_list sorted by uid, consistent with batch_score
         batch_source_list = batch.non_tensor_batch['data_source']
-        unique_uids = np.unique(uids)
-        unique_sorted_indices = sorted(range(len(unique_uids)), key=lambda i: unique_uids[i])
-        data_source_from_uid = [batch_source_list[i] for i in unique_sorted_indices]
+        sorted_batch_source_list = [batch_source_list[i] for i in sorted_indices]
+        # bs * rollout -> bs
+        sorted_batch_source_list = sorted_batch_source_list[::num_rollout]
         
         # both are sorted by uid
-        for score, data_source in zip(avg_batch_score_per_batch_np, data_source_from_uid):
+        for score, data_source in zip(avg_batch_score_per_batch_np, sorted_batch_source_list):
             data_source_score_dict[data_source].append(score)
 
         # add wandb histogram for each data source
