@@ -116,25 +116,27 @@ sleep 10
 
 # =================== leaderboard eval Config ===================
 leaderboard_list=(
+    "aime"
     "aime2025"
-    "barc"
+    # "barc"
+    # "finqa"
 )
 
 n_nodes=4
 n_gpus_per_node=8
 gpu_ids=0,1,2,3,4,5,6,7
 
-model_path=deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
+model_path=hkust-nlp/Qwen-2.5-7B-SimpleRL-Zoo
 data_folder=./data/test/
 save_folder=./data/test_leaderboard_output/
 
 # generation hyper-parameters
-n_samples=8
-batch_size=128
+n_samples=1
+batch_size=256
 temperature=1.0
 top_k=-1 # 0 for hf rollout, -1 for vllm rollout
-top_p=0.7
-prompt_length=4096
+top_p=0.95
+prompt_length=1024
 response_length=32768
 tensor_model_parallel_size=2
 gpu_memory_utilization=0.8
@@ -170,6 +172,7 @@ domain_mappings["olympiad_bench"]="math"
 domain_mappings["gpqa"]="stem"
 domain_mappings["arcagi1"]="simulation"
 domain_mappings["barc"]="simulation"
+domain_mappings["finqa"]="table"
 for leaderboard in "${leaderboard_list[@]}"; do
     # Get the domain for this leaderboard
     domain=${domain_mappings[$leaderboard]}
@@ -204,27 +207,27 @@ for leaderboard in "${leaderboard_list[@]}"; do
 
     # Generation step with tee to generation log file
     echo "Starting generation for $leaderboard at $(date)" | tee -a "$gen_log_file"
-    # {
-    #     python3 -m verl.trainer.main_generation \
-    #         trainer.nnodes=$n_nodes \
-    #         trainer.n_gpus_per_node=$n_gpus_per_node \
-    #         data.path="$data_file" \
-    #         data.prompt_key=prompt \
-    #         data.n_samples=$n_samples \
-    #         data.batch_size=$batch_size \
-    #         data.output_path="$save_path" \
-    #         model.path=$model_path \
-    #         +model.trust_remote_code=True \
-    #         rollout.temperature=$temperature \
-    #         rollout.top_k=$top_k \
-    #         rollout.top_p=$top_p \
-    #         rollout.prompt_length=$prompt_length \
-    #         rollout.response_length=$response_length \
-    #         rollout.max_num_batched_tokens=36864 \
-    #         rollout.tensor_model_parallel_size=$tensor_model_parallel_size \
-    #         rollout.gpu_memory_utilization=$gpu_memory_utilization
-    # } 2>&1 | tee -a "$gen_log_file"
-    # echo "Completed generation for $leaderboard at $(date)" | tee -a "$gen_log_file"
+    {
+        /mnt/weka/home/zhuojun.cheng/miniconda3/envs/Reasoning360/bin/python3 -m verl.trainer.main_generation \
+            trainer.nnodes=$n_nodes \
+            trainer.n_gpus_per_node=$n_gpus_per_node \
+            data.path="$data_file" \
+            data.prompt_key=prompt \
+            data.n_samples=$n_samples \
+            data.batch_size=$batch_size \
+            data.output_path="$save_path" \
+            model.path=$model_path \
+            +model.trust_remote_code=True \
+            rollout.temperature=$temperature \
+            rollout.top_k=$top_k \
+            rollout.top_p=$top_p \
+            rollout.prompt_length=$prompt_length \
+            rollout.response_length=$response_length \
+            rollout.max_num_batched_tokens=36864 \
+            rollout.tensor_model_parallel_size=$tensor_model_parallel_size \
+            rollout.gpu_memory_utilization=$gpu_memory_utilization
+    } 2>&1 | tee -a "$gen_log_file"
+    echo "Completed generation for $leaderboard at $(date)" | tee -a "$gen_log_file"
 
     # Evaluation step with tee to evaluation log file
     echo "Starting evaluation for $leaderboard at $(date)" | tee -a "$eval_log_file"

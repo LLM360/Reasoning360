@@ -20,7 +20,7 @@ def drop_latex_text(answer: str) -> str:
     return answer
     
 
-def compute_score(model_output: str, ground_truth: str) -> bool:
+def compute_score(model_output: str, ground_truth: str, extra_info: any = None) -> bool:
     model_output = str(model_output).lower()
     ground_truth = str(ground_truth).lower()
     

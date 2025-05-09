@@ -42,7 +42,7 @@ def select_reward_fn(data_source):
     elif data_source.startswith("table"):
         return tablereason.compute_score
     # math
-    elif data_source in ["aime_repeated_8x", "math", "olympiad_bench", "math__aime2025_repeated_8x"]:
+    elif data_source in ["math__aime_repeated_8x", "math", "olympiad_bench", "math__aime2025_repeated_8x"]:
         return naive_dapo.compute_score
     # code gen
     elif data_source in [
@@ -55,7 +55,7 @@ def select_reward_fn(data_source):
         return gpqa.compute_score
     elif data_source == "stem__supergpqa":
         return supergpqa.compute_score
-    elif data_source == "simulation__arcagi1":
+    elif data_source in ["simulation__arcagi1", "simulation__barc"]:
         return arcagi.compute_score
     else:
         raise NotImplementedError(f"Data source {data_source} not implemented")
@@ -73,7 +73,10 @@ def main(config):
     responses = dataset[config.data.response_key]
     data_sources = dataset[config.data.data_source_key]
     reward_model_data = dataset[config.data.reward_model_key]
-    extra_info_data = dataset["extra_info"]
+    try:
+        extra_info_data = dataset["extra_info"]
+    except:
+        extra_info_data = None
 
     passes = 0
 
@@ -87,16 +90,16 @@ def main(config):
         reward_data = reward_model_data[i]
         reward_fn = select_reward_fn(data_source)
         ground_truth = reward_data["ground_truth"]
-        extra_info = extra_info_data[i]
+        extra_info = extra_info_data[i] if extra_info_data is not None else None
         score_lst = []
         for r in response_lst:
             score = reward_fn(r, ground_truth, extra_info=extra_info)
-            score_lst.append(score)
+            score_lst.append(score['acc'])
 
         max_score = np.max(score_lst)
         # print(f">>> {max_score}, {score_lst}")
 
-        if max_score["acc"] == 1:
+        if max_score == 1:
             passes += 1
 
     print(f"pass@1: {passes / total}")
