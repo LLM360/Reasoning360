@@ -7,9 +7,9 @@ leaderboard_list=(
   # "math"           # math
   # "olympiad_bench" # math
   # "humaneval"      # codegen
-  # "mbpp"           # codegen
+  "mbpp"           # codegen
   # "livecodebench"  # codegen
-  "gpqa_diamond"           # stem
+  # "gpqa"           # stem
 )
 
 # gpu
@@ -22,17 +22,17 @@ data_folder=./data/test/
 save_folder=./data/test_leaderboard_output/
 
 # model
-model_path=deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
-model_name="distill-7b"  # this will be the folder name under the save_folder
+model_path=Qwen/Qwen2.5-Coder-7B-Instruct
+model_name="qwen2.5-coder-7b"  # this will be the folder name under the save_folder
 
 # generation hyper-parameters
 n_samples=1
 batch_size=128
-temperature=0.6
+temperature=0.7
 top_k=-1 # 0 for hf rollout, -1 for vllm rollout
-top_p=0.95
+top_p=0.8
 prompt_length=1024
-response_length=32768
+response_length=31744
 max_num_batched_tokens=65536  # 2 x context length
 tensor_model_parallel_size=2
 gpu_memory_utilization=0.8
@@ -69,7 +69,6 @@ domain_mappings["math"]="math"
 domain_mappings["minerva"]="math"
 domain_mappings["olympiad_bench"]="math"
 domain_mappings["gpqa"]="stem"
-domain_mappings["gpqa_diamond"]="stem"
 
 # Initialize counters for total time
 total_gen_time=0
@@ -87,10 +86,6 @@ for leaderboard in "${leaderboard_list[@]}"; do
     # Find the matching file in the data folder
     if [ "$leaderboard" == "olympiad_bench" ]; then
         file_pattern="${domain}__${leaderboard}_*.parquet"
-    elif [ "$leaderboard" == "gpqa_diamond" ]; then
-        file_pattern="${domain}__gpqa_diamond_*.parquet"
-    elif [ "$leaderboard" == "gpqa" ]; then
-        file_pattern="${domain}__gpqa_[0-9]*.parquet"  # This matches only gpqa followed by numbers
     else
         file_pattern="${domain}__${leaderboard}_*.parquet"
     fi

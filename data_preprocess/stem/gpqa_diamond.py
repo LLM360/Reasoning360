@@ -54,13 +54,13 @@ def make_map_fn(split: str, data_source: str) -> callable:
         formatted_choices = ""
         for i, choice in enumerate(all_choices):
             letter = chr(65 + i)
-            formatted_choices += f"({letter}) {choice}\n"
+            formatted_choices += f"{letter}) {choice}\n"
         
-        # prompt format is adopted from Appendix 3.1 in GPQA paper, also mentioned in https://github.com/huggingface/lighteval/issues/70
+        # deepseek uses OpenAI's simple-eval for GPQA-Diamond, so we adopt prompts from here: https://github.com/openai/simple-evals/blob/main/gpqa_eval.py
         prompt = (
-            f"What is the correct answer to this question:\n\n{question}\n\n"
-            f"Choices:\n{formatted_choices}\n"
-            "Format your response as follows: \"The correct answer is (insert answer here)\"."
+            f"Answer the following multiple choice question. The last line of your response should be of the following format: 'Answer: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering."
+            f"\n{question}\n"
+            f"{formatted_choices}"
         )
 
         

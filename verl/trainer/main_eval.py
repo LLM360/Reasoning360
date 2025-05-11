@@ -18,6 +18,7 @@ The input is a parquet file that contains N generated sequences and (optional) t
 """
 
 import hydra
+from tqdm import tqdm
 from verl.utils.fs import copy_to_local
 from verl.utils.reward_score import (
     math,
@@ -42,7 +43,7 @@ def select_reward_fn(data_source):
     elif data_source.startswith("table"):
         return tablereason.compute_score
     # math
-    elif data_source in ["aime_repeated_8x", "math", "olympiad_bench", "math__aime2025_repeated_8x"]:
+    elif data_source in ["math__aime_repeated_8x", "math__math", "olympiad_bench", "math__aime2025_repeated_8x"]:
         return naive_dapo.compute_score
     # code gen
     elif data_source in [
@@ -79,7 +80,7 @@ def main(config):
 
     total = len(dataset)
 
-    for i in range(total):
+    for i in tqdm(range(total), desc="testing..."):
         response_lst = responses[i]
         data_source = data_sources[i]
         # select reward score based on data_source

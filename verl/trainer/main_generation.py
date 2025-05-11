@@ -60,6 +60,8 @@ def main_task(config):
     local_path = copy_to_local(config.model.path)
     from verl.utils import hf_tokenizer
     tokenizer = hf_tokenizer(local_path)
+    if 'olmoe' in local_path.lower():
+        tokenizer.chat_template = "{{ bos_token }}{% for message in messages %}{% if message['role'] == 'system' %}{{ '<|system|>\n' + message['content'] + '\n' }}{% elif message['role'] == 'user' %}{{ '<|user|>\n' + message['content'] + '\n' }}{% elif message['role'] == 'assistant' %}{% if not loop.last %}{{ '<|assistant|>\n'  + message['content'] + eos_token + '\n' }}{% else %}{{ '<|assistant|>\n'  + message['content'] + eos_token }}{% endif %}{% endif %}{% if loop.last and add_generation_prompt %}{{ '<|assistant|>\n' }}{% endif %}{% endfor %}"
 
     if config.rollout.temperature == 0.:
         assert config.data.n_samples == 1, 'When temperature=0, n_samples must be 1.'
@@ -153,8 +155,7 @@ def main_task(config):
         # write to a new parquet
         output_dir = os.path.dirname(config.data.output_path)
         makedirs(output_dir, exist_ok=True)
-        # Save parquet - polars uses write_parquet with use_pyarrow=True for better compatibility
-        dataset.write_parquet(config.data.output_path, use_pyarrow=True)
+        dataset.write_parquet(config.data.output_path)
     else:
         # For pandas, use standard bracket assignment
         dataset['responses'] = output_lst
