@@ -53,7 +53,10 @@ dependencies = [
     "datasets",
     "wandb",
     "flash-attn",
-    "tensordict==0.7.2"
+    "tensordict==0.7.2",
+    "langdetect",
+    "immutabledict",
+    "nltk"
 ]
 
 # Optional dependencies (extras_require in setup.py)
