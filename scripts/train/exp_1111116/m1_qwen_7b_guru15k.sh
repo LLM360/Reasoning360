@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=zhoujun-rl-guru15k-guru15k
+#SBATCH --job-name=zhoujun-rl-guru15k-mix
 #SBATCH --partition=main
 #SBATCH --nodes=4
 #SBATCH --ntasks=4
@@ -10,7 +10,7 @@
 #SBATCH --output=slurm/%j_%x.out
 #SBATCH --error=slurm/%j_%x.err
 #SBATCH --exclusive
-#SBATCH --time=24:00:00
+#SBATCH --time=720:00:00
 
 
 # =================== Environment ===================
@@ -136,20 +136,20 @@ gpqa_diamond_test_path=${TEST_DATA_DIR}/stem__gpqa_198.parquet
 
 
 train_files="['${math_train_path1}',\
-'${math_train_path2}',
-'${leetcode_train_path}',
-'${livecodebench_train_path}',
-'${primeintellect_train_path}',
-'${taco_train_path}',
-'${arcagi1_train_path}',
-'${arcagi2_train_path}',
-'${barc_train_path}',
-'${graph_train_path}',
-'${ordering_train_path}',
-'${zebra_train_path}',
-'${codeio_train_path}',
-'${hitab_train_path}',
-'${multihier_train_path}',
+'${math_train_path2}', \
+'${leetcode_train_path}', \
+'${livecodebench_train_path}', \
+'${primeintellect_train_path}', \
+'${taco_train_path}', \
+'${arcagi1_train_path}', \
+'${arcagi2_train_path}', \
+'${barc_train_path}', \
+'${graph_train_path}', \
+'${ordering_train_path}', \
+'${zebra_train_path}', \
+'${codeio_train_path}', \
+'${hitab_train_path}', \
+'${multihier_train_path}', \
 '${webinstruct_train_path}']"
 
 test_files="['${math_test_path}',\

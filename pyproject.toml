@@ -57,6 +57,7 @@ dependencies = [
     "langdetect",
     "immutabledict",
     "nltk"
+    "polars"
 ]
 
 # Optional dependencies (extras_require in setup.py)

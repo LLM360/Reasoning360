@@ -10,7 +10,7 @@
 #SBATCH --output=slurm/verl-dapo-%j.out
 #SBATCH --error=slurm/verl-dapo-%j.err
 #SBATCH --exclusive
-#SBATCH --time=24:00:00
+#SBATCH --time=720:00:00
 
 # Get the list of allocated nodes
 nodes=( $(scontrol show hostnames "$SLURM_JOB_NODELIST") )

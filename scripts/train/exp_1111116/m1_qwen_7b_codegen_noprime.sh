@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=zhoujun-trial-rl-math
+#SBATCH --job-name=zhoujun-rl-guru15k-codegen2.5k-noprime
 #SBATCH --partition=main
 #SBATCH --nodes=4
 #SBATCH --ntasks=4
@@ -11,36 +11,38 @@
 #SBATCH --error=slurm/%j_%x.err
 #SBATCH --exclusive
 #SBATCH --time=720:00:00
-#SBATCH --qos=iq
+#SBATCH --exclude=azure-hpc-H200-instance-[230-233]
 
 
 # =================== Environment ===================
 # may vary from cluster to cluster, please check the environment variables
-# export LD_LIBRARY_PATH=/usr/local/nccl-rdma-sharp-plugins/lib:$LD_LIBRARY_PATH \
-#        UCX_TLS=dc \
-#        UCX_NET_DEVICES=mlx5_ib0:1 \
-#        CUDA_DEVICE_ORDER=PCI_BUS_ID \
-#        NCCL_SOCKET_IFNAME=eth0 \
-#        NCCL_DEBUG=WARN \
-#        NCCL_NET_GDR_LEVEL=5 \
-#        NCCL_MIN_NCHANNELS=32 \
-#        NCCL_TOPO_FILE=/mnt/users/runner/scripts/ndv5-topo.xml \
-#        OMPI_MCA_coll_hcoll_enable=0 \
-#        OMPI_MCA_plm_rsh_no_tree_spawn=1 \
-#        OMPI_MCA_plm_rsh_num_concurrent=800 \
-#        NCCL_IB_QPS_PER_CONNECTION=4 \
-#        NCCL_P2P_NET_CHUNKSIZE=$((512*1024)) \
-#        NCCL_PXN_DISABLE=1
+# === M1
+export LD_LIBRARY_PATH=/usr/local/nccl-rdma-sharp-plugins/lib:$LD_LIBRARY_PATH \
+       UCX_TLS=dc \
+       UCX_NET_DEVICES=mlx5_ib0:1 \
+       CUDA_DEVICE_ORDER=PCI_BUS_ID \
+       NCCL_SOCKET_IFNAME=eth0 \
+       NCCL_DEBUG=WARN \
+       NCCL_NET_GDR_LEVEL=5 \
+       NCCL_MIN_NCHANNELS=32 \
+       NCCL_TOPO_FILE=/mnt/users/runner/scripts/ndv5-topo.xml \
+       OMPI_MCA_coll_hcoll_enable=0 \
+       OMPI_MCA_plm_rsh_no_tree_spawn=1 \
+       OMPI_MCA_plm_rsh_num_concurrent=800 \
+       NCCL_IB_QPS_PER_CONNECTION=4 \
+       NCCL_P2P_NET_CHUNKSIZE=$((512*1024)) \
+       NCCL_PXN_DISABLE=1
 
-# export UCX_NET_DEVICES=mlx5_ib0:1,mlx5_ib1:1,mlx5_ib2:1,mlx5_ib3:1,mlx5_ib4:1,mlx5_ib5:1,mlx5_ib6:1,mlx5_ib7:1
-# export CUDA_DEVICE_MAX_CONNECTIONS=1
+export UCX_NET_DEVICES=mlx5_ib0:1,mlx5_ib1:1,mlx5_ib2:1,mlx5_ib3:1,mlx5_ib4:1,mlx5_ib5:1,mlx5_ib6:1,mlx5_ib7:1
+export CUDA_DEVICE_MAX_CONNECTIONS=1
 
-export NCCL_DEBUG=info
-export NCCL_ALGO=NVLSTree
-export NCCL_IBEXT_DISABLE=1
-export NCCL_NVLS_ENABLE=1
-export NCCL_IB_HCA=mlx5
-export UCX_NET_DEVICES=mlx5_0:1,mlx5_1:1,mlx5_2:1,mlx5_3:1,mlx5_4:1,mlx5_5:1,mlx5_6:1,mlx5_7:1
+# === M2 setup ===
+# export NCCL_DEBUG=info
+# export NCCL_ALGO=NVLSTree
+# export NCCL_IBEXT_DISABLE=1
+# export NCCL_NVLS_ENABLE=1
+# export NCCL_IB_HCA=mlx5
+# export UCX_NET_DEVICES=mlx5_0:1,mlx5_1:1,mlx5_2:1,mlx5_3:1,mlx5_4:1,mlx5_5:1,mlx5_6:1,mlx5_7:1
 
 # Get the list of allocated nodes
 nodes=( $(scontrol show hostnames "$SLURM_JOB_NODELIST") )
@@ -87,56 +89,56 @@ export VLLM_USE_V1=0
 
 
 # =================== Data Mixture (genie-25K)===================
-# WORKING_DIR=${HOME}/Reasoning360
-WORKING_DIR=/mnt/weka/home/zhuojun.cheng/leo/Reasoning360/
-TRAIN_DATA_DIR=${WORKING_DIR}/data/train_raw
-TEST_DATA_DIR=${WORKING_DIR}/data/test
+WORKING_DIR=${HOME}/Reasoning360
+TRAIN_DATA_DIR=${WORKING_DIR}/data/train_guru15k
+TEST_DATA_DIR=${WORKING_DIR}/data/test/test
 # Math (train)
-math_train_path=${TRAIN_DATA_DIR}/math__patch_merged_deduped_13.3k.parquet
+math_train_path1=${TRAIN_DATA_DIR}/math__merged_deduped_l1e-5_h0.9_60.0k_sampled_2.2k.parquet
+math_train_path2=${TRAIN_DATA_DIR}/math__patch_merged_deduped_13.3k_l1e-5_h0.9_9.3k_sampled_334.parquet
 # Math (test)
 math_test_path=${TEST_DATA_DIR}/math__math_500.parquet
 aime_test_path=${TEST_DATA_DIR}/math__aime_repeated_8x_240.parquet
 amc_test_path=${TEST_DATA_DIR}/math__amc_repeated_4x_332.parquet
 # Code (train)
-leetcode2k_train_path=${TRAIN_DATA_DIR}/codegen__deduped_leetcode2k_2.4k.parquet
-livecodebench_train_path=${TRAIN_DATA_DIR}/codegen__deduped_livecodebench_599.parquet
-primeintellect_train_path=${TRAIN_DATA_DIR}/codegen__deduped_primeintellect_9.6k.parquet
-taco_train_path=${TRAIN_DATA_DIR}/codegen__deduped_taco_11.1k.parquet
+leetcode_train_path=${TRAIN_DATA_DIR}/codegen__deduped_leetcode2k_2.4k_l1e-5_h0.9_1.3k_sampled_177.parquet
+livecodebench_train_path=${TRAIN_DATA_DIR}/codegen__deduped_livecodebench_599_l1e-5_h0.9_451_sampled_61.parquet
+primeintellect_train_path=${TRAIN_DATA_DIR}/codegen__deduped_primeintellect_9.6k_l1e-5_h0.9_7.6k_sampled_1.0k.parquet
+taco_train_path=${TRAIN_DATA_DIR}/codegen__deduped_taco_11.1k_l1e-5_h0.9_8.9k_sampled_1.2k.parquet
 # Code (test)
 humaneval_test_path=${TEST_DATA_DIR}/codegen__humaneval_164.parquet
-mbpp_test_path=${TEST_DATA_DIR}/codegen__mbpp_500.parquet
+mbpp_test_path=${TEST_DATA_DIR}/codegen__mbpp_500_sampled_200.parquet
 livecodebench_test_path=${TEST_DATA_DIR}/codegen__livecodebench_279.parquet
 # Logic (train)
-zebralogic_train_path=${TRAIN_DATA_DIR}/logic__zebra_puzzle_dataset_5.7k.parquet
-graph_train_path=${TRAIN_DATA_DIR}/logic__graph_logical_dataset_2.8k.parquet
-ordering_puzzle_train_path=${TRAIN_DATA_DIR}/logic__ordering_puzzle_dataset_2.9k.parquet
+arcagi1_train_path=${TRAIN_DATA_DIR}/logic__arcagi1_297_l1e-05_h0.9_sampled_45.parquet
+arcagi2_train_path=${TRAIN_DATA_DIR}/logic__arcagi2_653_l1e-05_h0.9_sampled_77.parquet
+barc_train_path=${TRAIN_DATA_DIR}/logic__barc_3.4k_l1e-5_h0.9_1.6k_sampled_631.parquet
+graph_train_path=${TRAIN_DATA_DIR}/logic__graph_logical_dataset_2.8k_l1e-5_h0.9_1.2k_sampled_485.parquet
+ordering_train_path=${TRAIN_DATA_DIR}/logic__ordering_puzzle_dataset_2.9k_l1e-5_h0.9_1.9k_sampled_736.parquet
+zebra_train_path=${TRAIN_DATA_DIR}/logic__zebra_puzzle_dataset_5.7k_l1e-5_h0.9_1.3k_sampled_523.parquet
 # Logic (test)
-zebralogic_test_path=${TEST_DATA_DIR}/logic__zebra_puzzle_dataset_300.parquet
-graph_test_path=${TEST_DATA_DIR}/logic__graph_logical_dataset_150.parquet
-ordering_puzzle_test_path=${TEST_DATA_DIR}/logic__ordering_puzzle_dataset_150.parquet
+zebralogic_test_path=${TEST_DATA_DIR}/logic__zebra_puzzle_dataset_300_sampled_200.parquet
+graph_test_path=${TEST_DATA_DIR}/logic__graph_logical_dataset_150_sampled_77.parquet
+ordering_puzzle_test_path=${TEST_DATA_DIR}/logic__ordering_puzzle_dataset_150_sampled_100.parquet
+arcagi1_test_path=${TEST_DATA_DIR}/simulation__arcagi1_200.parquet
 # Simulation (train)
-codeio_train_path=${TRAIN_DATA_DIR}/simulation__codeio_12.1k.parquet  # TODO
+codeio_train_path=${TRAIN_DATA_DIR}/simulation__codeio_fixed_12.1k_processed_l1e-5_h0.9_3.8k_sampled_2.5k.parquet
 # Simulation (test)
-codeio_test_path=${TEST_DATA_DIR}/simulation__codeio_500.parquet
-cruxeval_o_test_path=${TEST_DATA_DIR}/simulation__cruxeval-o_800.parquet
-cruxeval_i_test_path=${TEST_DATA_DIR}/simulation__cruxeval-i_800.parquet
+codeio_test_path=${TEST_DATA_DIR}/simulation__codeio_500_sampled_200.parquet
 # Table (train)
-multihier_train_path=${TRAIN_DATA_DIR}/table__multihier_2.9k.parquet
-hitab_train_path=${TRAIN_DATA_DIR}/table__hitab_7.4k.parquet
+hitab_train_path=${TRAIN_DATA_DIR}/table__hitab_7.4k_l1e-5_h0.9_4.5k_sampled_1.9k.parquet
+multihier_train_path=${TRAIN_DATA_DIR}/table__multihier_2.9k_l1e-5_h0.9_1.6k_sampled_645.parquet
 # Table (test)
-multihier_test_path=${TEST_DATA_DIR}/table__multihier_300.parquet
-hitab_test_path=${TEST_DATA_DIR}/table__hitab_300.parquet
+multihier_test_path=${TEST_DATA_DIR}/table__multihier_300_sampled_200.parquet
+hitab_test_path=${TEST_DATA_DIR}/table__hitab_300_sampled_200.parquet
 # Stem (train)
-webinstruct_train_path=${TRAIN_DATA_DIR}/stem__33.0k.parquet # TODO
+webinstruct_train_path=${TRAIN_DATA_DIR}/stem__web_31.8k_l1e-5_h0.9_19.3k_sampled_2.5k.parquet
 # Stem (test)
 gpqa_diamond_test_path=${TEST_DATA_DIR}/stem__gpqa_198.parquet
-# ARC-AGI (train)
-arc_agi_train_path=${TRAIN_DATA_DIR}/simulation__arcagi1_297.parquet
-# ARC-AGI (test)
-arc_agi_test_path=${TEST_DATA_DIR}/simulation__arcagi1_200.parquet
 
 
-train_files="['${math_train_path}']"
+train_files="['${leetcode_train_path}',\
+'${livecodebench_train_path}',\
+'${taco_train_path}']"
 
 test_files="['${math_test_path}',\
 '${aime_test_path}',\
@@ -147,18 +149,18 @@ test_files="['${math_test_path}',\
 '${zebralogic_test_path}',\
 '${graph_test_path}',\
 '${ordering_puzzle_test_path}',\
+'${arcagi1_test_path}',\
 '${codeio_test_path}',\
 '${multihier_test_path}',\
 '${hitab_test_path}',\
-'${gpqa_diamond_test_path}',\
-'${arc_agi_test_path}']"
+'${gpqa_diamond_test_path}']"
 
 
 # =================== Model ===================
 LOCAL_MODEL_DIR=${HOME}/.cache/huggingface/hub
-BASE_MODEL=Qwen/Qwen2.5-7B-Instruct
+# BASE_MODEL=Qwen/Qwen2.5-7B-Instruct
 # BASE_MODEL=Qwen/Qwen2.5-3B
-# BASE_MODEL=${LOCAL_MODEL_DIR}/models--Qwen--Qwen2.5-7B-think
+BASE_MODEL=${LOCAL_MODEL_DIR}/models--Qwen--Qwen2.5-7B-think
 # BASE_MODEL=deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
 
 # =================== Logging ===================
@@ -205,7 +207,7 @@ clip_ratio_high=0.2
 
 max_prompt_length=$((1024 * 4))
 max_response_length=$((1024 * 8))
-enable_overlong_buffer=True
+enable_overlong_buffer=False
 overlong_buffer_len=$((1024 * 4))
 overlong_penalty_factor=1.0
 
@@ -245,7 +247,7 @@ offload=True
     data.train_files="$train_files" \
     data.val_files="$test_files" \
     data.prompt_key=prompt \
-    data.truncation='left' \
+    data.truncation='right' \
     data.max_prompt_length=${max_prompt_length} \
     data.max_response_length=${max_response_length} \
     data.train_batch_size=${train_prompt_bsz} \
@@ -306,12 +308,12 @@ offload=True
     trainer.logger=['console','wandb'] \
     trainer.project_name=${WANDB_PROJECT} \
     trainer.experiment_name=${WANDB_EXPERIMENT_NAME} \
-    trainer.val_before_train=True \
+    trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes="${NNODES}" \
     trainer.nnodes=$worker_num \
-    trainer.save_freq=20 \
+    trainer.save_freq=10 \
     trainer.test_freq=5 \
-    trainer.total_epochs=5 \
-    +trainer.val_generations_to_log_to_wandb=50 \
+    trainer.total_epochs=10 \
+    +trainer.val_generations_to_log_to_wandb=30 \
     trainer.resume_mode=auto

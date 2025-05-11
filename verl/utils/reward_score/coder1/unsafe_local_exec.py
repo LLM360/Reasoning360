@@ -11,7 +11,7 @@ CLI_ARG_SIZE_LIMIT = 1024 * 3
 def code_exec_local(
     code,
     stdin: str = None,
-    timeout=20,
+    timeout=30,
     pytest: str = None,
     solution: str = None,
     python_env: str = os.environ.get("CONDA_BIN_PATH", None),

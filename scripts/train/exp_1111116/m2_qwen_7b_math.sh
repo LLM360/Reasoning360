@@ -10,7 +10,7 @@
 #SBATCH --output=slurm/%j_%x.out
 #SBATCH --error=slurm/%j_%x.err
 #SBATCH --exclusive
-#SBATCH --time=24:00:00
+#SBATCH --time=720:00:00
 #SBATCH --qos=iq
 #SBATCH --exclude=fs-mbz-gpu-[088,317,440,497]
 
@@ -291,7 +291,7 @@ offload=True
     trainer.n_gpus_per_node=8 \
     trainer.nnodes="${NNODES}" \
     trainer.nnodes=$worker_num \
-    trainer.save_freq=20 \
+    trainer.save_freq=10 \
     trainer.test_freq=5 \
     trainer.total_epochs=10 \
     +trainer.val_generations_to_log_to_wandb=30 \

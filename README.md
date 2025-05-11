@@ -13,8 +13,8 @@ conda create -n Reasoning360 python=3.12
 conda activate Reasoning360
 conda install -c nvidia/label/cuda-12.4.0 cuda-toolkit cuda-nvcc
 pip install uv # using uv to install packages is faster than pip
-uv pip install torch
-uv pip install flash-attn --no-build-isolation
+uv pip install torch==2.6.0
+uv pip install flash-attn==2.7.3 --no-build-isolation
 uv pip install -e .[gpu,math]
 ```
 

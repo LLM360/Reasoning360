@@ -34,7 +34,7 @@ from typing import Tuple
 
 
 # ------------ Core LLM call --------------------------------------------------
-def _llm_judge(question: str, student: str, reference: str) -> bool:
+def _llm_judge(question: str, student: str, reference: str, verbose: bool = False) -> bool:
     url_base = os.getenv("STEM_LLM_JUDGE_URL")
     if not url_base:
         raise EnvironmentError("STEM_LLM_JUDGE_URL not set")
@@ -71,7 +71,7 @@ def _llm_judge(question: str, student: str, reference: str) -> bool:
 
     marker = "✅" if score == 1. else "❌"
 
-    if True:
+    if verbose:
         print(marker*50 )
         print("student answer: ", student)
         print("gt: ", reference)
@@ -150,8 +150,7 @@ def compute_score(data_source: str,
         return 0.
     else:
         try:
-            is_correct = _llm_judge(question, extracted_model_output, ground_truth)
-            # print(reward_log)
+            is_correct = _llm_judge(question, extracted_model_output, ground_truth, verbose=False)
         except Exception as e:
             print(f"[judge-error] {e}")
             return 0.
@@ -166,7 +165,7 @@ if __name__ == "__main__":
                     "to receive $9,000 for the car, should you accept?",
         "answer": "$8,645.09"
     }
-    agent_reply = "$8,645.09"           # pretend this comes from your agent
+    agent_reply = "The answer is\\boxed{$8,645.09}"           # pretend this comes from your agent
     score = compute_score(
         data_source="",
         model_output=agent_reply,

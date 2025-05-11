@@ -10,7 +10,7 @@
 #SBATCH --output=slurm/%j_%x.out
 #SBATCH --error=slurm/%j_%x.err
 #SBATCH --exclusive
-#SBATCH --time=24:00:00
+#SBATCH --time=720:00:00
 #SBATCH --exclude=azure-hpc-H200-instance-[009,097,099]
 
 

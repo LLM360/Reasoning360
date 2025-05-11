@@ -23,6 +23,8 @@ def make_prompt(question: str):
 
 # ------------------ filter predicates ------------------ #
 def keep_example(example, max_answer_len):
+    if len(example.get("answer", "")) == 1 and example.get("answer", "").isalpha():
+        return False
     return (
         example.get("category") != "Mathematics"
         and example.get("difficulty") in ["University", "PhD"]
@@ -50,10 +52,8 @@ def main():
 
     def master_filter(ex):
         ans = ex.get("answer", "")
-        # 原有筛选条件
         if not keep_example(ex, args.max_answer_len):
             return False
-        # 如果答案中有超过 3 位小数，剔除
         if has_too_many_decimal_places(ans, max_decimals=3):
             return False
         return True
@@ -96,6 +96,7 @@ def main():
             "reward_model": {"ground_truth": ex["answer"]},
             "extra_info": {
                 "idx":          ex.get("id"),
+                "question":     ex["question"],
                 "category":     ex.get("category"),
                 "difficulty":   ex.get("difficulty"),
                 "answer_type":  ex.get("answer_type"),

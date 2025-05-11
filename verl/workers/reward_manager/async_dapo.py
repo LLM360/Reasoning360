@@ -13,9 +13,10 @@
 # limitations under the License.
 
 import asyncio
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from functools import partial
 from collections import defaultdict
+import numpy as np
 
 from verl import DataProto
 from verl.utils.reward_score import _default_compute_score
@@ -45,28 +46,75 @@ async def single_compute_score(compute_score_fn, data_source, solution_str, grou
 
 
 async def parallel_compute_score_async(compute_score_fn, data_sources, solutions, ground_truths, 
-                                      extra_infos, num_processes=64):
-    results = []
-    with ProcessPoolExecutor(max_workers=num_processes) as executor:
-        # Create tasks for all items
-        tasks_async = [
-            single_compute_score(compute_score_fn, data_source, solution, ground_truth, 
-                                extra_info, executor, timeout=300.)
-            for data_source, solution, ground_truth, extra_info in 
-            zip(data_sources, solutions, ground_truths, extra_infos)
-        ]
+                                      extra_infos, num_processes=64, batch_size=None, shuffle=False):
+    # If batch_size is not set, process all items at once
+    if batch_size is None or batch_size <= 0:
+        batch_size = len(data_sources)
+    
+    # Create indices for tracking original positions
+    indices = list(range(len(data_sources)))
+    
+    # Shuffle data if required
+    if shuffle:
+        # Create a copy of the original indices for restoring order later
+        original_indices = indices.copy()
+        # Create shuffled indices
+        shuffled_indices = np.random.permutation(len(data_sources))
         
-        # Handle potential exceptions to prevent process starvation
-        try:
-            results = await asyncio.gather(*tasks_async, return_exceptions=False)
-        except:
-            for pid, proc in executor._processes.items():
-                try:
-                    proc.kill()
-                except Exception as kill_err:
-                    print('shut down failed: ' + str(kill_err))
-            raise
-
+        # Apply shuffling to all data arrays
+        data_sources = [data_sources[i] for i in shuffled_indices]
+        solutions = [solutions[i] for i in shuffled_indices]
+        ground_truths = [ground_truths[i] for i in shuffled_indices]
+        extra_infos = [extra_infos[i] for i in shuffled_indices]
+        # Map shuffled positions to original indices
+        indices = [original_indices[i] for i in shuffled_indices]
+    
+    results = [None] * len(data_sources)
+    
+    with ProcessPoolExecutor(max_workers=num_processes) as executor:
+        # Process data in batches
+        for start_idx in range(0, len(data_sources), batch_size):
+            end_idx = min(start_idx + batch_size, len(data_sources))
+            
+            # Create tasks for current batch
+            tasks_async = [
+                single_compute_score(
+                    compute_score_fn, 
+                    data_sources[i], 
+                    solutions[i], 
+                    ground_truths[i], 
+                    extra_infos[i], 
+                    executor, 
+                    timeout=300.
+                )
+                for i in range(start_idx, end_idx)
+            ]
+            
+            # Handle potential exceptions to prevent process starvation
+            try:
+                batch_results = await asyncio.gather(*tasks_async, return_exceptions=False)
+                
+                # Store results in their correct positions
+                for i, result in enumerate(batch_results):
+                    actual_idx = start_idx + i
+                    results[actual_idx] = result
+                    
+            except Exception as e:
+                for pid, proc in executor._processes.items():
+                    try:
+                        proc.kill()
+                    except Exception as kill_err:
+                        print('shut down failed: ' + str(kill_err))
+                raise
+    
+    # Restore original order if data was shuffled
+    if shuffle:
+        # Create a mapping to restore original order
+        ordered_results = [None] * len(results)
+        for i, original_idx in enumerate(indices):
+            ordered_results[original_idx] = results[i]
+        results = ordered_results
+    
     return results
 
 
@@ -81,6 +129,8 @@ class AsyncDAPORewardManager:
                  reward_fn_key='data_source',
                  max_resp_len=None,
                  overlong_buffer_cfg=None,
+                 batch_size=2048,
+                 shuffle_batch=True,
                  **kwargs) -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
@@ -88,6 +138,8 @@ class AsyncDAPORewardManager:
         self.reward_fn_key = reward_fn_key
         self.overlong_buffer_cfg = overlong_buffer_cfg
         self.max_resp_len = max_resp_len
+        self.batch_size = batch_size
+        self.shuffle_batch = shuffle_batch
 
         if self.overlong_buffer_cfg is not None:
             assert self.max_resp_len is not None, f"max_resp_len must be provided if {overlong_buffer_cfg=}, but got None"
@@ -188,7 +240,9 @@ class AsyncDAPORewardManager:
                     solutions,
                     ground_truths,
                     extra_infos,
-                    num_processes=64
+                    num_processes=64,
+                    batch_size=self.batch_size,
+                    shuffle=self.shuffle_batch
                 )
             )
             # print(f"[DEBUG] Parallel score computation completed")

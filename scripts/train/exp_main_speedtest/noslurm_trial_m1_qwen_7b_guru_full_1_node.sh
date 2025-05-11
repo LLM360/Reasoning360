@@ -1,147 +1,154 @@
 #!/bin/bash
-#SBATCH --job-name=zhoujun-rl-guru15k-logic2.5k
-#SBATCH --partition=main
-#SBATCH --nodes=4
-#SBATCH --ntasks=4
-#SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:8
-#SBATCH --cpus-per-task=96
-#SBATCH --mem=512G
-#SBATCH --output=slurm/%j_%x.out
-#SBATCH --error=slurm/%j_%x.err
-#SBATCH --exclusive
-#SBATCH --time=720:00:00
-#SBATCH --qos=iq
-#SBATCH --exclude=fs-mbz-gpu-[088,317,440,497]
 
+# This script is designed to be run directly on a single compute node
+# after SSHing into it. It assumes your environment (like CONDA_BIN_PATH)
+# is already set up in your login shell profile (.bashrc, etc.).
+
+# Set options for stricter error handling
+set -euxo pipefail
 
 # =================== Environment ===================
-# may vary from cluster to cluster, please check the environment variables
-# export LD_LIBRARY_PATH=/usr/local/nccl-rdma-sharp-plugins/lib:$LD_LIBRARY_PATH \
-#        UCX_TLS=dc \
-#        UCX_NET_DEVICES=mlx5_ib0:1 \
-#        CUDA_DEVICE_ORDER=PCI_BUS_ID \
-#        NCCL_SOCKET_IFNAME=eth0 \
-#        NCCL_DEBUG=WARN \
-#        NCCL_NET_GDR_LEVEL=5 \
-#        NCCL_MIN_NCHANNELS=32 \
-#        NCCL_TOPO_FILE=/mnt/users/runner/scripts/ndv5-topo.xml \
-#        OMPI_MCA_coll_hcoll_enable=0 \
-#        OMPI_MCA_plm_rsh_no_tree_spawn=1 \
-#        OMPI_MCA_plm_rsh_num_concurrent=800 \
-#        NCCL_IB_QPS_PER_CONNECTION=4 \
-#        NCCL_P2P_NET_CHUNKSIZE=$((512*1024)) \
-#        NCCL_PXN_DISABLE=1
+# May vary from cluster to cluster. Keep these as they might
+# be necessary for the underlying libraries (NCCL, CUDA, etc.)
+# even on a single node, depending on how your system is configured.
+# Remove M2 setup if M1 is the intended configuration.
+export LD_LIBRARY_PATH=/usr/local/nccl-rdma-sharp-plugins/lib:$LD_LIBRARY_PATH \
+       UCX_TLS=dc \
+       UCX_NET_DEVICES=mlx5_ib0:1 \
+       CUDA_DEVICE_ORDER=PCI_BUS_ID \
+       NCCL_SOCKET_IFNAME=eth0 \
+       NCCL_DEBUG=WARN \
+       NCCL_NET_GDR_LEVEL=5 \
+       NCCL_MIN_NCHANNELS=32 \
+       # NCCL_TOPO_FILE=/mnt/users/runner/scripts/ndv5-topo.xml # This might be specific to multi-node topo, consider removing if it causes issues
+       OMPI_MCA_coll_hcoll_enable=0 \
+       OMPI_MCA_plm_rsh_no_tree_spawn=1 \
+       OMPI_MCA_plm_rsh_num_concurrent=800 \
+       NCCL_IB_QPS_PER_CONNECTION=4 \
+       NCCL_P2P_NET_CHUNKSIZE=$((512*1024)) \
+       NCCL_PXN_DISABLE=1
 
-# export UCX_NET_DEVICES=mlx5_ib0:1,mlx5_ib1:1,mlx5_ib2:1,mlx5_ib3:1,mlx5_ib4:1,mlx5_ib5:1,mlx5_ib6:1,mlx5_ib7:1
-# export CUDA_DEVICE_MAX_CONNECTIONS=1
+# Assuming your single node has multiple IB interfaces listed here
+export UCX_NET_DEVICES=mlx5_ib0:1,mlx5_ib1:1,mlx5_ib2:1,mlx5_ib3:1,mlx5_ib4:1,mlx5_ib5:1,mlx5_ib6:1,mlx5_ib7:1
+export CUDA_DEVICE_MAX_CONNECTIONS=1
 
-export NCCL_DEBUG=info
-export NCCL_ALGO=NVLSTree
-export NCCL_IBEXT_DISABLE=1
-export NCCL_NVLS_ENABLE=1
-export NCCL_IB_HCA=mlx5
-export UCX_NET_DEVICES=mlx5_0:1,mlx5_1:1,mlx5_2:1,mlx5_3:1,mlx5_4:1,mlx5_5:1,mlx5_6:1,mlx5_7:1
+# === M2 setup ===
+# # export NCCL_DEBUG=info
+# # export NCCL_ALGO=NVLSTree
+# # export NCCL_IBEXT_DISABLE=1
+# # export NCCL_NVLS_ENABLE=1
+# # export NCCL_IB_HCA=mlx5
+# # export UCX_NET_DEVICES=mlx5_0:1,mlx5_1:1,mlx5_2:1,mlx5_3:1,mlx5_4:5,mlx5_5:1,mlx5_6:1,mlx5_7:1
 
-# Get the list of allocated nodes
-nodes=( $(scontrol show hostnames "$SLURM_JOB_NODELIST") )
-echo "Nodes to check: ${nodes[@]}"
+# =================== Ray start (Single Node) ===================
+# Stop any potentially lingering Ray processes on the local node
+echo "Stopping any existing Ray processes..."
+ray stop || true # '|| true' prevents the script from exiting if ray is not running
 
-# We'll track PIDs so we can wait on them and detect errors
-declare -A pids
+sleep 5
+# Remove existing Ray cluster info (local)
+echo "Removing old Ray cluster info..."
+rm -rf /tmp/ray/ray_current_cluster
 
-# Spawn each check in the background
-for host in "${nodes[@]}"; do
-    echo "Spawning GPU check on node: $host"
-    srun --nodes=1 --ntasks=1 --nodelist="$host" \
-         ~/Reasoning360/scripts/tools/check_gpu.sh &
-    pids["$host"]=$!
-done
+# Get the local IP address and define Ray port
+# Use 'localhost' or the actual IP address depending on network config and Ray needs
+# Using IP address is often safer for distributed frameworks even locally
+local_ip=0.0.0.0
+port=6379
+address_head="$local_ip:$port"
 
-# Now wait for each job to finish and capture errors
-error_found=0
-for host in "${nodes[@]}"; do
-    # wait returns the exit code of the process
-    if ! wait "${pids[$host]}"; then
-        echo "ERROR: Found GPU usage by other users on $host. Exiting."
-        error_found=1
-    fi
-done
+# On a single node, the head node *is* the only node.
+# We set worker_num to 1.
+export worker_num=1
+# Assuming you have 96 CPUs and 8 GPUs available on this node as per sbatch request
+# Adjust num-cpus and num-gpus based on the actual resources you want Ray to manage locally
+num_gpus=8  # Corresponds to SBATCH --gres=gpu:8
 
-if [[ $error_found -eq 1 ]]; then
+echo "Starting Ray head node locally at $address_head..."
+# Note: --block is removed as we don't need to wait for remote workers
+# Use --dashboard-host 0.0.0.0 to make dashboard accessible from outside (if firewall allows)
+${CONDA_BIN_PATH}ray start --head --node-ip-address="$local_ip" --port=$port \
+    --num-gpus "${num_gpus}" --include-dashboard=True \
+    --dashboard-host 0.0.0.0 --address "$address_head" & # Start in background (&)
+    # The last --address "$address_head" might be redundant for head, but doesn't hurt.
+
+sleep 10 # Give Ray a moment to start
+
+# Check if Ray started successfully (optional but recommended)
+if ! ray status &> /dev/null; then
+    echo "ERROR: Ray head node failed to start. Exiting."
     exit 1
 fi
-
-echo "=== No leftover GPU usage found on all allocated nodes. ==="
-echo "Proceeding with the main job..."
+echo "Ray head node started successfully."
 
 
-export head_node=${nodes[0]}
-head_node_ip=$(srun --nodes=1 --ntasks=1 -w "$head_node" hostname --ip-address)
-port=6379
-address_head=$head_node_ip:$port
-
-export worker_num=$SLURM_NNODES
-export HYDRA_FULL_ERROR=1
-export VLLM_USE_V1=0
-# export GLOO_SOCKET_IFNAME=ens10f0np0
-
+# STEM LLM Judge
+export STEM_LLM_JUDGE_URL=http://10.0.5.198:8000
 
 # =================== Data Mixture (genie-25K)===================
-# WORKING_DIR=${HOME}/Reasoning360
-WORKING_DIR=/mnt/weka/home/zhuojun.cheng/leo/Reasoning360/
-TRAIN_DATA_DIR=${WORKING_DIR}/data/train_guru15k
-TEST_DATA_DIR=${WORKING_DIR}/data/test
+WORKING_DIR=${HOME}/Reasoning360
+TRAIN_DATA_DIR=${WORKING_DIR}/data/train_guru_full
+TEST_DATA_DIR=${WORKING_DIR}/data/test/test
 # Math (train)
-math_train_path1=${TRAIN_DATA_DIR}/math__merged_deduped_l1e-5_h0.9_60.0k_sampled_2.2k.parquet
-math_train_path2=${TRAIN_DATA_DIR}/math__patch_merged_deduped_13.3k_l1e-5_h0.9_9.3k_sampled_334.parquet
+math_train_path1=${TRAIN_DATA_DIR}/math__merged_deduped_l1e-5_h0.9_60.0k_sampled_60.0k.parquet
+math_train_path2=${TRAIN_DATA_DIR}/math__patch_merged_deduped_13.3k_l1e-5_h0.9_9.3k_sampled_9.3k.parquet
 # Math (test)
 math_test_path=${TEST_DATA_DIR}/math__math_500.parquet
 aime_test_path=${TEST_DATA_DIR}/math__aime_repeated_8x_240.parquet
 amc_test_path=${TEST_DATA_DIR}/math__amc_repeated_4x_332.parquet
 # Code (train)
-leetcode_train_path=${TRAIN_DATA_DIR}/codegen__deduped_leetcode2k_2.4k_l1e-5_h0.9_1.3k_sampled_177.parquet
-livecodebench_train_path=${TRAIN_DATA_DIR}/codegen__deduped_livecodebench_599_l1e-5_h0.9_451_sampled_61.parquet
-primeintellect_train_path=${TRAIN_DATA_DIR}/codegen__deduped_primeintellect_9.6k_l1e-5_h0.9_7.6k_sampled_1.0k.parquet
-taco_train_path=${TRAIN_DATA_DIR}/codegen__deduped_taco_11.1k_l1e-5_h0.9_8.9k_sampled_1.2k.parquet
+leetcode_train_path=${TRAIN_DATA_DIR}/codegen__deduped_leetcode2k_2.4k_l1e-5_h0.9_1.3k_sampled_177.parquet  # TODO: change this
+livecodebench_train_path=${TRAIN_DATA_DIR}/codegen__deduped_livecodebench_599_l1e-5_h0.9_451_sampled_61.parquet  # TODO: change this
+primeintellect_train_path=${TRAIN_DATA_DIR}/codegen__deduped_primeintellect_9.6k_l1e-5_h0.9_7.6k_sampled_1.0k.parquet  # TODO: change this
+taco_train_path=${TRAIN_DATA_DIR}/codegen__deduped_taco_11.1k_l1e-5_h0.9_8.9k_sampled_1.2k.parquet  # TODO: change this
 # Code (test)
 humaneval_test_path=${TEST_DATA_DIR}/codegen__humaneval_164.parquet
 mbpp_test_path=${TEST_DATA_DIR}/codegen__mbpp_500_sampled_200.parquet
 livecodebench_test_path=${TEST_DATA_DIR}/codegen__livecodebench_279.parquet
 # Logic (train)
-arcagi1_train_path=${TRAIN_DATA_DIR}/logic__arcagi1_297_l1e-05_h0.9_sampled_45.parquet
-arcagi2_train_path=${TRAIN_DATA_DIR}/logic__arcagi2_653_l1e-05_h0.9_sampled_77.parquet
-barc_train_path=${TRAIN_DATA_DIR}/logic__barc_3.4k_l1e-5_h0.9_1.6k_sampled_631.parquet
-graph_train_path=${TRAIN_DATA_DIR}/logic__graph_logical_dataset_2.8k_l1e-5_h0.9_1.2k_sampled_485.parquet
-ordering_train_path=${TRAIN_DATA_DIR}/logic__ordering_puzzle_dataset_2.9k_l1e-5_h0.9_1.9k_sampled_736.parquet
-zebra_train_path=${TRAIN_DATA_DIR}/logic__zebra_puzzle_dataset_5.7k_l1e-5_h0.9_1.3k_sampled_523.parquet
+arcagi1_train_path=${TRAIN_DATA_DIR}/logic__arcagi1_297_l1e-05_h0.9_sampled_117.parquet
+arcagi2_train_path=${TRAIN_DATA_DIR}/logic__arcagi2_653_l1e-05_h0.9_sampled_197.parquet
+barc_train_path=${TRAIN_DATA_DIR}/logic__barc_3.4k_l1e-5_h0.9_1.6k_sampled_1.6k.parquet
+graph_train_path=${TRAIN_DATA_DIR}/logic__graph_logical_dataset_2.8k_l1e-5_h0.9_1.2k_sampled_1.2k.parquet
+ordering_train_path=${TRAIN_DATA_DIR}/logic__ordering_puzzle_dataset_2.9k_l1e-5_h0.9_1.9k_sampled_1.9k.parquet
+zebra_train_path=${TRAIN_DATA_DIR}/logic__zebra_puzzle_dataset_5.7k_l1e-5_h0.9_1.3k_sampled_1.3k.parquet
 # Logic (test)
 zebralogic_test_path=${TEST_DATA_DIR}/logic__zebra_puzzle_dataset_300_sampled_200.parquet
 graph_test_path=${TEST_DATA_DIR}/logic__graph_logical_dataset_150_sampled_77.parquet
 ordering_puzzle_test_path=${TEST_DATA_DIR}/logic__ordering_puzzle_dataset_150_sampled_100.parquet
 arcagi1_test_path=${TEST_DATA_DIR}/simulation__arcagi1_200.parquet
 # Simulation (train)
-codeio_train_path=${TRAIN_DATA_DIR}/simulation__codeio_fixed_12.1k_processed_l1e-5_h0.9_3.8k_sampled_2.5k.parquet
+codeio_train_path=${TRAIN_DATA_DIR}/simulation__codeio_fixed_12.1k_processed_l1e-5_h0.9_3.8k_sampled_3.8k.parquet
 # Simulation (test)
 codeio_test_path=${TEST_DATA_DIR}/simulation__codeio_500_sampled_200.parquet
 # Table (train)
-hitab_train_path=${TRAIN_DATA_DIR}/table__hitab_7.4k_l1e-5_h0.9_4.5k_sampled_1.9k.parquet
-multihier_train_path=${TRAIN_DATA_DIR}/table__multihier_2.9k_l1e-5_h0.9_1.6k_sampled_645.parquet
+hitab_train_path=${TRAIN_DATA_DIR}/table__hitab_7.4k_l1e-5_h0.9_4.5k_sampled_4.5k.parquet
+multihier_train_path=${TRAIN_DATA_DIR}/table__multihier_2.9k_l1e-5_h0.9_1.6k_sampled_1.6k.parquet
 # Table (test)
 multihier_test_path=${TEST_DATA_DIR}/table__multihier_300_sampled_200.parquet
 hitab_test_path=${TEST_DATA_DIR}/table__hitab_300_sampled_200.parquet
 # Stem (train)
-webinstruct_train_path=${TRAIN_DATA_DIR}/stem__web_31.8k_l1e-5_h0.9_19.3k_sampled_2.5k.parquet
+webinstruct_train_path=${TRAIN_DATA_DIR}/stem__web_3.6k_aggressively_filtered.parquet
 # Stem (test)
 gpqa_diamond_test_path=${TEST_DATA_DIR}/stem__gpqa_198.parquet
 
 
-train_files="['${arcagi1_train_path}',\
-'${arcagi2_train_path}',\
-'${barc_train_path}',\
-'${graph_train_path}',\
-'${ordering_train_path}',\
-'${zebra_train_path}']"
+train_files="['${math_train_path1}',\
+'${math_train_path2}', \
+'${leetcode_train_path}', \
+'${livecodebench_train_path}', \
+'${primeintellect_train_path}', \
+'${taco_train_path}', \
+'${arcagi1_train_path}', \
+'${arcagi2_train_path}', \
+'${barc_train_path}', \
+'${graph_train_path}', \
+'${ordering_train_path}', \
+'${zebra_train_path}', \
+'${codeio_train_path}', \
+'${hitab_train_path}', \
+'${multihier_train_path}', \
+'${webinstruct_train_path}']"
 
 test_files="['${math_test_path}',\
 '${aime_test_path}',\
@@ -168,33 +175,8 @@ BASE_MODEL=${LOCAL_MODEL_DIR}/models--Qwen--Qwen2.5-7B-think
 
 # =================== Logging ===================
 WANDB_PROJECT=Reasoning360
-WANDB_EXPERIMENT_NAME=${SLURM_JOB_ID}-${SLURM_JOB_NAME}-${BASE_MODEL##*/}
-
-
-# =================== Ray start ===================
-# ray stop at all nodes
-srun --nodes=$worker_num --ntasks=$worker_num --ntasks-per-node=1 ray stop
-
-sleep 10
-# Remove existing Ray cluster
-srun --nodes=$worker_num --ntasks=$worker_num --ntasks-per-node=1 rm -rf /tmp/ray/ray_current_cluster
-
-# Start Ray head node
-srun --nodes=1 --ntasks=1 -w "$head_node" --export=ALL,VLLM_ATTENTION_BACKEND=XFORMERS \
-    ${CONDA_BIN_PATH}ray start --head --node-ip-address="$head_node_ip" --port=$port \
-    --num-cpus "${SLURM_CPUS_PER_TASK}" --num-gpus 8 --include-dashboard=True --block &
-
-sleep 10
-
-# Start Ray worker nodes
-for ((i = 1; i < worker_num; i++)); do
-    node_i=${nodes[$i]}
-    echo "Starting WORKER $i at $node_i"
-    srun --nodes=1 --ntasks=1 -w "$node_i" --export=ALL,VLLM_ATTENTION_BACKEND=XFORMERS \
-        ${CONDA_BIN_PATH}ray start --address "$address_head" \
-        --num-cpus "${SLURM_CPUS_PER_TASK}" --num-gpus 8 --block &    
-done
-sleep 10
+# Create a unique experiment name using hostname and timestamp
+WANDB_EXPERIMENT_NAME="$(hostname)-$(date +%Y%m%d_%H%M%S)-${BASE_MODEL##*/}-single-node"
 
 
 # =================== RL Config ===================
@@ -231,7 +213,9 @@ top_k=-1 # 0 for HF rollout, -1 for vLLM rollout
 
 # Mathematically equivalent
 sp_size=1
-gen_tp=2
+# For single node with 8 GPUs, common vLLM tensor parallel sizes are 1, 2, 4, 8
+# Adjust gen_tp based on how you want vLLM to use the 8 GPUs
+gen_tp=2 # Set to 8 to use all 8 GPUs for tensor parallelism in generation
 infer_micro_batch_size=null
 train_micro_batch_size=null
 use_dynamic_bsz=True
@@ -240,6 +224,7 @@ infer_ppo_max_token_len=$((max_prompt_length + max_response_length))
 offload=True
 
 # =================== Start RL training ===================
+echo "Starting main RL training script..."
 "${CONDA_BIN_PATH}python" -m verl.recipe.dapo.src.main_dapo \
     algorithm.adv_estimator=${adv_estimator} \
     algorithm.use_kl_in_reward=${use_kl_in_reward} \
@@ -313,10 +298,18 @@ offload=True
     trainer.experiment_name=${WANDB_EXPERIMENT_NAME} \
     trainer.val_before_train=True \
     trainer.n_gpus_per_node=8 \
-    trainer.nnodes="${NNODES}" \
-    trainer.nnodes=$worker_num \
-    trainer.save_freq=10 \
+    trainer.nnodes=1 \
+    trainer.save_freq=20 \
     trainer.test_freq=5 \
-    trainer.total_epochs=10 \
+    trainer.total_epochs=4 \
     +trainer.val_generations_to_log_to_wandb=30 \
     trainer.resume_mode=auto
+
+# Capture the exit status of the python script
+python_exit_status=$?
+
+# =================== Clean up Ray ===================
+echo "Stopping Ray processes after the job..."
+ray stop || true # Stop ray and ignore if it fails
+
+exit $python_exit_status # Exit with the status of the python script

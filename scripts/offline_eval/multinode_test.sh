@@ -10,7 +10,7 @@
 #SBATCH --output=slurm/%j_%x.log
 #SBATCH --error=slurm/%j_%x.log
 #SBATCH --exclusive
-#SBATCH --time=24:00:00
+#SBATCH --time=720:00:00
 #SBATCH --qos=iq
 #SBATCH --exclude=fs-mbz-gpu-[088,317,440,497]
 
