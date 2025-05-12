@@ -30,6 +30,7 @@ from verl.utils.reward_score import (
     supergpqa,
     arcagi,
     ifeval,
+    livebench,
 )
 import pandas as pd
 import numpy as np
@@ -60,6 +61,8 @@ def select_reward_fn(data_source):
         return arcagi.compute_score
     elif data_source in ["ood__ifeval"]:
         return ifeval.compute_score
+    elif data_source in ["ood__livebench"]:
+        return livebench.compute_score
     else:
         raise NotImplementedError(f"Data source {data_source} not implemented")
 

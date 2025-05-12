@@ -119,7 +119,8 @@ leaderboard_list=(
     # "aime"
     # "aime2025"
     # "barc"
-    "finqa"
+    # "finqa"
+    "livebench"
 )
 
 n_nodes=4
@@ -173,6 +174,7 @@ domain_mappings["gpqa"]="stem"
 domain_mappings["arcagi1"]="simulation"
 domain_mappings["barc"]="simulation"
 domain_mappings["finqa"]="table"
+domain_mappings["livebench"]="ood"
 for leaderboard in "${leaderboard_list[@]}"; do
     # Get the domain for this leaderboard
     domain=${domain_mappings[$leaderboard]}

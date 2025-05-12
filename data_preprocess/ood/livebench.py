@@ -144,10 +144,12 @@ if __name__ == "__main__":
         dataset = sample_dataset(dataset, args.sample_size)
 
         # Save the dataset to test directory
+        print(test_data_source, data_source)
+        file_prefix = test_data_source.replace("/", "_")
         test_output_path = save_dataset(
             dataset=dataset,
             output_dir=test_output_dir,
-            filename_prefix=data_source,
+            filename_prefix=f"{data_source}_{file_prefix}",
             sample_size=len(dataset),
         )
 
