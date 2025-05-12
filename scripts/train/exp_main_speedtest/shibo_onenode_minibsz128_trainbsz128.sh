@@ -8,7 +8,7 @@ export LD_LIBRARY_PATH=/usr/local/nccl-rdma-sharp-plugins/lib:$LD_LIBRARY_PATH \
        NCCL_DEBUG=WARN \
        NCCL_NET_GDR_LEVEL=5 \
        NCCL_MIN_NCHANNELS=32 \
-       NCCL_TOPO_FILE=/mnt/users/runner/scripts/ndv5-topo.xml # This might be specific to multi-node topo, consider removing if it causes issues
+       NCCL_TOPO_FILE=/mnt/users/runner/scripts/ndv5-topo.xml \
        OMPI_MCA_coll_hcoll_enable=0 \
        OMPI_MCA_plm_rsh_no_tree_spawn=1 \
        OMPI_MCA_plm_rsh_num_concurrent=800 \
@@ -20,6 +20,8 @@ export LD_LIBRARY_PATH=/usr/local/nccl-rdma-sharp-plugins/lib:$LD_LIBRARY_PATH \
 export UCX_NET_DEVICES=mlx5_ib0:1,mlx5_ib1:1,mlx5_ib2:1,mlx5_ib3:1,mlx5_ib4:1,mlx5_ib5:1,mlx5_ib6:1,mlx5_ib7:1
 export CUDA_DEVICE_MAX_CONNECTIONS=1
 
+# STEM LLM Judge
+export STEM_LLM_JUDGE_URL=http://10.0.5.198:8000
 
 # =================== Ray start (Single Node) ===================
 
@@ -48,7 +50,7 @@ export STEM_LLM_JUDGE_URL=http://10.0.5.198:8000
 
 
 # =================== Data Mixture (genie-25K)===================
-WORKING_DIR=${HOME}/Reasoning360
+WORKING_DIR=/lustrefs/users/zhuojun.cheng/Reasoning360
 TRAIN_DATA_DIR=${WORKING_DIR}/data/train_guru_full
 TEST_DATA_DIR=${WORKING_DIR}/data/test/test
 # Math (train)
@@ -129,10 +131,11 @@ test_files="['${math_test_path}',\
 
 
 # =================== Model ===================
-LOCAL_MODEL_DIR=${HOME}/.cache/huggingface/hub
+# LOCAL_MODEL_DIR=${HOME}/.cache/huggingface/hub
 # BASE_MODEL=Qwen/Qwen2.5-7B-Instruct
 # BASE_MODEL=Qwen/Qwen2.5-3B
-BASE_MODEL=${LOCAL_MODEL_DIR}/models--Qwen--Qwen2.5-7B-think
+# BASE_MODEL=${LOCAL_MODEL_DIR}/models--Qwen--Qwen2.5-7B-think
+BASE_MODEL=${HOME}/Qwen2.5-7B-think
 # BASE_MODEL=deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
 
 # =================== Logging ===================
@@ -163,10 +166,10 @@ loss_agg_mode="token-mean"
 enable_filter_groups=False
 filter_groups_metric=acc
 max_num_gen_batches=10
-train_prompt_bsz=512  # grad accum bsz; real grad accum bsz: train_prompt_bsz * rollout.n
+train_prompt_bsz=128  # grad accum bsz; real grad accum bsz: train_prompt_bsz * rollout.n
 gen_prompt_bsz=$((train_prompt_bsz * 1))  # rollout bsz, i.e., the x-axis in RL plot
 n_resp_per_prompt=16
-train_prompt_mini_bsz=32
+train_prompt_mini_bsz=128
 
 # Algorithm
 temperature=1.0
@@ -179,8 +182,8 @@ gen_tp=2
 infer_micro_batch_size=null
 train_micro_batch_size=null
 use_dynamic_bsz=True
-actor_ppo_max_token_len=$((2*(max_prompt_length + max_response_length)))
-infer_ppo_max_token_len=$((2*(max_prompt_length + max_response_length)))
+actor_ppo_max_token_len=$((max_prompt_length + max_response_length))
+infer_ppo_max_token_len=$((max_prompt_length + max_response_length))
 offload=True
 
 # =================== Start RL training ===================

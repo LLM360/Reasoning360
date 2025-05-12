@@ -4,6 +4,10 @@ import datasets
 import json
 import transformers
 import numpy as np
+import time
+from datasets import concatenate_datasets, Dataset # Import concatenate_datasets
+
+
 from verl.utils.data_process.utils import save_dataset
 from verl.utils.data_process.filter import LengthFilter
 
@@ -57,52 +61,99 @@ def postprocess_dataset(dataset, dataset_name) -> datasets.Dataset:
     # Truncate (right) too long input prompts, usually with very long unit test io pairs. 
     if "codegen" in dataset_name:
         def _map_func(item):
-            
-            MAX_PROMPT_CHARS = 4096 * 5 # Use char count instead of token count as it's faster; 4096 is max input tokens and 5 is avg. chars per token
+            start_time = time.time()
+
+            MAX_PROMPT_CHARS = 4096 * 5
             if len(item['prompt'][0]['content']) > MAX_PROMPT_CHARS:
+                # Optional: Time slicing if you suspect it's a major cost
+                # slice_start = time.time()
                 print(f"Truncating {item['id']} from {dataset_name} to {MAX_PROMPT_CHARS} chars")
                 item['prompt'][0]['content'] = item['prompt'][0]['content'][:MAX_PROMPT_CHARS]
+                # print(f"Slicing took {time.time() - slice_start:.4f} seconds")
+
+
+            MAX_UNIT_TEST_CHARS = 1024 * 128
             
-            MAX_UNIT_TEST_CHARS = 1024 * 128  # max unit test input/output length is 128KB
+            # --- Start timing JSON loading ---
+            json_load_start = time.time()
             ground_truth = json.loads(item['reward_model']['ground_truth'])
+            json_load_end = time.time()
+            # --- End timing JSON loading ---
+            
             if 'inputs' in ground_truth and len(ground_truth['inputs']) > 0:
-                # Store complete inputs/outputs in ground truth
                 complete_inputs = ground_truth['inputs']
                 complete_outputs = ground_truth['outputs']
                 
-                complete_inputs_after_filtered_too_long = []  
-                complete_outputs_after_filtered_too_long = []
-                for ut_in, ut_out in zip(complete_inputs, complete_outputs):
-                    if len(ut_in) > MAX_UNIT_TEST_CHARS:
-                        pass
-                        print(f"Unit test input is too long, {len(ut_in)} chars")
-                    elif len(ut_out) > MAX_UNIT_TEST_CHARS:
-                        pass
-                        print(f"Unit test output is too long, {len(ut_out)} chars")
-                    else:
-                        complete_inputs_after_filtered_too_long.append(ut_in)
-                        complete_outputs_after_filtered_too_long.append(ut_out)
+                complete_inputs_after_filtered_too_long = complete_inputs
+                complete_outputs_after_filtered_too_long = complete_outputs
+                # --- Start timing loop and filtering ---
+                # loop_start = time.time()
+                # complete_inputs_after_filtered_too_long = []  
+                # complete_outputs_after_filtered_too_long = []
+                # # Consider logging/printing how many items are in this loop for context
+                # # print(f"Processing {len(complete_inputs)} unit tests...")
+                # for ut_in, ut_out in zip(complete_inputs, complete_outputs):
+                #     # len() is fast, but the volume of data or appends might matter
+                #     if len(ut_in) > MAX_UNIT_TEST_CHARS:
+                #         pass
+                #         print(f"Unit test input is too long, {len(ut_in)} chars")
+                #     elif len(ut_out) > MAX_UNIT_TEST_CHARS:
+                #         pass
+                #         print(f"Unit test output is too long, {len(ut_out)} chars")
+                #     else:
+                #         complete_inputs_after_filtered_too_long.append(ut_in)
+                #         complete_outputs_after_filtered_too_long.append(ut_out)
+                # loop_end = time.time()
+                # --- End timing loop and filtering ---
 
-                # Get 8 random indices from this test case's inputs/outputs
                 n_tests = len(complete_inputs_after_filtered_too_long)
                 sample_indices = np.random.choice(n_tests, min(8, n_tests), replace=False)
 
-                # Update ground truth with sampled data while preserving complete data
                 ground_truth['complete_inputs'] = complete_inputs_after_filtered_too_long
                 ground_truth['complete_outputs'] = complete_outputs_after_filtered_too_long
                 ground_truth['inputs'] = [complete_inputs_after_filtered_too_long[i] for i in sample_indices]
                 ground_truth['outputs'] = [complete_outputs_after_filtered_too_long[i] for i in sample_indices]
-
-                item['reward_model']['ground_truth'] = json.dumps(ground_truth)
                 
                 if n_tests > 8:
-                    print(f"Filtering {n_tests} unit tests to 8 for {item['id']} from {dataset_name}")
-                    print(type(item['reward_model']['ground_truth']))
-                    print(item['reward_model']['ground_truth'])
+                    print(f"Filtering {n_tests} unit tests to 8 from {dataset_name}")
+                    # Avoid printing large data during profiling:
+                    # print(type(item['reward_model']['ground_truth']))
+                    # print(item['reward_model']['ground_truth'])
+                
+            
+                total_time = time.time() - start_time
+                # print(f"Processed item {item.get('id', 'N/A')} in {total_time:.4f}s | JSON Load: {json_load_end - json_load_start:.4f}s | Loop: {loop_end - loop_start:.4f}s | JSON Dump: {json_dump_end - json_dump_start:.4f}s")
+            
                 
             return item
-        
-        dataset = dataset.map(_map_func, num_proc=16)
+    
+        # Manually process the dataset in batches to avoid memory issues
+        batch_size = 16
+        processed_dataset_list = []
+
+        total_samples = len(dataset)
+        for i in range(0, total_samples, batch_size):
+            print(f"Processing batch {i//batch_size + 1} of {total_samples // batch_size + (total_samples % batch_size > 0)}")
+
+            # Select a slice of the dataset for the current batch
+            batch_slice = dataset.select(range(i, min(i + batch_size, total_samples)))
+
+            # Apply the map function to this smaller slice
+            # Use num_proc if you still want parallelization *within* the batch
+            processed_batch_slice = batch_slice.map(_map_func, num_proc=16) 
+
+            # Store the processed batch
+            processed_dataset_list.append(processed_batch_slice)
+
+            # Optional: Add a small sleep here to allow resources to settle between batches
+            time.sleep(5) 
+
+        # Concatenate the processed batches back into a single Dataset object
+        if processed_dataset_list:
+            dataset = concatenate_datasets(processed_dataset_list)
+        else:
+            dataset = Dataset.from_dict({}) # Handle empty dataset case
+            
     return dataset
 
 
