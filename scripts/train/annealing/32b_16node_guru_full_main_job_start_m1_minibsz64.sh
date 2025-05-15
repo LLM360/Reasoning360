@@ -2,6 +2,8 @@
 
 
 # the first node is the head node
+ #002-003,010,030-031,092,094-098,
+
 nodes=(
   "azure-hpc-H200-instance-002"
   "azure-hpc-H200-instance-003"
@@ -57,17 +59,17 @@ export HYDRA_FULL_ERROR=1
 
 # Training specific variables
 
-BASE_MODEL=${HOME}/Qwen2.5-32B-think
+BASE_MODEL=/lustrefs/users/shibo.hao/checkpoints/Reasoning360/azure-hpc-H200-instance-010.core42.ai-20250512_013325-Qwen2.5-32B-think-16node-guru-full-minibsz64/global_step_360/actor/huggingface
 WANDB_PROJECT=Reasoning360
-WANDB_EXPERIMENT_NAME=azure-hpc-H200-instance-010.core42.ai-20250512_013325-Qwen2.5-32B-think-16node-guru-full-minibsz64
+WANDB_EXPERIMENT_NAME=YOLO_ANNEAL_32B
 
 WORKING_DIR=/lustrefs/users/zhuojun.cheng/Reasoning360
-TRAIN_DATA_DIR=${WORKING_DIR}/data/train_guru_full
+TRAIN_DATA_DIR=/lustrefs/users/shibo.hao/leo/Reasoning360/data/train_anneal
 TEST_DATA_DIR=${WORKING_DIR}/data/test/test
 # Math (train)
 # math_train_path1=${TRAIN_DATA_DIR}/math__merged_deduped_l1e-5_h0.9_60.0k_sampled_60.0k.parquet
 # math_train_path2=${TRAIN_DATA_DIR}/math__patch_merged_deduped_13.3k_l1e-5_h0.9_9.3k_sampled_9.3k.parquet
-math_train_path=/lustrefs/users/zhuojun.cheng/Reasoning360/data/train_filtered/math__40k.parquet  # abs path
+math_train_path=/lustrefs/users/shibo.hao/leo/Reasoning360/data/train_anneal/math__combined_7.2k.parquet  # abs path
 # Math (test)
 math_test_path=${TEST_DATA_DIR}/math__math_500.parquet
 aime_test_path=${TEST_DATA_DIR}/math__aime_repeated_8x_240.parquet
@@ -78,38 +80,38 @@ amc_test_path=${TEST_DATA_DIR}/math__amc_repeated_4x_332.parquet
 # primeintellect_train_path=${TRAIN_DATA_DIR}/codegen__deduped_primeintellect_9.6k_l1e-5_h0.9_7.6k_sampled_1.0k.parquet  # TODO: change this
 # taco_train_path=${TRAIN_DATA_DIR}/codegen__deduped_taco_11.1k_l1e-5_h0.9_8.9k_sampled_1.2k.parquet  # TODO: change this
 # Code (train)
-leetcode_train_path=/lustrefs/users/zhuojun.cheng/Reasoning360/data/train_filtered/codegen__deduped_leetcode2k_2.4k_l1e-5_h0.9_1.3k_reduced_tests.parquet  # abs path
-livecodebench_train_path=/lustrefs/users/zhuojun.cheng/Reasoning360/data/train_filtered/codegen__deduped_livecodebench_599_l1e-5_h0.9_451_reduced_tests.parquet  # abs path
-primeintellect_train_path=/lustrefs/users/zhuojun.cheng/Reasoning360/data/train_filtered/codegen__deduped_primeintellect_9.6k_l1e-5_h0.9_7.6k_reduced_tests.parquet  # abs path
-taco_train_path=/lustrefs/users/zhuojun.cheng/Reasoning360/data/train_filtered/codegen__deduped_taco_11.1k_l1e-5_h0.9_8.9k_reduced_tests.parquet  # abs path
+leetcode_train_path=/lustrefs/users/shibo.hao/leo/Reasoning360/data/train_anneal/codegen__deduped_leetcode2k_38.parquet  # abs path
+livecodebench_train_path=/lustrefs/users/shibo.hao/leo/Reasoning360/data/train_anneal/codegen__deduped_livecodebench_25.parquet  # abs path
+primeintellect_train_path=/lustrefs/users/shibo.hao/leo/Reasoning360/data/train_anneal/codegen__deduped_primeintellect_1.3k.parquet  # abs path
+taco_train_path=/lustrefs/users/shibo.hao/leo/Reasoning360/data/train_anneal/codegen__deduped_taco_1.3k.parquet  # abs path
 # Code (test)
 humaneval_test_path=${TEST_DATA_DIR}/codegen__humaneval_164.parquet
 mbpp_test_path=${TEST_DATA_DIR}/codegen__mbpp_500_sampled_200.parquet
 livecodebench_test_path=${TEST_DATA_DIR}/codegen__livecodebench_279.parquet
 # Logic (train)
-arcagi1_train_path=${TRAIN_DATA_DIR}/logic__arcagi1_297_l1e-05_h0.9_sampled_117.parquet
-arcagi2_train_path=${TRAIN_DATA_DIR}/logic__arcagi2_653_l1e-05_h0.9_sampled_197.parquet
-barc_train_path=${TRAIN_DATA_DIR}/logic__barc_3.4k_l1e-5_h0.9_1.6k_sampled_1.6k.parquet
-graph_train_path=${TRAIN_DATA_DIR}/logic__graph_logical_dataset_2.8k_l1e-5_h0.9_1.2k_sampled_1.2k.parquet
-ordering_train_path=${TRAIN_DATA_DIR}/logic__ordering_puzzle_dataset_2.9k_l1e-5_h0.9_1.9k_sampled_1.9k.parquet
-zebra_train_path=${TRAIN_DATA_DIR}/logic__zebra_puzzle_dataset_5.7k_l1e-5_h0.9_1.3k_sampled_1.3k.parquet
+arcagi1_train_path=${TRAIN_DATA_DIR}/logic__arcagi1_49.parquet
+arcagi2_train_path=${TRAIN_DATA_DIR}/logic__arcagi2_80.parquet
+barc_train_path=${TRAIN_DATA_DIR}/logic__barc_376.parquet
+graph_train_path=${TRAIN_DATA_DIR}/logic__graph_logical_dataset_143.parquet
+ordering_train_path=${TRAIN_DATA_DIR}/logic__ordering_puzzle_dataset_1.parquet
+zebra_train_path=${TRAIN_DATA_DIR}/logic__zebra_puzzle_dataset_544.parquet
 # Logic (test)
 zebralogic_test_path=${TEST_DATA_DIR}/logic__zebra_puzzle_dataset_300_sampled_200.parquet
 graph_test_path=${TEST_DATA_DIR}/logic__graph_logical_dataset_150_sampled_77.parquet
 ordering_puzzle_test_path=${TEST_DATA_DIR}/logic__ordering_puzzle_dataset_150_sampled_100.parquet
 arcagi1_test_path=${TEST_DATA_DIR}/simulation__arcagi1_200.parquet
 # Simulation (train)
-codeio_train_path=${TRAIN_DATA_DIR}/simulation__codeio_fixed_12.1k_processed_l1e-5_h0.9_3.8k_sampled_3.8k.parquet
+codeio_train_path=${TRAIN_DATA_DIR}/simulation__codeio_fixed_12.1k_760.parquet
 # Simulation (test)
 codeio_test_path=${TEST_DATA_DIR}/simulation__codeio_500_sampled_200.parquet
 # Table (train)
-hitab_train_path=${TRAIN_DATA_DIR}/table__hitab_7.4k_l1e-5_h0.9_4.5k_sampled_4.5k.parquet
-multihier_train_path=${TRAIN_DATA_DIR}/table__multihier_2.9k_l1e-5_h0.9_1.6k_sampled_1.6k.parquet
+hitab_train_path=${TRAIN_DATA_DIR}/table__hitab_345.parquet
+multihier_train_path=${TRAIN_DATA_DIR}/table__multihier_276.parquet
 # Table (test)
 multihier_test_path=${TEST_DATA_DIR}/table__multihier_300_sampled_200.parquet
 hitab_test_path=${TEST_DATA_DIR}/table__hitab_300_sampled_200.parquet
 # Stem (train)
-webinstruct_train_path=${TRAIN_DATA_DIR}/stem__web_3.6k_aggressively_filtered_sampled_3.6k.parquet
+webinstruct_train_path=${TRAIN_DATA_DIR}/stem__web_377.parquet
 # Stem (test)
 gpqa_diamond_test_path=${TEST_DATA_DIR}/stem__gpqa_198.parquet
 
@@ -173,10 +175,10 @@ test_files="['${math_test_path}',\
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=$((1024*30)) \
     actor_rollout_ref.actor.strategy=fsdp \
     actor_rollout_ref.actor.optim.lr=1e-6 \
-    actor_rollout_ref.actor.optim.lr_warmup_steps=10 \
+    actor_rollout_ref.actor.optim.lr_warmup_steps=0 \
     actor_rollout_ref.actor.optim.weight_decay=0.1 \
-    actor_rollout_ref.actor.optim.warmup_style=constant \
-    actor_rollout_ref.actor.optim.min_lr_ratio=0.0 \
+    actor_rollout_ref.actor.optim.warmup_style=cosine \
+    actor_rollout_ref.actor.optim.min_lr_ratio=0.1 \
     actor_rollout_ref.actor.ppo_mini_batch_size=64 \
     actor_rollout_ref.actor.ppo_micro_batch_size=null \
     actor_rollout_ref.actor.fsdp_config.param_offload=True \
@@ -204,7 +206,7 @@ test_files="['${math_test_path}',\
     actor_rollout_ref.rollout.top_p=1.0 \
     actor_rollout_ref.rollout.top_k=-1 \
     actor_rollout_ref.rollout.val_kwargs.top_k=-1 \
-    actor_rollout_ref.rollout.val_kwargs.top_p=1.0 \
+    actor_rollout_ref.rollout.val_kwargs.top_p=0.7 \
     actor_rollout_ref.rollout.val_kwargs.temperature=1.0 \
     actor_rollout_ref.rollout.val_kwargs.n=1 \
     actor_rollout_ref.rollout.val_kwargs.do_sample=True \
@@ -224,6 +226,6 @@ test_files="['${math_test_path}',\
     trainer.nnodes=$worker_num \
     trainer.save_freq=10 \
     trainer.test_freq=10 \
-    trainer.total_epochs=4 \
+    trainer.total_epochs=5 \
     +trainer.val_generations_to_log_to_wandb=30 \
     trainer.resume_mode=auto

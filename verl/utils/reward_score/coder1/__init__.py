@@ -154,7 +154,7 @@ def fuzzy_equal(actual: str, expected: str, tolerance: float = 1e-6, verbose=Tru
     
     # Output fuzzy match information if any occurred
     if fuzzy_match_reasons and verbose:
-        print(f"🔍 FUZZY MATCH - Outputs approximately equal:")
+        print(f"😅 FUZZY MATCH - Outputs approximately equal:")
         print(f"  Expected: {repr(original_expected)}")
         print(f"  Actual:   {repr(original_actual)}")
         print(f"  Reasons for fuzzy matching:")

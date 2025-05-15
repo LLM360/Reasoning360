@@ -4,10 +4,10 @@
 
 # ========= USER CONFIG =========
 nodes=(
-  "azure-hpc-H200-instance-019"
-  "azure-hpc-H200-instance-180"
-  "azure-hpc-H200-instance-231"
-  "azure-hpc-H200-instance-460"
+  "azure-hpc-H200-instance-105"
+  "azure-hpc-H200-instance-106"
+  "azure-hpc-H200-instance-107"
+  "azure-hpc-H200-instance-161"
 )
 
 # nodes=("azure-hpc-H200-instance-010" "azure-hpc-H200-instance-029")
@@ -51,7 +51,7 @@ export NCCL_P2P_NET_CHUNKSIZE=$((512*1024))
 export NCCL_PXN_DISABLE=1
 export UCX_NET_DEVICES=mlx5_ib0:1,mlx5_ib1:1,mlx5_ib2:1,mlx5_ib3:1,mlx5_ib4:1,mlx5_ib5:1,mlx5_ib6:1,mlx5_ib7:1
 export CUDA_DEVICE_MAX_CONNECTIONS=1
-export STEM_LLM_JUDGE_URL=http://10.0.5.198:8000
+export STEM_LLM_JUDGE_URL=http://10.0.4.45:8000
 export VLLM_USE_V1=0
 export WANDB_API_KEY=633cdb1f1b9dfb2ae2681e47863635fe33b93a10
 export CONDA_BIN_PATH=/lustrefs/users/shibo.hao/miniforge3/envs/Reasoning360-May/bin/
