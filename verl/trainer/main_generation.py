@@ -81,6 +81,11 @@ def main_task(config):
         chat_lst = dataset[config.data.prompt_key].tolist()
         chat_lst = [chat.tolist() for chat in chat_lst]
         ground_truth_lst = dataset["reward_model"].tolist()
+    
+    # handle n_samples
+    if config.data.n_samples > 1:
+        chat_lst = chat_lst * config.data.n_samples
+        ground_truth_lst = ground_truth_lst * config.data.n_samples
 
     tokenizer.padding_side = 'left'
     if tokenizer.pad_token is None:
@@ -96,7 +101,7 @@ def main_task(config):
     config_batch_size = config.data.batch_size
     dispatch_dp_size = wg.world_size
     num_batch = -(-total_samples // config_batch_size)
-    output_lst = [[] for _ in range(config.data.n_samples)]
+    output_lst = [[]]
 
     for batch_idx in range(num_batch):
         print(f'[{batch_idx+1}/{num_batch}] Start to process.')
@@ -132,21 +137,20 @@ def main_task(config):
         assert batch_size % dispatch_dp_size == 0, f'batch_size {batch_size} is not divisible by dispatch_dp_size {dispatch_dp_size}'
 
         print(f'[{batch_idx+1}/{num_batch}] Start to generate.')
-        # START TO GENERATE FOR n_samples TIMES
-        for i in range(config.data.n_samples):
-            output = wg.generate_sequences(data)
-            # remove dummy data
-            output = output[:real_batch_size]
-            output_text = tokenizer.batch_decode(output.batch['input_ids'][:, -config.rollout.response_length:],
-                                                 skip_special_tokens=False)
+        # START TO GENERATE FOR 1 TIME SINCE WE'VE ALREADY HANDLED n_samples beforehand
+        output = wg.generate_sequences(data)
+        # remove dummy data
+        output = output[:real_batch_size]
+        output_text = tokenizer.batch_decode(output.batch['input_ids'][:, -config.rollout.response_length:],
+                                                skip_special_tokens=False)
 
-            # remove the padding
-            pad_token = tokenizer.pad_token
-            output_text_unpad = []
-            for text in output_text:
-                output_text_unpad.append(text.replace(pad_token, ''))
+        # remove the padding
+        pad_token = tokenizer.pad_token
+        output_text_unpad = []
+        for text in output_text:
+            output_text_unpad.append(text.replace(pad_token, ''))
 
-            output_lst[i].extend(output_text_unpad)
+        output_lst[0].extend(output_text_unpad)
 
     # convert output_lst from (n_samples, n_data) to (n_data, n_sampels)
     output_lst = np.array(output_lst, dtype=object)
