@@ -121,7 +121,7 @@ leaderboard_list=(
     # "math"
     # "olympiad_bench"
     # "livecodebench"
-    "mbpp"
+    # "mbpp"
     # "humaneval"
     # "arcagi1"
     # "gpqa"
@@ -133,7 +133,12 @@ leaderboard_list=(
     # "livebench_language"
     # "livebench_data_analysis"
     # "ifeval"
-    "supergpqa"
+    # "supergpqa"
+    "graph_logical_dataset"
+    "zebra_puzzle_dataset"
+    "codeio_500_sampled"
+    "hitab_300_sampled"
+    "multihier"
 )
 
 n_nodes=8
@@ -185,6 +190,11 @@ domain_mappings["livebench_reasoning"]="ood"
 domain_mappings["livebench_language"]="ood"
 domain_mappings["livebench_data_analysis"]="ood"
 domain_mappings["ifeval"]="ood"
+domain_mappings["graph_logical_dataset"]="logic"
+domain_mappings["zebra_puzzle_dataset"]="logic"
+domain_mappings["codeio_500_sampled"]="simulation"
+domain_mappings["hitab_300_sampled"]="table"
+domain_mappings["multihier"]="table"
 for leaderboard in "${leaderboard_list[@]}"; do
     # Get the domain for this leaderboard
     domain=${domain_mappings[$leaderboard]}
@@ -209,7 +219,7 @@ for leaderboard in "${leaderboard_list[@]}"; do
         top_p=0.95
     fi
     top_k=-1 # 0 for hf rollout, -1 for vllm rollout
-    if [ "$leaderboard" == "argagi1" ] || [ "$leaderboard" == "finqa" ]; then
+    if [ "$leaderboard" == "arcagi1" ] || [ "$leaderboard" == "finqa" ] || [ "$leaderboard" == "multihier" ]; then
         prompt_length=4096
         response_length=28672
     else
@@ -270,7 +280,7 @@ for leaderboard in "${leaderboard_list[@]}"; do
     echo "Starting evaluation for $leaderboard at $(date)" | tee -a "$eval_log_file"
     unset LD_LIBRARY_PATH
     {
-        python3 -m verl.trainer.main_eval \
+        /mnt/weka/home/zhuojun.cheng/miniconda3/envs/Reasoning360/bin/python3 -m verl.trainer.main_eval \
             data.path="$save_path" \
             data.prompt_key=prompt \
             data.response_key=responses \

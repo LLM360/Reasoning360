@@ -12,7 +12,7 @@
 #SBATCH --exclusive
 #SBATCH --time=24:00:00
 #SBATCH --qos=iq
-#SBATCH --exclude=fs-mbz-gpu-[088,317,440,497,097,186,191,275,097,186,191,275,012,041,050,071,109,139,216,282,029,121,129,195,292,310,358,465,022,026,070,076-077,205,290,359]
+#SBATCH --exclude=fs-mbz-gpu-[088,317,440,497,097,186,191,275,097,186,191,275,012,041,050,071,109,139,216,282,029,121,129,195,292,310,358,465,022,026,070,076-077,205,290,359,008,057,065,069,144,178,199,274]
 
 
 # =================== Environment ===================
@@ -90,7 +90,7 @@ unset LD_LIBRARY_PATH
 
 # =================== Ray start ===================
 # ray stop at all nodes
-srun --nodes=$worker_num --ntasks=$worker_num --ntasks-per-node=1 ray stop
+srun --nodes=$worker_num --ntasks=$worker_num --ntasks-per-node=1 /mnt/weka/home/zhuojun.cheng/miniconda3/envs/leo-verl/bin/ray stop
 
 sleep 10
 # Remove existing Ray cluster
@@ -98,7 +98,7 @@ srun --nodes=$worker_num --ntasks=$worker_num --ntasks-per-node=1 rm -rf /tmp/ra
 
 # Start Ray head node
 srun --nodes=1 --ntasks=1 -w "$head_node" --export=ALL,VLLM_ATTENTION_BACKEND=XFORMERS \
-    /mnt/weka/home/zhuojun.cheng/miniconda3/envs/Reasoning360/bin/ray start --head --node-ip-address="$head_node_ip" --port=$port \
+    /mnt/weka/home/zhuojun.cheng/miniconda3/envs/leo-verl/bin/ray start --head --node-ip-address="$head_node_ip" --port=$port \
     --num-cpus "${SLURM_CPUS_PER_TASK}" --num-gpus 8 --include-dashboard=True --block &
 
 sleep 10
@@ -108,7 +108,7 @@ for ((i = 1; i < worker_num; i++)); do
     node_i=${nodes[$i]}
     echo "Starting WORKER $i at $node_i"
     srun --nodes=1 --ntasks=1 -w "$node_i" --export=ALL,VLLM_ATTENTION_BACKEND=XFORMERS \
-        /mnt/weka/home/zhuojun.cheng/miniconda3/envs/Reasoning360/bin/ray start --address "$address_head" \
+        /mnt/weka/home/zhuojun.cheng/miniconda3/envs/leo-verl/bin/ray start --address "$address_head" \
         --num-cpus "${SLURM_CPUS_PER_TASK}" --num-gpus 8 --block &    
 done
 sleep 10
@@ -116,24 +116,28 @@ sleep 10
 
 # =================== leaderboard eval Config ===================
 leaderboard_list=(
-    "aime"
-    "aime2025"
-    "math"
-    "olympiad_bench"
-    "livecodebench"
-    "mbpp"
-    "humaneval"
-    "arcagi1"
-    "gpqa"
-    "gpqa_diamond"
-    "finqa"
-    "cruxeval-i"
-    "cruxeval-o"
-    "livebench_reasoning"
-    "livebench_language"
-    "livebench_data_analysis"
-    "ifeval"
-    "supergpqa"
+#     "aime"
+#     "aime2025"
+#     "math"
+#     # "olympiad_bench"
+#     "livecodebench"
+#     "mbpp"
+#     "humaneval"
+#     "arcagi1"
+#     # "gpqa"
+#     "gpqa_diamond"
+#     "finqa"
+#     "multihier"
+#     "cruxeval-i"
+#     "cruxeval-o"
+#     "livebench_reasoning"
+#     "livebench_language"
+#     "livebench_data_analysis"
+#     "ifeval"
+#     "supergpqa"
+    # "codeio_500_sampled"
+    # "zebra_puzzle_dataset"
+    "graph_logical_dataset"
 )
 
 n_nodes=8
@@ -145,7 +149,8 @@ data_folder=./data/test/
 save_folder=./data/test_leaderboard_output/
 
 # Extract model name from the path
-model_name=$(basename "$model_path")
+model_name=Open-Reasoner-Zero-7B
+# model_name=$(basename "$model_path")
 
 # Check if leaderboard generation folder exists, create if it doesn't
 if [ ! -d "$save_folder" ]; then
@@ -185,6 +190,12 @@ domain_mappings["livebench_reasoning"]="ood"
 domain_mappings["livebench_language"]="ood"
 domain_mappings["livebench_data_analysis"]="ood"
 domain_mappings["ifeval"]="ood"
+domain_mappings["multihier"]="table"
+domain_mappings["codeio_500_sampled"]="simulation"
+domain_mappings["zebra_puzzle_dataset"]="logic"
+domain_mappings["graph_logical_dataset"]="logic"
+
+
 for leaderboard in "${leaderboard_list[@]}"; do
     # Get the domain for this leaderboard
     domain=${domain_mappings[$leaderboard]}
@@ -195,17 +206,21 @@ for leaderboard in "${leaderboard_list[@]}"; do
     # 如果是argagi1 / finqa，则 prompt_length=4096, response_length=28672
     # 如果是argagi1, 则 n_samples=8
 
-    if [ "$leaderboard" == "arcagi1" ]; then
-        n_samples=8 # we only use pass@8 for arcagi task
+    if [ "$leaderboard" == "aime" ] || [ "$leaderboard" == "aime2025" ]; then
+        n_samples=1 # we only use pass@8 for arcagi task
+    elif [ "$leaderboard" == "arcagi1" ]; then
+        n_samples=8
     else
         n_samples=1
     fi
+    
     batch_size=1024
+    
     if [ "$leaderboard" == "aime" ] || [ "$leaderboard" == "aime2025" ] || [ "$leaderboard" == "arcagi1" ]; then
-        temperature=0.6
-        top_p=0.95
+        temperature=1.0
+        top_p=0.7
     else
-        temperature=0
+        temperature=0.6
         top_p=0.95
     fi
     top_k=-1 # 0 for hf rollout, -1 for vllm rollout
@@ -214,7 +229,7 @@ for leaderboard in "${leaderboard_list[@]}"; do
         response_length=28672
     else
         prompt_length=1024
-        response_length=31744
+        response_length=512
     fi
     tensor_model_parallel_size=2
     gpu_memory_utilization=0.8
@@ -224,7 +239,11 @@ for leaderboard in "${leaderboard_list[@]}"; do
     eval_log_file="${logs_dir}${model_name}_${leaderboard}_eval.log"
     
     # Find the matching file in the data folder
-    file_pattern="${domain}__${leaderboard}_*.parquet"
+    if [ "$leaderboard" == "aime" ] || [ "$leaderboard" == "aime2025" ]; then
+        file_pattern="${domain}__${leaderboard}_repeated_8x_[0-9]*.parquet"
+    else
+        file_pattern="${domain}__${leaderboard}_[0-9]*.parquet"
+    fi
     
     # Use find to get the actual file path
     data_file=$(find "$data_folder" -name "$file_pattern" -type f | head -n 1)
@@ -242,35 +261,35 @@ for leaderboard in "${leaderboard_list[@]}"; do
     
     export CUDA_VISIBLE_DEVICES=${gpu_ids}
 
-    # Generation step with tee to generation log file
-    echo "Starting generation for $leaderboard at $(date)" | tee -a "$gen_log_file"
-    {
-        /mnt/weka/home/zhuojun.cheng/miniconda3/envs/Reasoning360/bin/python3 -m verl.trainer.main_generation \
-            trainer.nnodes=$n_nodes \
-            trainer.n_gpus_per_node=$n_gpus_per_node \
-            data.path="$data_file" \
-            data.prompt_key=prompt \
-            data.n_samples=$n_samples \
-            data.batch_size=$batch_size \
-            data.output_path="$save_path" \
-            model.path=$model_path \
-            +model.trust_remote_code=True \
-            rollout.temperature=$temperature \
-            rollout.top_k=$top_k \
-            rollout.top_p=$top_p \
-            rollout.prompt_length=$prompt_length \
-            rollout.response_length=$response_length \
-            rollout.max_num_batched_tokens=$(($prompt_length + $response_length)) \
-            rollout.tensor_model_parallel_size=$tensor_model_parallel_size \
-            rollout.gpu_memory_utilization=$gpu_memory_utilization
-    } 2>&1 | tee -a "$gen_log_file"
-    echo "Completed generation for $leaderboard at $(date)" | tee -a "$gen_log_file"
+    # # Generation step with tee to generation log file
+    # echo "Starting generation for $leaderboard at $(date)" | tee -a "$gen_log_file"
+    # {
+    #     /mnt/weka/home/zhuojun.cheng/miniconda3/envs/leo-verl/bin/python3 -m verl.trainer.main_generation \
+    #         trainer.nnodes=$n_nodes \
+    #         trainer.n_gpus_per_node=$n_gpus_per_node \
+    #         data.path="$data_file" \
+    #         data.prompt_key=prompt \
+    #         data.n_samples=$n_samples \
+    #         data.batch_size=$batch_size \
+    #         data.output_path="$save_path" \
+    #         model.path=$model_path \
+    #         +model.trust_remote_code=True \
+    #         rollout.temperature=$temperature \
+    #         rollout.top_k=$top_k \
+    #         rollout.top_p=$top_p \
+    #         rollout.prompt_length=$prompt_length \
+    #         rollout.response_length=$response_length \
+    #         rollout.max_num_batched_tokens=$(($prompt_length + $response_length)) \
+    #         rollout.tensor_model_parallel_size=$tensor_model_parallel_size \
+    #         rollout.gpu_memory_utilization=$gpu_memory_utilization
+    # } 2>&1 | tee -a "$gen_log_file"
+    # echo "Completed generation for $leaderboard at $(date)" | tee -a "$gen_log_file"
 
     # Evaluation step with tee to evaluation log file
     echo "Starting evaluation for $leaderboard at $(date)" | tee -a "$eval_log_file"
     unset LD_LIBRARY_PATH
     {
-        python3 -m verl.trainer.main_eval \
+        /mnt/weka/home/zhuojun.cheng/miniconda3/envs/leo-verl/bin/python3 -m verl.trainer.main_eval \
             data.path="$save_path" \
             data.prompt_key=prompt \
             data.response_key=responses \

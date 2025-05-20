@@ -82,7 +82,7 @@ if __name__ == '__main__':
                         help='Domain of the dataset.')
     parser.add_argument('--name', default="supergpqa",
                         help='Name of the dataset.')
-    parser.add_argument('--sample-size', type=int, default=None,
+    parser.add_argument('--sample-size', type=int, default=1000,
                         help='Number of samples to use from dataset. If None, use all samples.')
     parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
 

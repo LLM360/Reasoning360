@@ -56,11 +56,16 @@ def make_map_fn(split: str, data_source: str) -> callable:
             letter = chr(65 + i)
             formatted_choices += f"{letter}) {choice}\n"
         
-        # deepseek uses OpenAI's simple-eval for GPQA-Diamond, so we adopt prompts from here: https://github.com/openai/simple-evals/blob/main/gpqa_eval.py
+        # # deepseek uses OpenAI's simple-eval for GPQA-Diamond, so we adopt prompts from here: https://github.com/openai/simple-evals/blob/main/gpqa_eval.py
+        # prompt = (
+        #     f"Answer the following multiple choice question. The last line of your response should be of the following format: 'Answer: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering."
+        #     f"\n{question}\n"
+        #     f"{formatted_choices}"
+        # )
         prompt = (
-            f"Answer the following multiple choice question. The last line of your response should be of the following format: 'Answer: $LETTER' (without quotes) where LETTER is one of ABCD. Think step by step before answering."
-            f"\n{question}\n"
+            f"{question}\n"
             f"{formatted_choices}"
+            "Please reason step by step, and put your final answer option within \\boxed{}. Only put the letter in the box, e.g. \\boxed{A}. There is only one correct answer."
         )
 
         
@@ -85,8 +90,8 @@ def make_map_fn(split: str, data_source: str) -> callable:
         
         if idx == 0 or idx == 1:
             print("\n" + "=" * 10 + f"{data_source} {split} {idx}" + "=" * 10)
-            print(data)
-            print(f'\none prompt example is \n{prompt}')
+            print(data["prompt"][0]["content"])
+            # print(f'\none prompt example is \n{prompt}')
             
         return data
 
@@ -99,7 +104,7 @@ if __name__ == '__main__':
                         help='Base directory to save the processed data files.')
     parser.add_argument('--domain', default="stem",
                         help='Domain of the dataset.')
-    parser.add_argument('--name', default="gpqa_diamond",
+    parser.add_argument('--name', default="gpqa_diamond_no_box",
                         help='Name of the dataset.')
     parser.add_argument('--sample-size', type=int, default=None,
                         help='Number of samples to use from dataset. If None, use all samples.')

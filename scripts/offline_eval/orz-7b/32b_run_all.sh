@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=zhoujun-rl-guru15k-table2.5k
 #SBATCH --partition=main
-#SBATCH --nodes=8
-#SBATCH --ntasks=8
+#SBATCH --nodes=16
+#SBATCH --ntasks=16
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=96
@@ -124,8 +124,8 @@ leaderboard_list=(
     # "mbpp"
     # "humaneval"
     # "arcagi1"
-    "gpqa"
-    "gpqa_diamond"
+    # "gpqa"
+    # "gpqa_diamond"
     # "finqa"
     # "cruxeval-i"
     # "cruxeval-o"
@@ -134,13 +134,20 @@ leaderboard_list=(
     # "livebench_data_analysis"
     # "ifeval"
     # "supergpqa"
+    # "graph_logical_dataset"
+    # "zebra_puzzle_dataset"
+    # "codeio_500_sampled"
+    # "hitab_300_sampled"
+    # "multihier"
+    # "supergpqa_1k"
+    "arcagi1"
 )
 
-n_nodes=8
+n_nodes=16
 n_gpus_per_node=8
 gpu_ids=0,1,2,3,4,5,6,7
 
-model_path=Skywork/Skywork-OR1-7B-Preview
+model_path=Open-Reasoner-Zero/Open-Reasoner-Zero-32B
 data_folder=./data/test/
 save_folder=./data/test_leaderboard_output/
 
@@ -185,6 +192,12 @@ domain_mappings["livebench_reasoning"]="ood"
 domain_mappings["livebench_language"]="ood"
 domain_mappings["livebench_data_analysis"]="ood"
 domain_mappings["ifeval"]="ood"
+domain_mappings["multihier"]="table"
+domain_mappings["supergpqa_1k"]="stem"
+domain_mappings["graph_logical_dataset"]="logic"
+domain_mappings["zebra_puzzle_dataset"]="logic"
+domain_mappings["codeio_500_sampled"]="simulation"
+domain_mappings["hitab_300_sampled"]="table"
 for leaderboard in "${leaderboard_list[@]}"; do
     # Get the domain for this leaderboard
     domain=${domain_mappings[$leaderboard]}
@@ -205,18 +218,18 @@ for leaderboard in "${leaderboard_list[@]}"; do
         temperature=0.6
         top_p=0.95
     else
-        temperature=0.7
-        top_p=0.8
+        temperature=0.6
+        top_p=0.95
     fi
     top_k=-1 # 0 for hf rollout, -1 for vllm rollout
-    if [ "$leaderboard" == "argagi1" ] || [ "$leaderboard" == "finqa" ]; then
+    if [ "$leaderboard" == "arcagi1" ] || [ "$leaderboard" == "finqa" ] || [ "$leaderboard" == "multihier" ]; then
         prompt_length=4096
         response_length=28672
     else
         prompt_length=1024
         response_length=31744
     fi
-    tensor_model_parallel_size=2
+    tensor_model_parallel_size=4
     gpu_memory_utilization=0.8
     
     # Create log files - one for generation and one for evaluation
@@ -224,7 +237,6 @@ for leaderboard in "${leaderboard_list[@]}"; do
     eval_log_file="${logs_dir}${model_name}_${leaderboard}_eval.log"
     
     # Find the matching file in the data folder
-    # * should be number, not alphabet
     file_pattern="${domain}__${leaderboard}_[0-9]*.parquet"
     
     # Use find to get the actual file path
@@ -243,35 +255,35 @@ for leaderboard in "${leaderboard_list[@]}"; do
     
     export CUDA_VISIBLE_DEVICES=${gpu_ids}
 
-    # Generation step with tee to generation log file
-    echo "Starting generation for $leaderboard at $(date)" | tee -a "$gen_log_file"
-    {
-        /mnt/weka/home/zhuojun.cheng/miniconda3/envs/Reasoning360/bin/python3 -m verl.trainer.main_generation \
-            trainer.nnodes=$n_nodes \
-            trainer.n_gpus_per_node=$n_gpus_per_node \
-            data.path="$data_file" \
-            data.prompt_key=prompt \
-            data.n_samples=$n_samples \
-            data.batch_size=$batch_size \
-            data.output_path="$save_path" \
-            model.path=$model_path \
-            +model.trust_remote_code=True \
-            rollout.temperature=$temperature \
-            rollout.top_k=$top_k \
-            rollout.top_p=$top_p \
-            rollout.prompt_length=$prompt_length \
-            rollout.response_length=$response_length \
-            rollout.max_num_batched_tokens=$(($prompt_length + $response_length)) \
-            rollout.tensor_model_parallel_size=$tensor_model_parallel_size \
-            rollout.gpu_memory_utilization=$gpu_memory_utilization
-    } 2>&1 | tee -a "$gen_log_file"
-    echo "Completed generation for $leaderboard at $(date)" | tee -a "$gen_log_file"
+    # # Generation step with tee to generation log file
+    # echo "Starting generation for $leaderboard at $(date)" | tee -a "$gen_log_file"
+    # {
+    #     /mnt/weka/home/zhuojun.cheng/miniconda3/envs/Reasoning360/bin/python3 -m verl.trainer.main_generation \
+    #         trainer.nnodes=$n_nodes \
+    #         trainer.n_gpus_per_node=$n_gpus_per_node \
+    #         data.path="$data_file" \
+    #         data.prompt_key=prompt \
+    #         data.n_samples=$n_samples \
+    #         data.batch_size=$batch_size \
+    #         data.output_path="$save_path" \
+    #         model.path=$model_path \
+    #         +model.trust_remote_code=True \
+    #         rollout.temperature=$temperature \
+    #         rollout.top_k=$top_k \
+    #         rollout.top_p=$top_p \
+    #         rollout.prompt_length=$prompt_length \
+    #         rollout.response_length=$response_length \
+    #         rollout.max_num_batched_tokens=$(($prompt_length + $response_length)) \
+    #         rollout.tensor_model_parallel_size=$tensor_model_parallel_size \
+    #         rollout.gpu_memory_utilization=$gpu_memory_utilization
+    # } 2>&1 | tee -a "$gen_log_file"
+    # echo "Completed generation for $leaderboard at $(date)" | tee -a "$gen_log_file"
 
     # Evaluation step with tee to evaluation log file
     echo "Starting evaluation for $leaderboard at $(date)" | tee -a "$eval_log_file"
     unset LD_LIBRARY_PATH
     {
-        python3 -m verl.trainer.main_eval \
+        /mnt/weka/home/zhuojun.cheng/miniconda3/envs/Reasoning360/bin/python3 -m verl.trainer.main_eval \
             data.path="$save_path" \
             data.prompt_key=prompt \
             data.response_key=responses \

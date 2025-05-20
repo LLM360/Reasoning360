@@ -1,8 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=zhoujun-rl-guru15k-table2.5k
-#SBATCH --partition=main
-#SBATCH --nodes=8
-#SBATCH --ntasks=8
+#SBATCH --nodes=16
+#SBATCH --ntasks=16
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=96
@@ -12,6 +11,7 @@
 #SBATCH --exclusive
 #SBATCH --time=24:00:00
 #SBATCH --qos=iq
+#SBATCH --partition=main
 #SBATCH --exclude=fs-mbz-gpu-[088,317,440,497,097,186,191,275,097,186,191,275,012,041,050,071,109,139,216,282,029,121,129,195,292,310,358,465,022,026,070,076-077,205,290,359,008,057,065,069,144,178,199,274]
 
 
@@ -116,17 +116,19 @@ sleep 10
 
 # =================== leaderboard eval Config ===================
 leaderboard_list=(
-    # "aime"
-    # "aime2025"
+    "aime"
+    "aime2025"
     # "math"
     # "olympiad_bench"
     # "livecodebench"
     # "mbpp"
     # "humaneval"
     # "arcagi1"
-    "gpqa"
-    "gpqa_diamond"
+    # "gpqa"
+    # "gpqa_diamond"
+    # "gpqa_diamond_no_box"
     # "finqa"
+    # "multihier"
     # "cruxeval-i"
     # "cruxeval-o"
     # "livebench_reasoning"
@@ -134,13 +136,18 @@ leaderboard_list=(
     # "livebench_data_analysis"
     # "ifeval"
     # "supergpqa"
+    # "graph_logical_dataset"
+    # "zebra_puzzle_dataset"
+    # "codeio_500_sampled"
+    # "hitab_300_sampled"
 )
 
-n_nodes=8
+n_nodes=16
 n_gpus_per_node=8
 gpu_ids=0,1,2,3,4,5,6,7
 
-model_path=Skywork/Skywork-OR1-7B-Preview
+model_path=LLM360/guru-32b-step340
+# model_path=Open-Reasoner-Zero/Open-Reasoner-Zero-32B
 data_folder=./data/test/
 save_folder=./data/test_leaderboard_output/
 
@@ -175,12 +182,14 @@ domain_mappings["minerva"]="math"
 domain_mappings["olympiad_bench"]="math"
 domain_mappings["gpqa"]="stem"
 domain_mappings["gpqa_diamond"]="stem"
+domain_mappings["gpqa_diamond_no_box"]="stem"
 domain_mappings["supergpqa"]="stem"
 domain_mappings["arcagi1"]="simulation"
 domain_mappings["barc"]="simulation"
 domain_mappings["cruxeval-i"]="simulation"
 domain_mappings["cruxeval-o"]="simulation"
 domain_mappings["finqa"]="table"
+domain_mappings["multihier"]="table"
 domain_mappings["livebench_reasoning"]="ood"
 domain_mappings["livebench_language"]="ood"
 domain_mappings["livebench_data_analysis"]="ood"
@@ -195,28 +204,30 @@ for leaderboard in "${leaderboard_list[@]}"; do
     # 如果是argagi1 / finqa，则 prompt_length=4096, response_length=28672
     # 如果是argagi1, 则 n_samples=8
 
-    if [ "$leaderboard" == "arcagi1" ]; then
-        n_samples=8 # we only use pass@8 for arcagi task
+    if [ "$leaderboard" == "aime" ] || [ "$leaderboard" == "aime2025" ]; then
+        n_samples=1 # we only use pass@8 for arcagi task
+    elif [ "$leaderboard" == "arcagi1" ]; then
+        n_samples=8
     else
         n_samples=1
     fi
     batch_size=1024
     if [ "$leaderboard" == "aime" ] || [ "$leaderboard" == "aime2025" ] || [ "$leaderboard" == "arcagi1" ]; then
-        temperature=0.6
-        top_p=0.95
+        temperature=1.0
+        top_p=0.7
     else
-        temperature=0.7
-        top_p=0.8
+        temperature=1.0
+        top_p=0.7
     fi
     top_k=-1 # 0 for hf rollout, -1 for vllm rollout
-    if [ "$leaderboard" == "argagi1" ] || [ "$leaderboard" == "finqa" ]; then
+    if [ "$leaderboard" == "arcagi1" ] || [ "$leaderboard" == "finqa" ] || [ "$leaderboard" == "multihier" ]; then
         prompt_length=4096
         response_length=28672
     else
         prompt_length=1024
         response_length=31744
     fi
-    tensor_model_parallel_size=2
+    tensor_model_parallel_size=4
     gpu_memory_utilization=0.8
     
     # Create log files - one for generation and one for evaluation
@@ -224,8 +235,13 @@ for leaderboard in "${leaderboard_list[@]}"; do
     eval_log_file="${logs_dir}${model_name}_${leaderboard}_eval.log"
     
     # Find the matching file in the data folder
-    # * should be number, not alphabet
-    file_pattern="${domain}__${leaderboard}_[0-9]*.parquet"
+    if [ "$leaderboard" == "aime" ] || [ "$leaderboard" == "aime2025" ]; then
+        file_pattern="${domain}__${leaderboard}_repeated_8x_7.7k.parquet"
+    elif [ "$leaderboard" == "supergpqa" ]; then
+        file_pattern="${domain}__${leaderboard}_1k.parquet"
+    else
+        file_pattern="${domain}__${leaderboard}_[0-9]*.parquet"
+    fi
     
     # Use find to get the actual file path
     data_file=$(find "$data_folder" -name "$file_pattern" -type f | head -n 1)
@@ -271,7 +287,7 @@ for leaderboard in "${leaderboard_list[@]}"; do
     echo "Starting evaluation for $leaderboard at $(date)" | tee -a "$eval_log_file"
     unset LD_LIBRARY_PATH
     {
-        python3 -m verl.trainer.main_eval \
+        /mnt/weka/home/zhuojun.cheng/miniconda3/envs/Reasoning360/bin/python3 -m verl.trainer.main_eval \
             data.path="$save_path" \
             data.prompt_key=prompt \
             data.response_key=responses \

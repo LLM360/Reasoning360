@@ -12,7 +12,10 @@ def compute_score(solution_str, ground_truth, extra_info):
         format_score: the score for the format
         score: the score for the correct answer
     """
-    answer = solution_str
+    if "</think>" in solution_str:
+        answer = solution_str.split("</think>")[1]
+    else:
+        answer = solution_str
     is_following_list = []
     for index, instruction_id in enumerate(extra_info["instruction_id_list"]):
         instruction_cls = instructions_registry.INSTRUCTION_DICT[instruction_id]

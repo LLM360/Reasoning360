@@ -67,7 +67,7 @@ def compute_accuracy(answer, ground_truth):
     accuracy = correct_cells / (num_rows * num_cols)
     return accuracy
 
-def compute_score(solution_str, ground_truth, method='strict', timeout: float = 10.0):
+def compute_score(solution_str, ground_truth, extra_info: any = None, method='strict', timeout: float = 10.0):
     try:
         with time_limit(timeout):
             predicted_arrangement = extract_solution(solution_str)

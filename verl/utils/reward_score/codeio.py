@@ -135,7 +135,7 @@ def check_accuracy(raw_pred: str, gt: str, any_order: bool = False) -> Tuple[boo
         return False, no_answer
     return all(item in truth for item in pred), no_answer
 
-def compute_score(model_output: str, ground_truth: str) -> Dict[str, bool]:
+def compute_score(model_output: str, ground_truth: str, extra_info: any = None) -> Dict[str, bool]:
     """
     Compute score dict for evaluation harness.
     """

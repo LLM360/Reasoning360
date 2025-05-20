@@ -83,7 +83,7 @@ def compute_edit_distance(list1, list2):
     return dp[len(list1)][len(list2)]
 
 # granular reward function
-def compute_score(solution_str, ground_truth, method='strict', timeout: float = 10.0):
+def compute_score(solution_str, ground_truth, extra_info: any = None, method='strict', timeout: float = 10.0):
     """The scoring function for bird puzzles task.
     
     Args:

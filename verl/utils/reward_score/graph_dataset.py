@@ -33,7 +33,7 @@ def extract_solution(solution_str):
     else:
         return None
 
-def compute_score(solution_str, ground_truth, timeout: float = 10.0):
+def compute_score(solution_str, ground_truth, extra_info: any = None, timeout: float = 10.0):
     """The scoring function for graph dataset task.
     
     Args:

@@ -34,6 +34,9 @@ from verl.utils.reward_score import (
     arcagi,
     ifeval,
     livebench,
+    zebra_puzzle,
+    graph_dataset,
+    codeio,
 )
 import pandas as pd
 import numpy as np
@@ -58,6 +61,8 @@ def select_reward_fn(data_source):
     ]:
         return coder1.compute_score
     elif data_source in ['stem__gpqa', 'stem__gpqa_diamond']:
+        return supergpqa.compute_score
+    elif data_source in ['stem__gpqa_diamond_no_box']:
         return gpqa.compute_score
     elif data_source == "stem__supergpqa":
         return supergpqa.compute_score
@@ -67,6 +72,12 @@ def select_reward_fn(data_source):
         return ifeval.compute_score
     elif data_source in ["ood__livebench"]:
         return livebench.compute_score
+    elif data_source.startswith("logic__zebra_puzzle"):
+        return zebra_puzzle.compute_score
+    elif data_source.startswith("logic__graph_logical_dataset"):
+        return graph_dataset.compute_score
+    elif data_source.startswith("simulation__codeio"):
+        return codeio.compute_score
     else:
         raise NotImplementedError(f"Data source {data_source} not implemented")
 
@@ -113,7 +124,8 @@ def main(config):
         if max_score > 0:
             passes += 1
 
-    print(f"pass@: {passes / total}")
+    print(f"pass@1: {passes / total * 100.0}")
+    print(f"avg_pass: {avg_pass / total * 100.0}")
     
     metric_output_path = config.data.path.replace(".parquet", "_metric.json")
     if os.path.exists(metric_output_path):

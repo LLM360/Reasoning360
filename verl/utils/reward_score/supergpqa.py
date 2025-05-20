@@ -47,7 +47,7 @@ def get_prediction(output):
             return option
     return random.choice(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'])
 
-def compute_score(solution_str, ground_truth, method='strict', format_score=0., score=1.):
+def compute_score(solution_str, ground_truth, extra_info: any = None,method='strict', format_score=0., score=1.):
     answer = get_prediction(solution_str)
     if answer is None:
         return {'score': 0, 'acc': 0}
