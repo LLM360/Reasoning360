@@ -44,7 +44,7 @@ dependencies = [
     "pylatexenc",
     "ray[default]>=2.10",
     "torchdata",
-    "transformers==4.51.0",
+    "transformers==4.52.3",
     "vllm==0.8.2",
     'wandb',
     "math-verify[antlr4_9_3]==0.6.0",
