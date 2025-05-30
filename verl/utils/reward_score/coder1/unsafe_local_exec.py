@@ -1,12 +1,16 @@
 import os
 import subprocess
-
+import shlex
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 
 from .utils import _ERROR_MSG_PREFIX, _DEFAULT_TIMEOUT_SECONDS
 
 CLI_ARG_SIZE_LIMIT = 1024 * 3
+MEMORY_LIMIT_KB = 10 * 1024 * 1024  # 10GB in KB
 
+def wrap_command_with_ulimit(command):
+    cmd_str = ' '.join(shlex.quote(c) for c in command)
+    return ["bash", "-c", f"ulimit -v {MEMORY_LIMIT_KB}; exec {cmd_str}"]
 
 def code_exec_local(
     code,
@@ -19,7 +23,7 @@ def code_exec_local(
     env = os.environ.copy()
     env["OPENBLAS_NUM_THREADS"] = "1"
     if "PYTHONPATH" in env:
-        del env["PYTHONPATH"]  # avoid importing wrong stuff
+        del env["PYTHONPATH"]
 
     if python_env is None:
         python_executable = "/usr/bin/python3"
@@ -40,6 +44,7 @@ def code_exec_local(
                 python_executable,
                 os.path.join(tmpdir, "test_solution.py"),
             ]
+            command = wrap_command_with_ulimit(command)
             result = subprocess.run(
                 command,
                 cwd=tmpdir,
@@ -64,6 +69,7 @@ def code_exec_local(
                 "pytest",
                 tmpdir,
             ]
+            command = wrap_command_with_ulimit(command)
             result = subprocess.run(
                 command,
                 cwd=tmpdir,
@@ -72,17 +78,13 @@ def code_exec_local(
                 env=env,
                 check=False,
             )
-            # print(
-            #     f"STDOUT:\n{result.stdout.decode()}\n\nSTDERR:\n{result.stderr.decode()}"
-            # )
     else:
         if len(code) < CLI_ARG_SIZE_LIMIT:
             command = ["timeout", str(timeout), python_executable, "-c", code]
+            command = wrap_command_with_ulimit(command)
             result = subprocess.run(
                 command,
-                input=(
-                    stdin.encode() if stdin else None
-                ),  # Preserving stdin.encode() to avoid hanging
+                input=(stdin.encode() if stdin else None),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 env=env,
@@ -93,11 +95,10 @@ def code_exec_local(
                 tmp.write(code.encode())
                 tmp.flush()
                 command = ["timeout", str(timeout), python_executable, tmp.name]
+                command = wrap_command_with_ulimit(command)
                 result = subprocess.run(
                     command,
-                    input=(
-                        stdin.encode() if stdin else None
-                    ),  # Preserving stdin.encode() to avoid hanging
+                    input=(stdin.encode() if stdin else None),
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     env=env,

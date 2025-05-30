@@ -3,13 +3,13 @@
 
 # leaderboard list (the name should match the test file name)
 leaderboard_list=(
-  # "aime"           # math
+  "arcagi1"           # math
   # "math"           # math
   # "olympiad_bench" # math
-  "humaneval"      # codegen
+  # "humaneval"      # codegen
   # "mbpp"           # codegen
   # "livecodebench"  # codegen
-  # "gpqa"           # stem
+#   "gpqa_diamond"           # stem
 )
 
 # gpu
@@ -18,28 +18,25 @@ n_gpus_per_node=8
 gpu_ids=0,1,2,3,4,5,6,7
 
 # path
-data_folder=./data/test/
-save_folder=./data/test_leaderboard_output/
+data_folder=/lustrefs/users/shibo.hao/data/feng/code/Reasoning360/data/test
+save_folder=/lustrefs/users/shibo.hao/data/feng/code/Reasoning360/data/test_leaderboard_output/
 
 # model
-model_path=Qwen/Qwen3-30B-A3B-Base
-model_name="qwen3-30b-base"  # this will be the folder name under the save_folder
+model_path=Open-Reasoner-Zero/Open-Reasoner-Zero-7B
+model_name="orz-7b"  # this will be the folder name under the save_folder
 
 # generation hyper-parameters
-n_samples=1
+n_samples=8
 batch_size=128
 temperature=0.6
 top_k=-1 # 0 for hf rollout, -1 for vllm rollout
 top_p=0.95
-prompt_length=1024
-response_length=31744  # 32768 - 1024, Qwen3-moe only has 32768 max len
+prompt_length=4096
+response_length=28672
 max_num_batched_tokens=65536  # 2 x context length
 tensor_model_parallel_size=2
 gpu_memory_utilization=0.8
 ### ============== leadboard eval config ==============
-
-
-
 
 # Generate timestamp for unique log files
 timestamp=$(date +"%Y%m%d_%H%M%S")
@@ -72,6 +69,13 @@ domain_mappings["math"]="math"
 domain_mappings["minerva"]="math"
 domain_mappings["olympiad_bench"]="math"
 domain_mappings["gpqa"]="stem"
+domain_mappings["gpqa_diamond"]="stem"
+domain_mappings["graph_logical"]="logic"
+domain_mappings["zebra_puzzle"]="logic"
+domain_mappings["hitab"]="table"
+domain_mappings["multihier"]="table"
+domain_mappings["supergpqa"]="stem"
+domain_mappings["arcagi1"]="simulation"
 
 # Initialize counters for total time
 total_gen_time=0
@@ -89,6 +93,10 @@ for leaderboard in "${leaderboard_list[@]}"; do
     # Find the matching file in the data folder
     if [ "$leaderboard" == "olympiad_bench" ]; then
         file_pattern="${domain}__${leaderboard}_*.parquet"
+    elif [ "$leaderboard" == "gpqa_diamond" ]; then
+        file_pattern="${domain}__gpqa_diamond_*.parquet"
+    elif [ "$leaderboard" == "gpqa" ]; then
+        file_pattern="${domain}__gpqa_[0-9]*.parquet"  # This matches only gpqa followed by numbers
     else
         file_pattern="${domain}__${leaderboard}_*.parquet"
     fi

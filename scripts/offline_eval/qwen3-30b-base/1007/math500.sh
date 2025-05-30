@@ -4,10 +4,10 @@
 # leaderboard list (the name should match the test file name)
 leaderboard_list=(
   # "aime"           # math
-  # "math"           # math
+  "math"           # math
   # "olympiad_bench" # math
   # "humaneval"      # codegen
-  "mbpp"           # codegen
+  # "mbpp"           # codegen
   # "livecodebench"  # codegen
   # "gpqa"           # stem
 )
@@ -23,14 +23,14 @@ save_folder=./data/test_leaderboard_output/
 
 # model
 model_path=Qwen/Qwen3-30B-A3B-Base
-model_name="qwen3-30b-base"  # this will be the folder name under the save_folder
+model_name="qwen3-30b-base_1007"  # this will be the folder name under the save_folder
 
 # generation hyper-parameters
 n_samples=1
 batch_size=128
-temperature=0.6
+temperature=1.0
 top_k=-1 # 0 for hf rollout, -1 for vllm rollout
-top_p=0.95
+top_p=0.7
 prompt_length=1024
 response_length=31744  # 32768 - 1024, Qwen3-moe only has 32768 max len
 max_num_batched_tokens=65536  # 2 x context length

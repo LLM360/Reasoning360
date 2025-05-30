@@ -5,12 +5,11 @@
 leaderboard_list=(
   # "aime"           # math
   # "math"           # math
-  # "olympiad_bench" # math
+  "olympiad_bench" # math
   # "humaneval"      # codegen
   # "mbpp"           # codegen
   # "livecodebench"  # codegen
   # "gpqa"           # stem
-  "gpqa_diamond"    #stem
 )
 
 # gpu
@@ -24,7 +23,7 @@ save_folder=./data/test_leaderboard_output/
 
 # model
 model_path=Qwen/Qwen3-30B-A3B-Base
-model_name="qwen3-30b-base"  # this will be the folder name under the save_folder
+model_name="qwen3-30b-base_0609"  # this will be the folder name under the save_folder
 
 # generation hyper-parameters
 n_samples=1
@@ -38,9 +37,6 @@ max_num_batched_tokens=65536  # 2 x context length
 tensor_model_parallel_size=2
 gpu_memory_utilization=0.8
 ### ============== leadboard eval config ==============
-
-
-
 
 # Generate timestamp for unique log files
 timestamp=$(date +"%Y%m%d_%H%M%S")
@@ -73,7 +69,6 @@ domain_mappings["math"]="math"
 domain_mappings["minerva"]="math"
 domain_mappings["olympiad_bench"]="math"
 domain_mappings["gpqa"]="stem"
-domain_mappings["gpqa_diamond"]="stem"
 
 # Initialize counters for total time
 total_gen_time=0
@@ -91,10 +86,6 @@ for leaderboard in "${leaderboard_list[@]}"; do
     # Find the matching file in the data folder
     if [ "$leaderboard" == "olympiad_bench" ]; then
         file_pattern="${domain}__${leaderboard}_*.parquet"
-    elif [ "$leaderboard" == "gpqa_diamond" ]; then
-        file_pattern="${domain}__gpqa_diamond_*.parquet"
-    elif [ "$leaderboard" == "gpqa" ]; then
-        file_pattern="${domain}__gpqa_[0-9]*.parquet"  # This matches only gpqa followed by numbers
     else
         file_pattern="${domain}__${leaderboard}_*.parquet"
     fi

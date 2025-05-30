@@ -96,12 +96,13 @@ def main_task(config):
     wg = RayWorkerGroup(resource_pool=resource_pool, ray_cls_with_init=ray_cls_with_init)
     wg.init_model()
 
-    total_samples = len(dataset)
+    total_samples = len(chat_lst) # chat_lst is repeated
     # real_batch_size = data.batch['input_ids'].shape[0]
     config_batch_size = config.data.batch_size
     dispatch_dp_size = wg.world_size
     num_batch = -(-total_samples // config_batch_size)
-    output_lst = [[]]
+
+    output_lst = []
 
     for batch_idx in range(num_batch):
         print(f'[{batch_idx+1}/{num_batch}] Start to process.')
@@ -150,11 +151,15 @@ def main_task(config):
         for text in output_text:
             output_text_unpad.append(text.replace(pad_token, ''))
 
-        output_lst[0].extend(output_text_unpad)
+        output_lst.extend(output_text_unpad)
 
-    # convert output_lst from (n_samples, n_data) to (n_data, n_sampels)
-    output_lst = np.array(output_lst, dtype=object)
-    output_lst = np.transpose(output_lst, axes=(1, 0)).tolist()
+    # convert output_lst from (n_samples * n_data ,) to (n_data, n_sampels)
+    original_data_size = len(dataset)
+    output_lst = np.array(output_lst).reshape(config.data.n_samples, original_data_size)
+    output_lst = output_lst.T.tolist()
+    
+    original_chat_lst = chat_lst[:original_data_size]
+    original_ground_truth_lst = ground_truth_lst[:original_data_size]
 
     # add to the data frame
     if is_polars_df:
@@ -177,7 +182,7 @@ def main_task(config):
             "response": output,
             "ground_truth": str(ground_truth),
         } 
-        for chat, output, ground_truth in zip(chat_lst, output_lst, ground_truth_lst)
+        for chat, output, ground_truth in zip(original_chat_lst, output_lst, original_ground_truth_lst)
     ]
     model_name = config.model.path.split('/')[-1]
     with open(config.data.output_path.replace('.parquet', f'_{model_name}.json'), 'w', encoding='utf-8') as f:

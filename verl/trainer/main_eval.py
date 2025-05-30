@@ -56,7 +56,9 @@ def select_reward_fn(data_source):
     # code gen
     elif data_source in [
         "codegen__humaneval",
+        "codegen__humanevalplus",
         "codegen__mbpp",
+        "codegen__mbppplus",
         "codegen__livecodebench",
     ]:
         return coder1.compute_score
@@ -101,6 +103,7 @@ def main(config):
 
     passes = 0
     avg_pass = 0
+    k = None
 
     total = len(dataset)
 
@@ -114,6 +117,7 @@ def main(config):
         ground_truth = reward_data["ground_truth"]
         extra_info = extra_info_data[i] if extra_info_data is not None else None
         score_lst = []
+        k = len(response_lst)
         for r in response_lst:
             score = reward_fn(r, ground_truth, extra_info=extra_info)
             score_lst.append(score['acc'])
@@ -124,17 +128,17 @@ def main(config):
         if max_score > 0:
             passes += 1
 
-    print(f"pass@1: {passes / total * 100.0}")
-    print(f"avg_pass: {avg_pass / total * 100.0}")
+    print(f"pass@{k}: {passes / total * 100.0}")
+    print(f"pass@1_(avg{k}): {avg_pass / total * 100.0}")
     
     metric_output_path = config.data.path.replace(".parquet", "_metric.json")
     if os.path.exists(metric_output_path):
         with open(metric_output_path, "r") as f:
             metric_data = json.load(f)
-        metric_data["pass@1"] = passes / total * 100.0
-        metric_data["avg_pass"] = avg_pass / total * 100.0
+        metric_data[f"pass@{k}"] = passes / total * 100.0
+        metric_data[f"pass@1_(avg{k})"] = avg_pass / total * 100.0
     else:
-        metric_data = {"pass@1": passes / total * 100.0, "avg_pass": avg_pass / total * 100.0}
+        metric_data = {f"pass@{k}": passes / total * 100.0, f"pass@1_(avg{k})": avg_pass / total * 100.0}
     with open(metric_output_path, "w") as f:
         json.dump(metric_data, f, indent=4)
 

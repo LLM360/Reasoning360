@@ -7,7 +7,7 @@ leaderboard_list=(
   # "math"           # math
   # "olympiad_bench" # math
   # "humaneval"      # codegen
-  "mbpp"           # codegen
+  "mbppplus"           # codegen
   # "livecodebench"  # codegen
   # "gpqa"           # stem
 )
@@ -18,8 +18,8 @@ n_gpus_per_node=8
 gpu_ids=0,1,2,3,4,5,6,7
 
 # path
-data_folder=./data/test/
-save_folder=./data/test_leaderboard_output/
+data_folder=/lustrefs/users/shibo.hao/data/feng/code/Reasoning360/data/test
+save_folder=/lustrefs/users/shibo.hao/data/feng/code/Reasoning360/data/test_leaderboard_output/
 
 # model
 model_path=deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
@@ -69,7 +69,7 @@ domain_mappings["math"]="math"
 domain_mappings["minerva"]="math"
 domain_mappings["olympiad_bench"]="math"
 domain_mappings["gpqa"]="stem"
-
+domain_mappings["mbppplus"]="codegen"
 # Initialize counters for total time
 total_gen_time=0
 total_eval_time=0
