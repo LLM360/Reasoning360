@@ -12,18 +12,20 @@ group_by_alias=(
 )
 math_run_id="cdket31w"
 logic_run_id="90fg2lx2"
-codegen_run_id="thmx9v2l"
+codegen_run_id="a7pxr73p"
 simulation_run_id="9pf3p5rd"
 stem_run_id="tnjlr51x"
 table_run_id="et5mnxhr"
 mix_run_id="jz8lbvjz"
+mix_2_run_id="fbenc656"
+mix_3_run_id="hz8bwqyc"
 
 python crawl_wandb_shibo.py \
     --project "Reasoning360" \
     --entity "mbzuai-llm" \
     --wandb-api-key "633cdb1f1b9dfb2ae2681e47863635fe33b93a10" \
-    --run_ids "${math_run_id},${logic_run_id},${codegen_run_id},${simulation_run_id},${stem_run_id},${table_run_id},${mix_run_id}" \
-    --output-dir "wandb_data_response_pass"
+    --run_ids "${math_run_id},${logic_run_id},${codegen_run_id},${simulation_run_id},${stem_run_id},${table_run_id},${mix_run_id},${mix_2_run_id},${mix_3_run_id}" \
+    --output-dir "wandb_data_reward_length"
 
 
 # # ============================ Crawl 32b 'guru_full' run stats ============================

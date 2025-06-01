@@ -4,7 +4,7 @@
 # ===== part1 =====
 guru18k_run_name_list=(
     "71131-zhoujun-math3k-guru18k-models--Qwen--Qwen2.5-7B-think"
-    "70449-zhoujun-codegen3k-guru18k-models--Qwen--Qwen2.5-7B-think"
+    "72107-zhoujun-codegen3k-guru18k-models--Qwen--Qwen2.5-7B-think"
     "71130-zhoujun-logic3k-guru18k-models--Qwen--Qwen2.5-7B-think"
     "71136-zhoujun-table3k-guru18k-models--Qwen--Qwen2.5-7B-think"
     "71162-zhoujun-simulation3k-guru18k-models--Qwen--Qwen2.5-7B-think"

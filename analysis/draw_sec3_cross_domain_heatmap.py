@@ -13,7 +13,7 @@ GURU15K_TRAINING_DOMAIN_MAP = {
     "guru15k_logic2.5k": "+Logic",
     "guru15k_simulation2.5k": "+Simulation",
     "guru15k_table2.5k": "+Table",
-    "guru15k_stem2.5k": "+STEM",
+    "guru15k_stem2.5k": "+Science",
     "guru15k_mix": "Mix All",
 }
 GURU18K_TRAINING_DOMAIN_MAP = {
@@ -22,43 +22,46 @@ GURU18K_TRAINING_DOMAIN_MAP = {
     "guru18k_logic3k": "+Logic",
     "guru18k_simulation3k": "+Simulation",
     "guru18k_table3k": "+Table",
-    "guru18k_stem3k": "+STEM",
+    "guru18k_stem3k": "+Science",
     "guru18k_mix": "Mix All",
 }
 
 # Original fine-grained task aliases
+# COLUMNS_TO_EXCLUDE = ['GraphLogic', "GPQA Diamond"]
+COLUMNS_TO_EXCLUDE = ['val/test_score/logic__graph_logical_dataset/unknown',
+                      'val/test_score/stem__gpqa_diamond/Idavidrein/gpqa']
+
 TASK_ALIAS = {
     "math": "MATH500", "amc_repeated_4x": "AMC", "aime_repeated_8x": "AIME24",
     "humaneval": "HumanEval", "mbpp": "MBPP", "livecodebench": "LiveCodeBench",
-    "arcagi1": "ARC-AGI", "graph_logical_dataset": "GraphLogic",
+    "arcagi1": "ARC-AGI",
     "ordering_puzzle_dataset": "OrderLogic", "zebra_puzzle_dataset": "ZebraLogic",
     "codeio": "Code I/O",
     "hitab": "HiTab", "multihier": "MultiHiertt",
-    "gpqa_diamond": "GPQA Diamond",
+    # "gpqa_diamond": "GPQA Diamond",
     "supergpqa": "SuperGPQA",
 }
 
 # Order for fine-grained evaluation tasks
 DETAILED_EVAL_COLUMN_ORDER = [
     "MATH500", "AMC", "AIME24", "HumanEval", "MBPP", "LiveCodeBench",
-    "ARC-AGI", "GraphLogic", "OrderLogic", "ZebraLogic", "Code I/O",
-    "HiTab", "MultiHiertt", "GPQA Diamond", "SuperGPQA"
+    "SuperGPQA",
+    "ARC-AGI", "OrderLogic", "ZebraLogic", "Code I/O",
+    "HiTab", "MultiHiertt", 
 ]
 
 # Mapping of fine-grained evaluation tasks to their broader domains
 EVAL_TASK_TO_DOMAIN_GROUP_MAP = {
     "MATH500": "Math", "AMC": "Math", "AIME24": "Math",
     "HumanEval": "Codegen", "MBPP": "Codegen", "LiveCodeBench": "Codegen",
-    "ARC-AGI": "Logic", "GraphLogic": "Logic", "OrderLogic": "Logic", "ZebraLogic": "Logic",
+    "ARC-AGI": "Logic", "OrderLogic": "Logic", "ZebraLogic": "Logic",
     "Code I/O": "Simulation",
     "HiTab": "Table", "MultiHiertt": "Table", # Assuming 'Structure' can be grouped under 'Table' or a new 'Structure' group
-    "GPQA Diamond": "STEM", "SuperGPQA": "STEM"
+     "SuperGPQA": "Science"
 }
 
 # Desired order for grouped evaluation domain columns
-GROUPED_EVAL_COLUMN_ORDER = ["Math", "Codegen", "Logic", "Simulation", "Table", "STEM"]
-
-COLUMNS_TO_EXCLUDE = ['GraphLogic', "GPQA Diamond"]
+GROUPED_EVAL_COLUMN_ORDER = ["Math", "Codegen", "Science", "Logic", "Simulation", "Table", ]
 
 GURU15K_EXPERIMENT_DIRS = [
     "guru15k_math2.5k", "guru15k_codegen2.5k", "guru15k_logic2.5k",
@@ -66,10 +69,11 @@ GURU15K_EXPERIMENT_DIRS = [
     "guru15k_mix",
 ]
 GURU18K_EXPERIMENT_DIRS = [
-    "guru18k_math3k", "guru18k_codegen3k", "guru18k_logic3k",
-    "guru18k_simulation3k", "guru18k_table3k", "guru18k_stem3k",
+    "guru18k_math3k", "guru18k_codegen3k", "guru18k_stem3k", "guru18k_logic3k",
+    "guru18k_simulation3k", "guru18k_table3k", 
     "guru18k_mix",
 ]
+
 
 # --- Data Loading and Preprocessing Functions ---
 def load_experiment_data(data_dir, exp_dir):
@@ -176,6 +180,12 @@ def process_all_experiments(data_dir, exp_dirs, use_last_step=False, use_best_av
     loaded_dfs = {}
     for exp_dir in exp_dirs:
         df_combined = load_experiment_data(data_dir, exp_dir)
+        # Drop columns that are not needed for evaluation
+        for task_to_exclude in COLUMNS_TO_EXCLUDE:
+            print(f"To drop column: {task_to_exclude}")
+            print(f"df_combined.columns: {df_combined.columns}")
+            if task_to_exclude in df_combined.columns:
+                df_combined = df_combined.drop(columns=[task_to_exclude])
         loaded_dfs[exp_dir] = df_combined # Store the loaded df
         all_best_performance[exp_dir] = calculate_best_performance_for_experiment(
             df_combined, exp_dir, use_last_step, use_best_avg_step
@@ -259,12 +269,12 @@ def extract_domain_task_from_col(col_name, task_alias_map):
 def prepare_heatmap_data(all_best_performance, baseline_scores_dict, training_domain_map, task_alias_map,
                          group_eval_domains=False, eval_task_to_domain_group_map=None):
     heatmap_data_list = []
-
+    
     # Add Baseline data first
     if baseline_scores_dict:
         for task_name, score in baseline_scores_dict.items():
              record = {
-                "Training Data": "Baseline (Qwen2.5-7B)",
+                "Training Data": "Base (Qwen2.5-7B)",
                 "Score": score
              }
              if group_eval_domains:
@@ -316,24 +326,100 @@ def prepare_heatmap_data(all_best_performance, baseline_scores_dict, training_do
     return df
 
 def normalize_score_matrix(score_matrix):
+    """
+    Normalizes each column of a DataFrame by subtracting the first row's value
+    (baseline) and then scaling the resulting delta to the range [-1, 1].
+
+    Original NaN values are filled with a placeholder (-2) in the output.
+
+    Args:
+        score_matrix (pd.DataFrame): The input DataFrame of scores.
+
+    Returns:
+        pd.DataFrame: The normalized DataFrame with deltas scaled to [-1, 1].
+                      Original NaNs are replaced by -2.
+    """
     normalized_matrix = score_matrix.astype(float).copy() # Ensure float for calculations
-    epsilon = 1e-9
+    output_matrix = pd.DataFrame(index=score_matrix.index, columns=score_matrix.columns, dtype=float)
+    placeholder_for_nan = -2.0 # Value to replace original NaNs with
+
     for col in normalized_matrix.columns:
-        col_data = normalized_matrix[col].dropna()
-        if col_data.empty:
-            normalized_matrix[col] = 0.0
+        col_data = normalized_matrix[col]
+        
+        # Get the baseline value from the first row, ignoring potential NaN
+        # If the first value is NaN, we cannot establish a baseline for this column
+        baseline = col_data.iloc[0]
+
+        if pd.isna(baseline):
+            # If baseline is NaN, we cannot normalize this column meaningfully
+            print(f"Warning: Baseline (first row) for column '{col}' is NaN. Filling column with placeholder.")
+            output_matrix[col] = placeholder_for_nan
             continue
-        min_val, max_val = col_data.min(), col_data.max()
-        if (max_val - min_val) > epsilon:
-            normalized_matrix[col] = (normalized_matrix[col] - min_val) / (max_val - min_val)
+
+        # Calculate the delta from the baseline for all values
+        delta_data = col_data - baseline
+
+        # Identify where the original NaNs were
+        original_nan_mask = col_data.isna()
+
+        # Get non-NaN deltas for min/max calculation
+        valid_deltas = delta_data.dropna()
+
+        if valid_deltas.empty:
+             # If all values were NaN (except possibly the first row NaN case handled above)
+             output_matrix[col] = placeholder_for_nan
+             continue
+             
+        min_delta = valid_deltas.min()
+        max_delta = valid_deltas.max()
+
+        epsilon = 1e-9 # Tolerance for floating point comparison
+
+        if abs(max_delta - min_delta) < epsilon:
+            # If all valid deltas are the same (constant column after baseline subtraction)
+            # Normalize to 0 if the delta is 0, otherwise handle as a constant non-zero delta
+            if abs(min_delta) < epsilon:
+                 # Delta is effectively 0 everywhere (e.g., original column was constant)
+                 output_matrix[col] = 0.0
+            else:
+                 # All non-NaN deltas are the same but non-zero.
+                 # This case is tricky for [-1, 1] normalization based on range.
+                 # A reasonable approach is to map this single non-zero delta to 0,
+                 # or perhaps sign(delta). Let's map to 0 as it's a constant 'change'
+                 # relative to the baseline across non-NaN values.
+                 print(f"Warning: All valid deltas in column '{col}' are constant and non-zero after baseline subtraction. Mapping non-NaN deltas to 0.")
+                 output_matrix[col] = 0.0
         else:
-            # Normalize constant columns to 1 if max > 0, else 0.
-            # If all values are the same, they all get the same normalized score.
-            # If that value is the max/min across the whole column, it's 1 or 0.
-            normalized_matrix[col] = 1.0 if max_val > 0 else 0.0
-        # Fill original NaNs with a distinct low value for viz, outside the [0, 1] range
-        normalized_matrix[col] = normalized_matrix[col].fillna(-0.05)
-    return normalized_matrix
+            # Normalize the non-NaN deltas to the range [-1, 1]
+            # Formula: 2 * (x - min) / (max - min) - 1
+            # output_matrix[col] = 2 * (delta_data - min_delta) / (max_delta - min_delta) - 1
+            output_matrix[col] = (delta_data - min_delta) / (max_delta - min_delta)
+            
+        # Fill the locations of original NaNs with the placeholder value
+        output_matrix.loc[original_nan_mask, col] = placeholder_for_nan
+
+    return output_matrix
+
+# def normalize_score_matrix(score_matrix):
+#     normalized_matrix = score_matrix.astype(float).copy() # Ensure float for calculations
+#     epsilon = 1e-9
+#     for col in normalized_matrix.columns:
+#         col_data = normalized_matrix[col].dropna()
+#         if col_data.empty:
+#             normalized_matrix[col] = 0.0
+#             continue
+#         min_val, max_val = col_data.min(), col_data.max()
+#         if (max_val - min_val) > epsilon:
+#             normalized_matrix[col] = (normalized_matrix[col] - min_val) / (max_val - min_val)
+#         else:
+#             # Normalize constant columns to 1 if max > 0, else 0.
+#             # If all values are the same, they all get the same normalized score.
+#             # If that value is the max/min across the whole column, it's 1 or 0.
+#             normalized_matrix[col] = 1.0 if max_val > 0 else 0.0
+#         # Fill original NaNs with a distinct low value for viz, outside the [0, 1] range
+#         normalized_matrix[col] = normalized_matrix[col].fillna(-0.05)
+#     return normalized_matrix
+
 
 # --- Plotting ---
 def plot_heatmap(score_matrix, normalized_score_matrix, filename="heatmap.png", title_suffix="", hide_numbers=False, group_eval_domains=False):
@@ -342,7 +428,8 @@ def plot_heatmap(score_matrix, normalized_score_matrix, filename="heatmap.png", 
         return
 
     # --- Colormap Setting ---
-    cmap = sns.color_palette("YlGnBu", as_cmap=True)
+    # cmap = sns.color_palette("YlGnBu", as_cmap=True)
+    cmap = sns.color_palette("coolwarm", as_cmap=True)
 
     num_rows = len(score_matrix.index)
     num_cols = len(score_matrix.columns)
@@ -399,8 +486,8 @@ def plot_heatmap(score_matrix, normalized_score_matrix, filename="heatmap.png", 
     if group_eval_domains:
         plt.xlabel("Evaluation Task (Avg. across Domain Group)", fontsize=12, labelpad=12)
     else:
-        plt.xlabel("Evaluation Task", fontsize=12, labelpad=12)
-    plt.ylabel("Training Data Domain", fontsize=12, labelpad=12)
+        plt.xlabel("Evaluation Task", fontsize=12, labelpad=15)
+    plt.ylabel("Training Data Domain", fontsize=12, labelpad=1.5)
     plt.xticks(rotation=45, ha='right', fontsize=10)
     plt.yticks(rotation=0, fontsize=10)
     ax.tick_params(axis='both', which='major', pad=6)
@@ -412,6 +499,11 @@ def plot_heatmap(score_matrix, normalized_score_matrix, filename="heatmap.png", 
         # plt.show()
     except Exception as e:
         print(f"Error saving heatmap: {e}")
+
+def save_score_matrix(score_matrix, output_filename):
+    # Save the score matrix to a CSV file
+    score_matrix.to_csv(output_filename, index=True)
+    print(f"Score matrix saved to {output_filename}")
 
 # --- Main Execution ---
 def main():
@@ -449,10 +541,22 @@ def main():
     elif args.use_best_avg_step:
         args.output_filename = args.output_filename.replace(".png", "_best_avg_step.png")
 
+    # Modify output filename based on step selection mode
+    if args.group_eval_domains:
+        current_column_order = GROUPED_EVAL_COLUMN_ORDER
+        title_suffix = "across Evaluation Domain Groups"
+        output_filename = args.output_filename.replace(".png", "_grouped.png")
+    else:
+        current_column_order = DETAILED_EVAL_COLUMN_ORDER
+        title_suffix = "across Evaluation Tasks"
+        output_filename = args.output_filename.replace(".png", "_detailed.png")
+    if args.hide_numbers:
+        output_filename = output_filename.replace(".png", "_hide_numbers.png")
+
     # Get baseline performance from step=0 across all loaded runs
     baseline_scores_dict = get_average_baseline_scores(loaded_dfs, TASK_ALIAS)
     if baseline_scores_dict:
-        print("\n--- Baseline (Qwen2.5-7B) Performance (Average at Step 0) ---")
+        print("\n--- Base (Qwen2.5-7B) Performance (Average at Step 0) ---")
         for task, score in baseline_scores_dict.items():
             print(f"  {task:<15}: {score:.4f}")
         print("-" * 40)
@@ -486,22 +590,10 @@ def main():
         return
 
     # Define the desired row order, adding the baseline at the top
-    desired_row_order = ["Baseline (Qwen2.5-7B)"] + \
+    desired_row_order = ["Base (Qwen2.5-7B)"] + \
                         [GURU18K_TRAINING_DOMAIN_MAP[d] for d in GURU18K_EXPERIMENT_DIRS if GURU18K_TRAINING_DOMAIN_MAP[d] in score_matrix.index]
     # Filter out any desired rows not actually present in the data
     desired_row_order = [row for row in desired_row_order if row in score_matrix.index]
-
-
-    if args.group_eval_domains:
-        current_column_order = GROUPED_EVAL_COLUMN_ORDER
-        title_suffix = "across Evaluation Domain Groups"
-        output_filename = args.output_filename.replace(".png", "_grouped.png")
-    else:
-        current_column_order = DETAILED_EVAL_COLUMN_ORDER
-        title_suffix = "across Evaluation Tasks"
-        output_filename = args.output_filename.replace(".png", "_detailed.png")
-    if args.hide_numbers:
-        output_filename = output_filename.replace(".png", "_hide_numbers.png")
         
 
     # Add missing desired columns with NaN
@@ -513,12 +605,15 @@ def main():
     # Filter current_column_order to only include columns actually present OR added as NaN
     final_column_order = [col for col in current_column_order if col in score_matrix.columns]
     score_matrix = score_matrix.reindex(index=desired_row_order, columns=final_column_order)
-    try:
-        score_matrix = score_matrix.drop(columns=COLUMNS_TO_EXCLUDE)
-    except Exception as e:
-        print(f"Error dropping columns: {e}")
-        print("Columns in score_matrix:", score_matrix.columns)
-        print("Sample of score_matrix:\n", score_matrix.head())
+    
+    save_score_matrix(score_matrix, output_filename.replace(".png", "_score_matrix.csv"))
+    # try:
+    #     print("score_matrix.columns:", score_matrix.columns)
+    #     score_matrix = score_matrix.drop(columns=COLUMNS_TO_EXCLUDE)
+    # except Exception as e:
+    #     print(f"Error dropping columns: {e}")
+    #     print("Columns in score_matrix:", score_matrix.columns)
+    #     print("Sample of score_matrix:\n", score_matrix.head())
 
     # Normalize the matrix for coloring (excluding baseline from normalization range if needed,
     # but column-wise normalization should handle this implicitly as baseline is just another row)
