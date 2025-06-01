@@ -97,29 +97,29 @@ for leaderboard in "${leaderboard_list[@]}"; do
     
     export CUDA_VISIBLE_DEVICES=${gpu_ids}
 
-    # Generation step with tee to generation log file
-    echo "Starting generation for $leaderboard at $(date)" | tee -a "$gen_log_file"
-    {
-        python3 -m verl.trainer.main_generation \
-            trainer.nnodes=$n_nodes \
-            trainer.n_gpus_per_node=$n_gpus_per_node \
-            data.path="$data_file" \
-            data.prompt_key=prompt \
-            data.n_samples=$n_samples \
-            data.batch_size=$batch_size \
-            data.output_path="$save_path" \
-            model.path=$model_path \
-            +model.trust_remote_code=True \
-            rollout.temperature=$temperature \
-            rollout.top_k=$top_k \
-            rollout.top_p=$top_p \
-            rollout.prompt_length=$prompt_length \
-            rollout.response_length=$response_length \
-            rollout.max_num_batched_tokens=33792 \
-            rollout.tensor_model_parallel_size=$tensor_model_parallel_size \
-            rollout.gpu_memory_utilization=$gpu_memory_utilization
-    } 2>&1 | tee -a "$gen_log_file"
-    echo "Completed generation for $leaderboard at $(date)" | tee -a "$gen_log_file"
+    # # Generation step with tee to generation log file
+    # echo "Starting generation for $leaderboard at $(date)" | tee -a "$gen_log_file"
+    # {
+    #     python3 -m verl.trainer.main_generation \
+    #         trainer.nnodes=$n_nodes \
+    #         trainer.n_gpus_per_node=$n_gpus_per_node \
+    #         data.path="$data_file" \
+    #         data.prompt_key=prompt \
+    #         data.n_samples=$n_samples \
+    #         data.batch_size=$batch_size \
+    #         data.output_path="$save_path" \
+    #         model.path=$model_path \
+    #         +model.trust_remote_code=True \
+    #         rollout.temperature=$temperature \
+    #         rollout.top_k=$top_k \
+    #         rollout.top_p=$top_p \
+    #         rollout.prompt_length=$prompt_length \
+    #         rollout.response_length=$response_length \
+    #         rollout.max_num_batched_tokens=33792 \
+    #         rollout.tensor_model_parallel_size=$tensor_model_parallel_size \
+    #         rollout.gpu_memory_utilization=$gpu_memory_utilization
+    # } 2>&1 | tee -a "$gen_log_file"
+    # echo "Completed generation for $leaderboard at $(date)" | tee -a "$gen_log_file"
 
     # Evaluation step with tee to evaluation log file
     echo "Starting evaluation for $leaderboard at $(date)" | tee -a "$eval_log_file"

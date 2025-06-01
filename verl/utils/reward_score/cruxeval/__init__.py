@@ -6,8 +6,11 @@ def compute_score(model_output: str, ground_truth: str, extra_info: any = None) 
     model_output = str(model_output)
     # print(f">>> {model_output}")
     try:
-        # remove content until </think>
-        model_output = re.split(r"</think>", model_output)[1]
+        if "</think>" in model_output:
+            # remove content until </think>
+            model_output = re.split(r"</think>", model_output)[1]
+        else:
+            model_output = model_output
         # remove content between ```python and ```
         model_output = re.split(r"```python", model_output)[1]
         model_output = re.split(r"```", model_output)[0]

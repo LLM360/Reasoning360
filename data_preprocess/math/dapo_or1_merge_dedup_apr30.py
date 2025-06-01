@@ -56,6 +56,8 @@ def make_map_fn(split: str, data_source: str, reward_metric: str='default') -> c
         question = example.pop("problem")
         # question = example.pop("problem")
         answer = example.pop("answer")
+        if isinstance(answer, list):
+            answer = answer[0]
         data = {
             "data_source": data_source,
             "prompt": [

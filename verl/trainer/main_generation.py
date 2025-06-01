@@ -61,6 +61,9 @@ def main_task(config):
     from verl.utils import hf_tokenizer
     tokenizer = hf_tokenizer(local_path)
 
+    if 'olmoe' in local_path.lower() and 'instruct' not in local_path.lower():
+        tokenizer.chat_template = "{{ bos_token }}{% for message in messages %}{% if message['role'] == 'system' %}{{ '<|system|>\n' + message['content'] + '\n' }}{% elif message['role'] == 'user' %}{{ '<|user|>\n' + message['content'] + '\n' }}{% elif message['role'] == 'assistant' %}{% if not loop.last %}{{ '<|assistant|>\n'  + message['content'] + eos_token + '\n' }}{% else %}{{ '<|assistant|>\n'  + message['content'] + eos_token }}{% endif %}{% endif %}{% if loop.last and add_generation_prompt %}{{ '<|assistant|>\n' }}{% endif %}{% endfor %}"
+
     if config.rollout.temperature == 0.:
         assert config.data.n_samples == 1, 'When temperature=0, n_samples must be 1.'
 
@@ -71,11 +74,18 @@ def main_task(config):
         dataset = pl.read_parquet(config.data.path)
         chat_lst = list(dataset[config.data.prompt_key])
         chat_lst = [list(chat) for chat in chat_lst]
+        ground_truth_lst = list(dataset["reward_model"])
         is_polars_df = True
     else:
         dataset = pd.read_parquet(config.data.path)
         chat_lst = dataset[config.data.prompt_key].tolist()
         chat_lst = [chat.tolist() for chat in chat_lst]
+        ground_truth_lst = dataset["reward_model"].tolist()
+    
+    # handle n_samples
+    if config.data.n_samples > 1:
+        chat_lst = chat_lst * config.data.n_samples
+        ground_truth_lst = ground_truth_lst * config.data.n_samples
 
     tokenizer.padding_side = 'left'
     if tokenizer.pad_token is None:
@@ -86,12 +96,13 @@ def main_task(config):
     wg = RayWorkerGroup(resource_pool=resource_pool, ray_cls_with_init=ray_cls_with_init)
     wg.init_model()
 
-    total_samples = len(dataset)
+    total_samples = len(chat_lst) # chat_lst is repeated
     # real_batch_size = data.batch['input_ids'].shape[0]
     config_batch_size = config.data.batch_size
     dispatch_dp_size = wg.world_size
     num_batch = -(-total_samples // config_batch_size)
-    output_lst = [[] for _ in range(config.data.n_samples)]
+
+    output_lst = []
 
     for batch_idx in range(num_batch):
         print(f'[{batch_idx+1}/{num_batch}] Start to process.')
@@ -127,25 +138,28 @@ def main_task(config):
         assert batch_size % dispatch_dp_size == 0, f'batch_size {batch_size} is not divisible by dispatch_dp_size {dispatch_dp_size}'
 
         print(f'[{batch_idx+1}/{num_batch}] Start to generate.')
-        # START TO GENERATE FOR n_samples TIMES
-        for i in range(config.data.n_samples):
-            output = wg.generate_sequences(data)
-            # remove dummy data
-            output = output[:real_batch_size]
-            output_text = tokenizer.batch_decode(output.batch['input_ids'][:, -config.rollout.response_length:],
-                                                 skip_special_tokens=False)
+        # START TO GENERATE FOR 1 TIME SINCE WE'VE ALREADY HANDLED n_samples beforehand
+        output = wg.generate_sequences(data)
+        # remove dummy data
+        output = output[:real_batch_size]
+        output_text = tokenizer.batch_decode(output.batch['input_ids'][:, -config.rollout.response_length:],
+                                                skip_special_tokens=False)
 
-            # remove the padding
-            pad_token = tokenizer.pad_token
-            output_text_unpad = []
-            for text in output_text:
-                output_text_unpad.append(text.replace(pad_token, ''))
+        # remove the padding
+        pad_token = tokenizer.pad_token
+        output_text_unpad = []
+        for text in output_text:
+            output_text_unpad.append(text.replace(pad_token, ''))
 
-            output_lst[i].extend(output_text_unpad)
+        output_lst.extend(output_text_unpad)
 
-    # convert output_lst from (n_samples, n_data) to (n_data, n_sampels)
-    output_lst = np.array(output_lst, dtype=object)
-    output_lst = np.transpose(output_lst, axes=(1, 0)).tolist()
+    # convert output_lst from (n_samples * n_data ,) to (n_data, n_sampels)
+    original_data_size = len(dataset)
+    output_lst = np.array(output_lst).reshape(config.data.n_samples, original_data_size)
+    output_lst = output_lst.T.tolist()
+    
+    original_chat_lst = chat_lst[:original_data_size]
+    original_ground_truth_lst = ground_truth_lst[:original_data_size]
 
     # add to the data frame
     if is_polars_df:
@@ -153,8 +167,7 @@ def main_task(config):
         # write to a new parquet
         output_dir = os.path.dirname(config.data.output_path)
         makedirs(output_dir, exist_ok=True)
-        # Save parquet - polars uses write_parquet with use_pyarrow=True for better compatibility
-        dataset.write_parquet(config.data.output_path, use_pyarrow=True)
+        dataset.write_parquet(config.data.output_path)
     else:
         # For pandas, use standard bracket assignment
         dataset['responses'] = output_lst
@@ -162,8 +175,15 @@ def main_task(config):
         output_dir = os.path.dirname(config.data.output_path)
         makedirs(output_dir, exist_ok=True)
         dataset.to_parquet(config.data.output_path)
-
-    result_list = [{"prompt": chat, "response": output} for chat, output in zip(chat_lst, output_lst)]
+    
+    result_list = [
+        {
+            "prompt": chat,
+            "response": output,
+            "ground_truth": str(ground_truth),
+        } 
+        for chat, output, ground_truth in zip(original_chat_lst, output_lst, original_ground_truth_lst)
+    ]
     model_name = config.model.path.split('/')[-1]
     with open(config.data.output_path.replace('.parquet', f'_{model_name}.json'), 'w', encoding='utf-8') as f:
         json.dump(result_list, f, indent=2, ensure_ascii=False)

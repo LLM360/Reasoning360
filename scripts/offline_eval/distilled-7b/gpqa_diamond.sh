@@ -28,9 +28,9 @@ model_name="distill-7b"  # this will be the folder name under the save_folder
 # generation hyper-parameters
 n_samples=1
 batch_size=128
-temperature=1.0
+temperature=0.6
 top_k=-1 # 0 for hf rollout, -1 for vllm rollout
-top_p=0.7
+top_p=0.95
 prompt_length=1024
 response_length=32768
 max_num_batched_tokens=65536  # 2 x context length

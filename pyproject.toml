@@ -54,6 +54,9 @@ dependencies = [
     "wandb",
     "flash-attn",
     "tensordict==0.7.2",
+    "langdetect",
+    "immutabledict",
+    "nltk",
     "polars"
 ]
 

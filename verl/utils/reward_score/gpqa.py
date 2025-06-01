@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import re
-
 
 import re
 
@@ -31,8 +29,8 @@ def extract_solution(solution_str, method='strict'):
     assert method in ['strict', 'flexible']
 
     if method == 'strict':
-        # Look for the exact format "The correct answer is (X)"
-        solution = re.search(r"The correct answer is \(([A-D])\)", solution_str)
+        # Use regex from OpenAI simple-eval https://github.com/openai/simple-evals/blob/main/gpqa_eval.py
+        solution = re.search(r"(?i)Answer[ \t]*:[ \t]*\$?([A-D])\$?", solution_str)
         if solution is None:
             final_answer = None
         else:

@@ -220,7 +220,7 @@ if __name__ == "__main__":
     parser.add_argument('--name', default="multihier", help='Name of the dataset.')
     parser.add_argument('--train-sample-size', type=int, default=None, 
                         help='Number of samples to use from training dataset. If None, use all samples.')
-    parser.add_argument('--test-sample-size', type=int, default=None,
+    parser.add_argument('--test-sample-size', type=int, default=500,
                         help='Number of samples to use from test dataset. If None, use all samples.')
     parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
 
