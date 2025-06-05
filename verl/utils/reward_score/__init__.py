@@ -79,13 +79,23 @@ def default_compute_score(data_source, solution_str, ground_truth, extra_info=No
         res = tablereason.compute_score(solution_str, ground_truth)
     elif data_source.startswith('stem__gpqa'):
         from . import gpqa
-        res = gpqa.compute_score(solution_str, ground_truth)
+        from . import supergpqa
+        if "no_box" in data_source:
+            res = gpqa.compute_score(solution_str, ground_truth)
+        else:
+            res = supergpqa.compute_score(solution_str, ground_truth)
     elif data_source.startswith('stem__supergpqa'):
         from . import supergpqa
         res = supergpqa.compute_score(solution_str, ground_truth)
     elif data_source.startswith('stem_web'):
         from . import stem_llm_judge
         res = stem_llm_judge.compute_score(data_source=data_source, model_output=solution_str, ground_truth=ground_truth, extra_info=extra_info)
+    elif data_source in ["ood__ifeval"]:
+        from . import ifeval
+        res = ifeval.compute_score(solution_str, ground_truth, extra_info=extra_info)
+    elif data_source in ["ood__livebench"]:
+        from . import livebench
+        res = livebench.compute_score(solution_str, ground_truth, extra_info=extra_info)
     # NOTE: above is added by Reasoning360
     elif data_source == "openai/gsm8k":
         from . import gsm8k

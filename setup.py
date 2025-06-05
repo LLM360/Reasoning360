@@ -37,10 +37,15 @@ install_requires = [
     "pylatexenc",
     "ray[default]>=2.41.0",
     "torchdata",
-    "tensordict<=0.6.2",
-    "transformers",
+    "tensordict<=0.6.2",    # NOTE: Reasoning360 used a fixed version ==0.72
+    "transformers", # NOTE Reasoning360 used a fixed version ==4.51.0
     "wandb",
     "packaging>=20.0",
+    # NOTE: added by Reasoning360
+    "langdetect",
+    "immutabledict",
+    "nltk",
+    "polars"
 ]
 
 TEST_REQUIRES = ["pytest", "pre-commit", "py-spy"]
