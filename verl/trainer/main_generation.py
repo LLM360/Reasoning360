@@ -14,58 +14,66 @@
 """
 Generate responses given a dataset of prompts
 """
-import ray
-import numpy as np
-import hydra
+
 import os
 import json
 
-os.environ['NCCL_DEBUG'] = 'WARN'
-os.environ['TOKENIZERS_PARALLELISM'] = 'true'
+import hydra
+import numpy as np
+import ray
+
+os.environ["NCCL_DEBUG"] = "WARN"
+os.environ["TOKENIZERS_PARALLELISM"] = "true"
 # os.environ['TORCH_COMPILE_DISABLE'] = '1'
 
-from verl.utils.model import compute_position_id_with_mask
+from pprint import pprint
 
 import pandas as pd
-
-from transformers import AutoTokenizer
+from omegaconf import OmegaConf
 
 from verl import DataProto
-from verl.utils.fs import copy_to_local
-from verl.workers.fsdp_workers import ActorRolloutRefWorker
-from verl.utils.hdfs_io import makedirs
+from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
 from verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, RayWorkerGroup
+from verl.utils import hf_tokenizer
+from verl.utils.fs import copy_to_local
+from verl.utils.hdfs_io import makedirs
+from verl.utils.model import compute_position_id_with_mask
+from verl.workers.fsdp_workers import ActorRolloutRefWorker
+from verl.utils.device import is_cuda_available
 
 
-@hydra.main(config_path='config', config_name='generation', version_base=None)
+@hydra.main(config_path="config", config_name="generation", version_base=None)
 def main(config):
     run_generation(config)
 
 
 def run_generation(config) -> None:
-
     if not ray.is_initialized():
         # this is for local ray cluster
-        ray.init(runtime_env={'env_vars': {'TOKENIZERS_PARALLELISM': 'true', 'NCCL_DEBUG': 'WARN'}})
+        ray.init(
+            runtime_env={"env_vars": {"TOKENIZERS_PARALLELISM": "true", "NCCL_DEBUG": "WARN"}},
+            num_cpus=config.ray_init.num_cpus,
+        )
 
     ray.get(main_task.remote(config))
 
 
 @ray.remote(num_cpus=1)
 def main_task(config):
-    from pprint import pprint
-    from omegaconf import OmegaConf
     pprint(OmegaConf.to_container(config, resolve=True))  # resolve=True will eval symbol values
     OmegaConf.resolve(config)
-    local_path = copy_to_local(config.model.path)
-    from verl.utils import hf_tokenizer
-    tokenizer = hf_tokenizer(local_path)
 
+    local_path = copy_to_local(config.model.path)
+    trust_remote_code = config.data.get("trust_remote_code", False)
+    tokenizer = hf_tokenizer(local_path, trust_remote_code=trust_remote_code)
+
+    # NOTE: added by Reasoning360
     if 'olmoe' in local_path.lower() and 'instruct' not in local_path.lower():
         tokenizer.chat_template = "{{ bos_token }}{% for message in messages %}{% if message['role'] == 'system' %}{{ '<|system|>\n' + message['content'] + '\n' }}{% elif message['role'] == 'user' %}{{ '<|user|>\n' + message['content'] + '\n' }}{% elif message['role'] == 'assistant' %}{% if not loop.last %}{{ '<|assistant|>\n'  + message['content'] + eos_token + '\n' }}{% else %}{{ '<|assistant|>\n'  + message['content'] + eos_token }}{% endif %}{% endif %}{% if loop.last and add_generation_prompt %}{{ '<|assistant|>\n' }}{% endif %}{% endfor %}"
 
-    if config.rollout.temperature == 0.:
-        assert config.data.n_samples == 1, 'When temperature=0, n_samples must be 1.'
+    if config.rollout.temperature == 0.0:
+        assert config.data.n_samples == 1, "When temperature=0, n_samples must be 1."
+    assert config.data.n_samples >= 1, "n_samples should always >= 1"
 
     # read dataset. Note that the dataset should directly contain chat template format (e.g., a list of dictionary)
     is_polars_df = False
@@ -87,15 +95,16 @@ def main_task(config):
         chat_lst = chat_lst * config.data.n_samples
         ground_truth_lst = ground_truth_lst * config.data.n_samples
 
-    tokenizer.padding_side = 'left'
+    tokenizer.padding_side = "left"
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    ray_cls_with_init = RayClassWithInitArgs(cls=ray.remote(ActorRolloutRefWorker), config=config, role='rollout')
+    ray_cls_with_init = RayClassWithInitArgs(cls=ray.remote(ActorRolloutRefWorker), config=config, role="rollout")
     resource_pool = RayResourcePool(process_on_nodes=[config.trainer.n_gpus_per_node] * config.trainer.nnodes)
-    wg = RayWorkerGroup(resource_pool=resource_pool, ray_cls_with_init=ray_cls_with_init)
+    wg = RayWorkerGroup(resource_pool=resource_pool, ray_cls_with_init=ray_cls_with_init, device_name="cuda" if is_cuda_available else "npu")
     wg.init_model()
 
+    # NOTE: updated by Reasoning360. Sample n times together
     total_samples = len(chat_lst) # chat_lst is repeated
     # real_batch_size = data.batch['input_ids'].shape[0]
     config_batch_size = config.data.batch_size
@@ -104,51 +113,54 @@ def main_task(config):
 
     output_lst = []
 
-    for batch_idx in range(num_batch):
-        print(f'[{batch_idx+1}/{num_batch}] Start to process.')
-        batch_chat_lst = chat_lst[batch_idx * config_batch_size:(batch_idx + 1) * config_batch_size]
-        inputs = tokenizer.apply_chat_template(batch_chat_lst,
-                                               add_generation_prompt=True,
-                                               padding=True,
-                                               truncation=True,
-                                               max_length=config.rollout.prompt_length,
-                                               return_tensors='pt',
-                                               return_dict=True,
-                                               tokenize=True)
-        input_ids = inputs['input_ids']
-        attention_mask = inputs['attention_mask']
-        position_ids = compute_position_id_with_mask(attention_mask)
+    # total_samples = len(dataset)
+    # config_batch_size = config.data.batch_size
+    # num_batch = -(-total_samples // config_batch_size)
+    # output_lst = [[] for _ in range(config.data.n_samples)]
 
-        batch_dict = {'input_ids': input_ids, 'attention_mask': attention_mask, 'position_ids': position_ids}
+    for batch_idx in range(num_batch):
+        print(f"[{batch_idx + 1}/{num_batch}] Start to process.")
+        batch_chat_lst = chat_lst[batch_idx * config_batch_size : (batch_idx + 1) * config_batch_size]
+        inputs = tokenizer.apply_chat_template(
+            batch_chat_lst,
+            add_generation_prompt=True,
+            padding=True,
+            truncation=True,
+            max_length=config.rollout.prompt_length,
+            return_tensors="pt",
+            return_dict=True,
+            tokenize=True,
+        )
+        input_ids = inputs["input_ids"]
+        attention_mask = inputs["attention_mask"]
+        position_ids = compute_position_id_with_mask(attention_mask)
+        batch_dict = {"input_ids": input_ids, "attention_mask": attention_mask, "position_ids": position_ids}
 
         data = DataProto.from_dict(batch_dict)
-        real_batch_size = data.batch['input_ids'].shape[0]
-        if real_batch_size % dispatch_dp_size != 0:
-            dummy_data_size = dispatch_dp_size - real_batch_size % dispatch_dp_size
-            if dummy_data_size <= real_batch_size:
-                dummy_data = data[:dummy_data_size]
-            else:
-                dummy_data = data.repeat(-(-dummy_data_size // real_batch_size))[:dummy_data_size]
-            data = DataProto.concat([data, dummy_data])
-            print(
-                f'real_batch_size {real_batch_size} is not divisible by dispatch_dp_size {dispatch_dp_size}, add {dummy_data_size} dummy data'
-            )
+        # NOTE: modified by Reasoning360. Sample n times altogether.
+        data_padded, pad_size = pad_dataproto_to_divisor(data, wg.world_size)
 
-        batch_size = data.batch['input_ids'].shape[0]
-        assert batch_size % dispatch_dp_size == 0, f'batch_size {batch_size} is not divisible by dispatch_dp_size {dispatch_dp_size}'
+        batch_size = data_padded.batch['input_ids'].shape[0]
 
         print(f'[{batch_idx+1}/{num_batch}] Start to generate.')
         # START TO GENERATE FOR 1 TIME SINCE WE'VE ALREADY HANDLED n_samples beforehand
-        output = wg.generate_sequences(data)
+        output_padded = wg.generate_sequences(data_padded)
         # remove dummy data
-        output = output[:real_batch_size]
-        output_text = tokenizer.batch_decode(output.batch['input_ids'][:, -config.rollout.response_length:],
-                                                skip_special_tokens=False)
+        output = unpad_dataproto(output_padded, pad_size=pad_size)
+        output_texts = []
+        for i in range(len(output)):
+            data_item = output[i]
+            prompt_length = data_item.batch["prompts"].shape[-1]
+            # TODO: batch this operation.
+            valid_response_length = data_item.batch["attention_mask"][prompt_length:].sum()
+            valid_response_ids = data_item.batch["responses"][:valid_response_length]
+            response_str = tokenizer.decode(valid_response_ids, skip_special_tokens=True)
+            output_texts.append(response_str)
 
         # remove the padding
         pad_token = tokenizer.pad_token
         output_text_unpad = []
-        for text in output_text:
+        for text in output_texts:
             output_text_unpad.append(text.replace(pad_token, ''))
 
         output_lst.extend(output_text_unpad)
@@ -175,7 +187,7 @@ def main_task(config):
         output_dir = os.path.dirname(config.data.output_path)
         makedirs(output_dir, exist_ok=True)
         dataset.to_parquet(config.data.output_path)
-    
+    # NOTE: added by Reasoning360. dump results
     result_list = [
         {
             "prompt": chat,
@@ -188,8 +200,6 @@ def main_task(config):
     with open(config.data.output_path.replace('.parquet', f'_{model_name}.json'), 'w', encoding='utf-8') as f:
         json.dump(result_list, f, indent=2, ensure_ascii=False)
 
-    return output_text
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

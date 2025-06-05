@@ -9,6 +9,12 @@ on:
   branch_protection_rule:
   # To guarantee Maintained check is occasionally updated. See
   # https://github.com/ossf/scorecard/blob/main/docs/checks.md#maintained
+  schedule:
+    - cron: "27 7 * * 1"
+  push:
+    branches:
+      - main
+      - v0.*
 
   # TODO: enable when we make this a public/enterprise repository
 # Declare default permissions as read only.

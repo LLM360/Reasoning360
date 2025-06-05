@@ -12,10 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .naive import NaiveRewardManager
-from .naive_parallel import NaiveParallelRewardManager
-from .prime import PrimeRewardManager
 from .batch import BatchRewardManager
 from .dapo import DAPORewardManager
+from .naive import NaiveRewardManager
+from .prime import PrimeRewardManager
+
+# Added by Reasoning360
+from .naive_parallel import NaiveParallelRewardManager
 from .async_dapo import AsyncDAPORewardManager
 from .llm_judge import LLMJudgeRewardManager
+
+__all__ = ["BatchRewardManager", "DAPORewardManager", "NaiveRewardManager", "PrimeRewardManager",
+           # Added by Reasoning360
+           "NaiveParallelRewardManager", "AsyncDAPORewardManager", "LLMJudgeRewardManager",
+           ]

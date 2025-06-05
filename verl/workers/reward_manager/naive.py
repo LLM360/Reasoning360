@@ -12,30 +12,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from verl import DataProto
-from verl.utils.reward_score import _default_compute_score
+from collections import defaultdict
+
 import torch
 from collections import defaultdict
+
+from verl import DataProto
+from verl.utils.reward_score import default_compute_score
 
 
 class NaiveRewardManager:
     """The reward manager."""
 
-    def __init__(self, tokenizer, num_examine, compute_score=None, reward_fn_key='data_source', **kwargs) -> None:
+    def __init__(self, tokenizer, num_examine, compute_score=None, reward_fn_key="data_source") -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
-        self.compute_score = compute_score or _default_compute_score
+        self.compute_score = compute_score or default_compute_score
         self.reward_fn_key = reward_fn_key
 
-    def __call__(self, data: DataProto, return_dict: bool = False):
+    def __call__(self, data: DataProto, return_dict=False):
         """We will expand this function gradually based on the available datasets"""
 
         # If there is rm score, we directly return rm score. Otherwise, we compute via rm_score_fn
         if "rm_scores" in data.batch.keys():
             if return_dict:
-                return {"reward_tensor": data.batch['rm_scores']}
+                return {"reward_tensor": data.batch["rm_scores"]}
             else:
-                return data.batch['rm_scores']
+                return data.batch["rm_scores"]
 
         reward_tensor = torch.zeros_like(data.batch["responses"], dtype=torch.float32)
         reward_extra_info = defaultdict(list)
@@ -74,14 +77,14 @@ class NaiveRewardManager:
             )
 
             if isinstance(score, dict):
-                reward = score['score']
+                reward = score["score"]
                 # Store the information including original reward
                 for key, value in score.items():
                     reward_extra_info[key].append(value)
             else:
                 reward = score
-            
-            reward_tensor[i, valid_response_length-1] = reward
+
+            reward_tensor[i, valid_response_length - 1] = reward
 
             if data_source not in already_print_data_sources:
                 already_print_data_sources[data_source] = 0
@@ -91,12 +94,11 @@ class NaiveRewardManager:
                 print("[prompt]", prompt_str)
                 print("[response]", response_str)
                 print("[ground_truth]", ground_truth)
-                
                 if isinstance(score, dict):
                     for key, value in score.items():
                         print(f"[{key}]", value)
                 else:
-                    print(f"[score]", score)
+                    print("[score]", score)
 
         if return_dict:
             return {

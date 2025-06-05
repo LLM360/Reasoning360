@@ -15,6 +15,7 @@
 Preprocess the Geometry3k dataset to parquet format
 """
 
+import argparse
 import os
 import datasets
 
@@ -32,8 +33,8 @@ if __name__ == '__main__':
 
     dataset = datasets.load_dataset(data_source)
 
-    train_dataset = dataset['train']
-    test_dataset = dataset['test']
+    train_dataset = dataset["train"]
+    test_dataset = dataset["test"]
 
     instruction_following = (
         r'You FIRST think about the reasoning process as an internal monologue and then provide the final answer. '
@@ -42,7 +43,6 @@ if __name__ == '__main__':
 
     # add a row to each data item that represents a unique id
     def make_map_fn(split):
-
         def process_fn(example, idx):
             problem = example.pop('problem')
             prompt = problem + ' ' + instruction_following
@@ -78,8 +78,8 @@ if __name__ == '__main__':
     local_dir = args.local_dir
     hdfs_dir = args.hdfs_dir
 
-    train_dataset.to_parquet(os.path.join(local_dir, 'train.parquet'))
-    test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
+    train_dataset.to_parquet(os.path.join(local_dir, "train.parquet"))
+    test_dataset.to_parquet(os.path.join(local_dir, "test.parquet"))
 
     if hdfs_dir is not None:
         makedirs(hdfs_dir)

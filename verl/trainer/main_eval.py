@@ -17,82 +17,36 @@ The input is a parquet file that contains N generated sequences and (optional) t
 
 """
 
-import os
-import json
-import math
+from collections import defaultdict
+
 import hydra
-from verl.utils.fs import copy_to_local
-from verl.utils.reward_score import (
-    math,
-    gsm8k,
-    cruxeval,
-    tablereason,
-    naive_dapo,
-    coder1,
-    gpqa,
-    supergpqa,
-    arcagi,
-    ifeval,
-    livebench,
-    zebra_puzzle,
-    graph_dataset,
-    codeio,
-)
-import pandas as pd
 import numpy as np
+import pandas as pd
+import ray
 from tqdm import tqdm
 
+from verl.trainer.ppo.reward import get_custom_reward_fn
+from verl.utils.fs import copy_to_local
+from verl.utils.reward_score import default_compute_score
 
-def select_reward_fn(data_source):
-    if data_source == "lighteval/MATH":
-        return math.compute_score
-    elif data_source.startswith("simulation__cruxeval"):
-        return cruxeval.compute_score
-    elif data_source.startswith("table"):
-        return tablereason.compute_score
-    # math
-    elif data_source in ["math__aime_repeated_8x", "math__math", "math__olympiad_bench", "math__aime2025_repeated_8x"]:
-        return naive_dapo.compute_score
-    # code gen
-    elif data_source in [
-        "codegen__humaneval",
-        "codegen__humanevalplus",
-        "codegen__mbpp",
-        "codegen__mbppplus",
-        "codegen__livecodebench",
-    ]:
-        return coder1.compute_score
-    elif data_source in ['stem__gpqa', 'stem__gpqa_diamond']:
-        return supergpqa.compute_score
-    elif data_source in ['stem__gpqa_diamond_no_box']:
-        return gpqa.compute_score
-    elif data_source == "stem__supergpqa":
-        return supergpqa.compute_score
-    elif data_source in ["simulation__arcagi1", "simulation__barc"]:
-        return arcagi.compute_score
-    elif data_source in ["ood__ifeval"]:
-        return ifeval.compute_score
-    elif data_source in ["ood__livebench"]:
-        return livebench.compute_score
-    elif data_source.startswith("logic__zebra_puzzle"):
-        return zebra_puzzle.compute_score
-    elif data_source.startswith("logic__graph_logical_dataset"):
-        return graph_dataset.compute_score
-    elif data_source.startswith("simulation__codeio"):
-        return codeio.compute_score
-    else:
-        raise NotImplementedError(f"Data source {data_source} not implemented")
+
+@ray.remote
+def process_item(reward_fn, data_source, response_lst, reward_data):
+    ground_truth = reward_data["ground_truth"]
+    score_lst = [reward_fn(data_source, r, ground_truth) for r in response_lst]
+    return data_source, np.mean(score_lst)
 
 
 @hydra.main(config_path="config", config_name="evaluation", version_base=None)
 def main(config):
-    local_path = copy_to_local(config.data.path)
+    local_path = copy_to_local(config.data.path, use_shm=config.data.get('use_shm', False))    
+    # NOTE: added by Reasoning360. Use polars for livecodebench
     if 'livecodebench' in local_path:
         import polars as pl
         dataset = pl.read_parquet(local_path)
     else:
         dataset = pd.read_parquet(local_path)
-    prompts = dataset[config.data.prompt_key]
+    # NOTE: reasoning 360 prompts = dataset[config.data.prompt_key]
     responses = dataset[config.data.response_key]
     data_sources = dataset[config.data.data_source_key]
     reward_model_data = dataset[config.data.reward_model_key]
@@ -101,36 +55,43 @@ def main(config):
     except:
         extra_info_data = None
 
-    passes = 0
-    avg_pass = 0
-    k = None
-
     total = len(dataset)
 
-    for i in tqdm(range(total), desc="evaluating..."):
-        response_lst = responses[i]
-        data_source = data_sources[i]
-        # select reward score based on data_source
-        prompt = prompts[i]
-        reward_data = reward_model_data[i]
-        reward_fn = select_reward_fn(data_source)
-        ground_truth = reward_data["ground_truth"]
-        extra_info = extra_info_data[i] if extra_info_data is not None else None
-        score_lst = []
-        k = len(response_lst)
-        for r in response_lst:
-            score = reward_fn(r, ground_truth, extra_info=extra_info)
-            score_lst.append(score['acc'])
+    # Initialize Ray
+    if not ray.is_initialized():
+        ray.init(num_cpus=config.ray_init.num_cpus)
 
-        max_score = np.max(score_lst)
-        avg_pass += np.mean(score_lst)
+    # evaluate test_score based on data source
+    data_source_reward = defaultdict(list)
+    # NOTE: modified by Reasoning360. Use the default reward function if no customized one is provided.
+    compute_score = get_custom_reward_fn(config) or default_compute_score
 
-        if max_score > 0:
-            passes += 1
+    # Create remote tasks
+    remote_tasks = [process_item.remote(compute_score, data_sources[i], responses[i], reward_model_data[i]) for i in range(total)]
+
+    # Process results as they come in
+    # NOTE: added by Reasoning360, count the pass rate
+    passes = 0
+    avg_pass = 0
+    with tqdm(total=total) as pbar:
+        while len(remote_tasks) > 0:
+            # Use ray.wait to get completed tasks
+            done_ids, remote_tasks = ray.wait(remote_tasks)
+            for result_id in done_ids:
+                data_source, score = ray.get(result_id)
+                data_source_reward[data_source].append(score)
+                pbar.update(1)
+                # NOTE: added by Reasoning360, count the pass rate
+                passes += score > 0
+                avg_pass += score
+
+    # NOTE: added by Reasoning360, print and count the pass rate.
+    import os
+    import json
+    k = len(responses[-1])
 
     print(f"pass@{k}: {passes / total * 100.0}")
     print(f"pass@1_(avg{k}): {avg_pass / total * 100.0}")
-    
     metric_output_path = config.data.path.replace(".parquet", "_metric.json")
     if os.path.exists(metric_output_path):
         with open(metric_output_path, "r") as f:
@@ -141,6 +102,14 @@ def main(config):
         metric_data = {f"pass@{k}": passes / total * 100.0, f"pass@1_(avg{k})": avg_pass / total * 100.0}
     with open(metric_output_path, "w") as f:
         json.dump(metric_data, f, indent=4)
+    ###
+
+    metric_dict = {}
+    for data_source, rewards in data_source_reward.items():
+        metric_dict[f"test_score/{data_source}"] = np.mean(rewards)
+
+    print(metric_dict)
+
 
 if __name__ == "__main__":
     main()

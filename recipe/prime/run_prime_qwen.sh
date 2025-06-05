@@ -1,9 +1,12 @@
 set -x
 
-export VLLM_ATTENTION_BACKEND=XFORMERS
+# If you are using vllm<=0.6.3, you might need to set the following environment variable to avoid bugs:
+# export VLLM_ATTENTION_BACKEND=XFORMERS
 
 gsm8k_train_path=$HOME/data/gsm8k/train.parquet
 gsm8k_test_path=$HOME/data/gsm8k/test.parquet
+
+# download from https://huggingface.co/datasets/PRIME-RL/Eurus-2-RL-Data
 math_train_path=$HOME/data/math/train.parquet
 math_test_path=$HOME/data/math/test.parquet
 
@@ -33,6 +36,7 @@ python3 -m recipe.prime.main_prime \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.actor.fsdp_config.param_offload=True \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
+    actor_rollout_ref.actor.use_kl_loss=False \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=32 \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
@@ -40,6 +44,9 @@ python3 -m recipe.prime.main_prime \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=32 \
     algorithm.adv_estimator=rloo \
+    algorithm.use_kl_in_reward=True \
+    algorithm.kl_penalty=kl \
+    algorithm.kl_ctrl.kl_coef=0.001 \
     reward_model.model.path=$model_path \
     reward_model.micro_batch_size_per_gpu=1 \
     reward_model.model.update=before \
