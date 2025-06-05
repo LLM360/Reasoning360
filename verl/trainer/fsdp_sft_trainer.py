@@ -203,10 +203,6 @@ class FSDPSFTTrainer:
 
                 apply_monkey_patch(model=self.model, ulysses_sp_size=self.config.ulysses_sequence_parallel_size)
 
-            if self.use_remove_padding or self.config.ulysses_sequence_parallel_size > 1:
-                from verl.models.transformers.monkey_patch import apply_monkey_patch
-                apply_monkey_patch(model=self.model)
-
             # Apply Liger kernel if use_liger is enabled
             if self.config.model.get("use_liger", False):
                 from liger_kernel.transformers.monkey_patch import _apply_liger_kernel_to_instance

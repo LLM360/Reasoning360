@@ -421,19 +421,16 @@ def agg_loss(loss_mat: torch.Tensor, loss_mask: torch.Tensor, loss_agg_mode: str
     """
     Aggregate the loss matrix into a scalar.
     Args:
-        loss_mat: `(torch.Tensor)`
+        loss_mat: `(torch.Tensor)`:
             shape: (bs, response_length)
-        loss_mask: `(torch.Tensor)`
+        loss_mask: `(torch.Tensor)`:
             shape: (bs, response_length)
-        loss_agg_mode: (str) choices: "token-mean" / "seq-mean-token-sum" / "seq-mean-token-mean"
-            "token-mean": take the overall mean over the tokens x batch.
-            "seq-mean-token-sum": sum the loss over the tokens first, then mean over the batch.
-            "seq-mean-token-mean": mean the loss over the tokens first, then mean over the batch.
-            "token-mean" is the default behavior
+        loss_agg_mode: (str) choices:
+            method to aggregate the loss matrix into a scalar.
 
     Returns:
         loss: `a scalar torch.Tensor`
-            the aggregated loss
+            aggregated loss
     
     """
     if loss_agg_mode == "token-mean":

@@ -15,8 +15,8 @@
 Generate responses given a dataset of prompts
 """
 
-import os
 import json
+import os
 
 import hydra
 import numpy as np
@@ -90,7 +90,7 @@ def main_task(config):
         chat_lst = [chat.tolist() for chat in chat_lst]
         ground_truth_lst = dataset["reward_model"].tolist()
     
-    # handle n_samples
+    # NOTE: added by Reasoning360. handle n_samples
     if config.data.n_samples > 1:
         chat_lst = chat_lst * config.data.n_samples
         ground_truth_lst = ground_truth_lst * config.data.n_samples

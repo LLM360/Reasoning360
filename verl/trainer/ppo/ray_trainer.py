@@ -29,7 +29,6 @@ from enum import Enum
 from pprint import pprint
 from typing import Dict, Optional, Type
 
-import ray
 import numpy as np
 import ray
 import torch
@@ -48,6 +47,7 @@ from verl.trainer.ppo import core_algos
 from verl.trainer.ppo.core_algos import agg_loss
 from verl.trainer.ppo.metric_utils import (
     compute_data_metrics,
+    compute_difficulty_histogram_metrics,   # NOTE: added by Reasoning360
     compute_throughout_metrics,
     compute_timing_metrics,
     process_validation_metrics,
@@ -412,7 +412,7 @@ class RayPPOTrainer:
             self.use_critic = False
         else:
             raise NotImplementedError
-            
+
         self._validate_config()
         self._create_dataloader(train_dataset, val_dataset, collate_fn, train_sampler)
 
@@ -480,13 +480,13 @@ class RayPPOTrainer:
         # Actor
         # check if train_batch_size is larger than ppo_mini_batch_size
         # if NOT dynamic_bsz, we must ensure:
-        #   ppo_mini_batch_size is divisible by ppo_micro_batch_size
-        #   ppo_micro_batch_size * sequence_parallel_size >= n_gpus
+        #    ppo_mini_batch_size is divisible by ppo_micro_batch_size
+        #    ppo_micro_batch_size * sequence_parallel_size >= n_gpus
         if not config.actor_rollout_ref.actor.use_dynamic_bsz:
             assert config.data.train_batch_size >= config.actor_rollout_ref.actor.ppo_mini_batch_size
             sp_size = config.actor_rollout_ref.actor.get("ulysses_sequence_parallel_size", 1)
             if config.actor_rollout_ref.actor.ppo_micro_batch_size is not None:
-                assert config.actor_rollout_ref.actor.ppo_mini_batch_size % config.actor_rollotu_ref.actor.ppo_micro_batch_size == 0
+                assert config.actor_rollout_ref.actor.ppo_mini_batch_size % config.actor_rollout_ref.actor.ppo_micro_batch_size == 0
                 assert config.actor_rollout_ref.actor.ppo_micro_batch_size * sp_size >= n_gpus
 
         assert config.actor_rollout_ref.actor.loss_agg_mode in [
@@ -504,7 +504,7 @@ class RayPPOTrainer:
             assert config.data.train_batch_size >= config.critic.ppo_mini_batch_size
             sp_size = config.critic.get("ulysses_sequence_parallel_size", 1)
             if config.critic.ppo_micro_batch_size is not None:
-                assert (config.critic.ppo_mini_batch_size % config.critic.ppo_micro_batch_size== 0)
+                assert config.critic.ppo_mini_batch_size % config.critic.ppo_micro_batch_size == 0
                 assert config.critic.ppo_micro_batch_size * sp_size >= n_gpus
 
         # Check if use_remove_padding is enabled when using sequence parallelism for fsdp
@@ -654,18 +654,15 @@ class RayPPOTrainer:
 
         for test_data in self.val_dataloader:
             test_batch = DataProto.from_single_dict(test_data)
-            print(f"Shape of test_batch: {test_batch.batch['input_ids'].shape}")
-
-            # repeat test batch
-            test_batch = test_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.val_kwargs.n,
-                                        interleave=True)
+            # NOTE: print statements in this loop added by Reasoning360 are temporarily disabled
+            # print(f"Shape of test_batch: {test_batch.batch['input_ids'].shape}")
 
             # repeat test batch
             test_batch = test_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.val_kwargs.n, interleave=True)
 
             # we only do validation on rule-based rm
             if self.config.reward_model.enable and test_batch[0].non_tensor_batch["reward_model"]["style"] == "model":
-                print(f"EXITING VALIDATION HERE BECAUSE {self.config.reward_model.enable=} and {test_batch[0].non_tensor_batch['reward_model']['style']=}")
+                # print(f"EXITING VALIDATION HERE BECAUSE {self.config.reward_model.enable=} and {test_batch[0].non_tensor_batch['reward_model']['style']=}")
                 return {}
 
             # Store original inputs
@@ -720,14 +717,9 @@ class RayPPOTrainer:
             result = self.val_reward_fn(test_batch, return_dict=True)
             reward_tensor = result["reward_tensor"]
             scores = reward_tensor.sum(-1).cpu().tolist()
-            print(f"Shape of reward_tensor: {reward_tensor.shape}")
+            # print(f"Shape of reward_tensor: {reward_tensor.shape}")
             
             sample_scores.extend(scores)
-            
-            reward_extra_infos_dict["reward"].extend(scores)
-            if "reward_extra_info" in result:
-                for key, lst in result["reward_extra_info"].items():
-                    reward_extra_infos_dict[key].extend(lst)
 
             reward_extra_infos_dict["reward"].extend(scores)
             if "reward_extra_info" in result:
@@ -806,9 +798,7 @@ class RayPPOTrainer:
         """
         self.resource_pool_manager.create_resource_pool()
 
-        self.resource_pool_to_cls = {
-            pool: {} for pool in self.resource_pool_manager.resource_pool_dict.values()
-        }
+        self.resource_pool_to_cls = {pool: {} for pool in self.resource_pool_manager.resource_pool_dict.values()}
 
         # create actor and rollout
         if self.hybrid_engine:
@@ -922,15 +912,11 @@ class RayPPOTrainer:
         if self.config.trainer.default_hdfs_dir is not None:
             raise NotImplementedError("load from hdfs is not implemented yet")
         else:
-            checkpoint_folder = (
-                self.config.trainer.default_local_dir
-            )  # TODO: check path
+            checkpoint_folder = self.config.trainer.default_local_dir   # TODO: check path
             if not os.path.isabs(checkpoint_folder):
                 working_dir = os.getcwd()
                 checkpoint_folder = os.path.join(working_dir, checkpoint_folder)
-            global_step_folder = find_latest_ckpt_path(
-                checkpoint_folder
-            )  # None if no latest
+            global_step_folder = find_latest_ckpt_path(checkpoint_folder)  # None if no latest
 
         # find global_step_folder
         if self.config.trainer.resume_mode == "auto":
@@ -977,9 +963,7 @@ class RayPPOTrainer:
         world_size = self.actor_rollout_wg.world_size
         global_partition_lst = get_seqlen_balanced_partitions(global_seqlen_lst, k_partitions=world_size, equal_size=True)
         # reorder based on index. The data will be automatically equally partitioned by dispatch function
-        global_idx = torch.tensor(
-            [j for partition in global_partition_lst for j in partition]
-        )
+        global_idx = torch.tensor([j for partition in global_partition_lst for j in partition])
         batch.reorder(global_idx)
         global_balance_stats = log_seqlen_unbalance(seqlen_list=global_seqlen_lst, partitions=global_partition_lst, prefix=logging_prefix)
         metrics.update(global_balance_stats)
@@ -1263,6 +1247,3 @@ class RayPPOTrainer:
                     pprint(f"Final validation metrics: {last_val_metrics}")
                     progress_bar.close()
                     return
-
-                progress_bar.update(1)
-                self.global_steps += 1

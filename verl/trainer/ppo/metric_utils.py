@@ -95,6 +95,9 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
             - critic/advantages/mean, max, min: Statistics about advantages
             - critic/returns/mean, max, min: Statistics about returns
             - critic/values/mean, max, min: Statistics about critic values (if use_critic=True)
+            - critic/vf_explained_var: Explained variance of the value function (if use_critic=True)
+            - response_length/mean, max, min, clip_ratio: Statistics about response lengths
+            - prompt_length/mean, max, min, clip_ratio: Statistics about prompt lengths
     """
     sequence_score = batch.batch["token_level_scores"].sum(-1)
     sequence_reward = batch.batch["token_level_rewards"].sum(-1)
@@ -116,12 +119,13 @@ def compute_data_metrics(batch: DataProto, use_critic: bool = True) -> Dict[str,
     valid_adv = torch.masked_select(advantages, response_mask)
     valid_returns = torch.masked_select(returns, response_mask)
 
+    if use_critic:
         values = batch.batch["values"]
         valid_values = torch.masked_select(values, response_mask)
         return_diff_var = torch.var(valid_returns - valid_values)
         return_var = torch.var(valid_returns)
 
-    # Group response lengths and rewards by data source
+    # NOTE: added by Reasoning360. Group response lengths and rewards by data source
     data_source_response_lengths = defaultdict(list)
     data_source_scores = defaultdict(list)
     for i, data_source in enumerate(batch.non_tensor_batch['data_source']):
@@ -445,7 +449,6 @@ def process_validation_metrics(data_sources: list[str], sample_inputs: list[str]
             for metric_name, prompt_vals in metric2prompt_vals.items():
                 data_src2var2metric2val[data_source][var_name][metric_name] = np.mean(prompt_vals)
 
-    
     return data_src2var2metric2val
 
 def compute_difficulty_histogram_metrics(batch: DataProto, config) -> Dict[str, Any]:
