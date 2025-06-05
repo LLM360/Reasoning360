@@ -97,22 +97,16 @@ def logprobs_from_logits_v2(logits: torch.FloatTensor, labels):
     A memory efficient implementation of logprobs_from_logits
     """
     if logits.dtype in [torch.float32, torch.float64]:
-        logits_labels = torch.gather(
-            logits, dim=-1, index=labels.unsqueeze(-1)
-        ).squeeze(-1)
+        logits_labels = torch.gather(logits, dim=-1, index=labels.unsqueeze(-1)).squeeze(-1)
         # loop to reduce peak mem consumption
         logsumexp_values = torch.stack([torch.logsumexp(logit, dim=-1) for logit in logits])
         logprobs_labels = logits_labels - logsumexp_values  # log_softmax(x_i) = x_i - logsumexp(x)
     else:
         # logsumexp approach is unstable with bfloat16, fall back to slightly less efficent approach
         logprobs_labels = []
-        for row_logits, row_labels in zip(
-            logits, labels
-        ):  # loop to reduce peak mem consumption
+        for row_logits, row_labels in zip(logits, labels):  # loop to reduce peak mem consumption
             row_logprobs = F.log_softmax(row_logits, dim=-1)
-            row_logprobs_labels = row_logprobs.gather(
-                dim=-1, index=row_labels.unsqueeze(-1)
-            ).squeeze(-1)
+            row_logprobs_labels = row_logprobs.gather(dim=-1, index=row_labels.unsqueeze(-1)).squeeze(-1)
             logprobs_labels.append(row_logprobs_labels)
         logprobs_labels = torch.stack(logprobs_labels)
     return logprobs_labels
@@ -167,9 +161,7 @@ def masked_var(values, mask, unbiased=True):
         # note that if mask_sum == 1, then there is a division by zero issue
         # to avoid it you just need to use a larger minibatch_size
         if mask_sum == 1:
-            raise ValueError(
-                "The sum of the mask is one, which can cause a division by zero."
-            )
+            raise ValueError("The sum of the mask is one, which can cause a division by zero.")
         bessel_correction = mask_sum / (mask_sum - 1)
         variance = variance * bessel_correction
     return variance
@@ -226,9 +218,7 @@ def compute_grad_norm(model: nn.Module):
     return total_grad_square
 
 
-def broadcast_dict_tensor(
-    tensors: Union[Dict[str, torch.Tensor], TensorDict], src, group
-):
+def broadcast_dict_tensor(tensors: Union[Dict[str, torch.Tensor], TensorDict], src, group):
     """
     TODO: optimize this. Technically, we only need one broadcast
     """
@@ -237,9 +227,7 @@ def broadcast_dict_tensor(
         torch.distributed.broadcast(tensors[key], src=src, group=group, async_op=False)
 
 
-def allgather_dict_tensors(
-    tensors: Union[Dict[str, torch.Tensor], TensorDict], size, group, dim=0
-):
+def allgather_dict_tensors(tensors: Union[Dict[str, torch.Tensor], TensorDict], size, group, dim=0):
     """
     TODO: optimize this.
     - We can use async ops
@@ -403,9 +391,7 @@ def log_probs_from_logits_response(input_ids, logits, response_length):
     return response_log_prob
 
 
-def log_probs_from_logits_response_rmpad(
-    input_ids, attention_mask, logits_rmpad, response_length
-):
+def log_probs_from_logits_response_rmpad(input_ids, attention_mask, logits_rmpad, response_length):
     """Compute the log_probs from logits with rmpad logits and pad input. Note that
     logits_rmpad = model(input_ids_rmpad). For each sentences, there is a shift between
     logits and input_ids.
@@ -421,9 +407,7 @@ def log_probs_from_logits_response_rmpad(
     from flash_attn.bert_padding import pad_input, unpad_input
 
     batch_size, seqlen = input_ids.shape
-    input_ids_rmpad, indices, *_ = unpad_input(
-        input_ids.unsqueeze(-1), attention_mask=attention_mask
-    )
+    input_ids_rmpad, indices, *_ = unpad_input(input_ids.unsqueeze(-1), attention_mask=attention_mask)
     input_ids_rmpad = input_ids_rmpad.squeeze(-1)
     input_ids_rmpad_rolled = torch.roll(input_ids_rmpad, shifts=-1, dims=0)
     full_log_probs_rmpad = logprobs_from_logits(logits=logits_rmpad, labels=input_ids_rmpad_rolled)  # (total_nnz,)
@@ -432,9 +416,7 @@ def log_probs_from_logits_response_rmpad(
     return output
 
 
-def log_probs_from_logits_all_rmpad(
-    input_ids_rmpad, logits_rmpad, indices, batch_size, seqlen, response_length
-):
+def log_probs_from_logits_all_rmpad(input_ids_rmpad, logits_rmpad, indices, batch_size, seqlen, response_length):
     """Compute the log_probs from logits with rmpad input_ids and logits. Note that
     logits_rmpad = model(input_ids_rmpad). For each sentences, there is a shift between
     logits and input_ids.
@@ -565,9 +547,7 @@ def prepare_decoder_attention_mask(attention_mask, input_shape, inputs_embeds):
 
 
 # Copied from transformers.models.bart.modeling_bart._make_causal_mask
-def _make_causal_mask(
-    input_ids_shape: torch.Size, dtype: torch.dtype, device: torch.device
-):
+def _make_causal_mask(input_ids_shape: torch.Size, dtype: torch.dtype, device: torch.device):
     """
     Make causal mask used for bi-directional self-attention.
     """
@@ -591,9 +571,7 @@ def _expand_mask(mask: torch.Tensor, dtype: torch.dtype, tgt_len: Optional[int] 
 
     inverted_mask = 1.0 - expanded_mask
 
-    return inverted_mask.masked_fill(
-        inverted_mask.to(torch.bool), torch.finfo(dtype).min
-    )
+    return inverted_mask.masked_fill(inverted_mask.to(torch.bool), torch.finfo(dtype).min)
 
 
 def get_unpad_data(attention_mask):

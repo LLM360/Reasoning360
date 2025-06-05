@@ -136,8 +136,6 @@ class RLHFDataset(Dataset):
 
         print(f"dataset len: {len(self.dataframe)}")
 
-        # print(self.dataframe.head())
-
         # Safely check if apply_chat_template exists in dataframe
         # NOTE: added by Reasoning360
         if "apply_chat_template" not in self.dataframe:
@@ -169,9 +167,7 @@ class RLHFDataset(Dataset):
         self.serialize_dataset = not hasattr(self, "original_data_files")
         # resume dataframe if not it's serialized in data.pt
         if not self.serialize_dataset:
-            self._download(
-                use_origin_parquet=True
-            )  # download and resume from original parquet files
+            self._download(use_origin_parquet=True)  # download and resume from original parquet files
             self._read_files_and_tokenize()
         else:
             print(r"old dataloader ckpt file is used, please train from scratch for better ckpt performance")

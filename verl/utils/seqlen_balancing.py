@@ -96,9 +96,7 @@ def karmarkar_karp(seqlen_list: List[int], k_partitions: int, equal_size: bool):
     sorted_seqlen_list = sorted([(seqlen, i) for i, seqlen in enumerate(seqlen_list)])
     states_pq = []
     if equal_size:
-        assert (
-            len(seqlen_list) % k_partitions == 0
-        ), f"{len(seqlen_list)} % {k_partitions} != 0"
+        assert len(seqlen_list) % k_partitions == 0, f"{len(seqlen_list)} % {k_partitions} != 0"
         for offset in range(0, len(sorted_seqlen_list), k_partitions):
             items = []
             for i in range(k_partitions):
@@ -168,9 +166,7 @@ def get_seqlen_balanced_partitions(seqlen_list: List[int], k_partitions: int, eq
         AssertionError: If equal_size is True and len(seqlen_list) is not divisible by k_partitions.
         AssertionError: If any resulting partition is empty.
     """
-    assert (
-        len(seqlen_list) >= k_partitions
-    ), f"number of items:[{len(seqlen_list)}] < k_partitions:[{k_partitions}]"
+    assert len(seqlen_list) >= k_partitions, f"number of items:[{len(seqlen_list)}] < k_partitions:[{k_partitions}]"
 
     def _check_and_sort_partitions(partitions):
         assert len(partitions) == k_partitions, f"{len(partitions)} != {k_partitions}"
@@ -184,9 +180,7 @@ def get_seqlen_balanced_partitions(seqlen_list: List[int], k_partitions: int, eq
         assert seen_idx == set(range(len(seqlen_list)))
         return sorted_partitions
 
-    partitions = karmarkar_karp(
-        seqlen_list=seqlen_list, k_partitions=k_partitions, equal_size=equal_size
-    )
+    partitions = karmarkar_karp(seqlen_list=seqlen_list, k_partitions=k_partitions, equal_size=equal_size)
     return _check_and_sort_partitions(partitions)
 
 
@@ -268,9 +262,7 @@ def rearrange_micro_batches(batch, max_token_len, dp_group=None, num_batches_div
     seq_len_effective = seq_len_effective.tolist()
     assert num_micro_batches <= len(seq_len_effective)
 
-    micro_bsz_idx = get_seqlen_balanced_partitions(
-        seq_len_effective, num_micro_batches, equal_size=False
-    )
+    micro_bsz_idx = get_seqlen_balanced_partitions(seq_len_effective, num_micro_batches, equal_size=False)
 
     micro_batches = []
 

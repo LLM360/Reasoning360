@@ -196,6 +196,7 @@ def is_correct_strict_box(pred: str, gt: str, pause_tokens_index: Optional[list[
         pred: The prediction string
         gt: The ground truth answer
         pause_tokens_index: Indices of pause tokens
+
     Returns:
         Tuple of (score, extracted_prediction)
     """
@@ -221,6 +222,7 @@ def verify(solution_str: str, answer: str, strict_box_verify: bool = False, paus
         answer: The ground truth answer
         strict_box_verify: Whether to use strict box verification
         pause_tokens_index: Indices of pause tokens
+
     Returns:
         True if the solution is correct, False otherwise
     """

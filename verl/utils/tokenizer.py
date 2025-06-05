@@ -71,6 +71,7 @@ def hf_processor(name_or_path, **kwargs):
         transformers.ProcessorMixin: The pretrained processor.
     """
     from transformers import AutoProcessor
+
     try:
         processor = AutoProcessor.from_pretrained(name_or_path, **kwargs)
     except Exception:

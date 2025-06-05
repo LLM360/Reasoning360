@@ -335,6 +335,8 @@ def _last_boxed_only_string(string):
 
 
 def match_answer(response):
+    # NOTE: Reasoning360 used to comment out all response stripping
+
     is_matched = False
     for ans_marker in ["answer:", "answer is", "answers are"]:
         ans_idx = response.lower().rfind(ans_marker)
@@ -344,13 +346,13 @@ def match_answer(response):
             if response.endswith("\n"):
                 response = response[:-2]
 
-    # for ans_marker in ["is answer", "is the answer", "are answers", "are the answers"]:
-    #     ans_idx = response.lower().rfind(ans_marker)
-    #     if ans_idx != -1:
-    #         is_matched = True
-    #         response = response[:ans_idx].strip()
-    #         if response.endswith("\n"):
-    #             response = response[:-2]
+    for ans_marker in ["is answer", "is the answer", "are answers", "are the answers"]:
+        ans_idx = response.lower().rfind(ans_marker)
+        if ans_idx != -1:
+            is_matched = True
+            response = response[:ans_idx].strip()
+            if response.endswith("\n"):
+                response = response[:-2]
 
     # Find boxed
     ans_boxed = _last_boxed_only_string(response)
@@ -358,10 +360,10 @@ def match_answer(response):
         is_matched = True
         response = ans_boxed
 
-    # if ". " in response:
-    #     dot_idx = response.lower().rfind(". ")
-    #     if dot_idx != -1:
-    #         response = response[:dot_idx].strip()
+    if ". " in response:
+        dot_idx = response.lower().rfind(". ")
+        if dot_idx != -1:
+            response = response[:dot_idx].strip()
 
     for ans_marker in ["be ", "is ", "are ", "=", ": ", "get ", "be\n", "is\n", "are\n", ":\n", "get\n"]:
         ans_idx = response.lower().rfind(ans_marker)
@@ -371,8 +373,8 @@ def match_answer(response):
             if response.endswith("\n"):
                 response = response[:-2]
 
-    # is_matched = is_matched if any([c.isdigit() for c in response]) else False  # answer must have a digit
-    # # Grade
+    is_matched = is_matched if any([c.isdigit() for c in response]) else False  # answer must have a digit
+    # Grade
     return is_matched, response
 
 

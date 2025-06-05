@@ -48,15 +48,6 @@ def is_sglang_available():
     return sglang_spec is not None
 
 
-@cache
-def is_sglang_available():
-    try:
-        import sglang
-        return True
-    except ImportError:
-        return False
-
-
 def import_external_libs(external_libs=None):
     if external_libs is None:
         return

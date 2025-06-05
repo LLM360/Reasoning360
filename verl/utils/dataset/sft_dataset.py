@@ -132,10 +132,7 @@ class SFTDataset(Dataset):
 
         # string
         prompt_chat_str = tokenizer.apply_chat_template(prompt_chat, add_generation_prompt=True, tokenize=False)
-        # response_chat_str = response + tokenizer.eos_token # TODO: eos_token is <|im_end|>, should be <|endoftext|>
-        response_chat_str = response + tokenizer.pad_token # TODO: eos_token is <|im_end|>, should be <|endoftext|>
-        
-        # print(f'prompt_chat_str={prompt_chat_str}')
+        response_chat_str = response + tokenizer.eos_token # TODO: eos_token is <|im_end|>, should be <|endoftext|>
 
         # tokenize
         prompt_ids_output = tokenizer(prompt_chat_str, return_tensors="pt", add_special_tokens=False)
