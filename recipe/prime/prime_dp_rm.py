@@ -14,62 +14,56 @@
 """
 Implement a multiprocess PPOCritic
 """
+
 import itertools
-from typing import Iterable
 
 import torch
 import torch.distributed
+from flash_attn.bert_padding import index_first_axis, pad_input, rearrange, unpad_input
 from torch import nn, optim
-
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
-from .prime_core_algos import compute_ce_dpo_loss_rm, compute_detach_dpo_loss_rm
+import verl.utils.torch_functional as verl_F
 from verl import DataProto
 from verl.trainer.ppo import core_algos
 from verl.workers.critic import BasePPOCritic
 from verl.utils.py_functional import append_to_dict
-from verl.utils.torch_functional import masked_mean
-from verl.utils.ulysses import ulysses_pad_and_slice_inputs, gather_outpus_and_unpad
-from verl.utils.seqlen_balancing import rearrange_micro_batches, get_reverse_idx
-import verl.utils.torch_functional as verl_F
+from verl.utils.seqlen_balancing import get_reverse_idx, rearrange_micro_batches
+from verl.utils.ulysses import gather_outpus_and_unpad, ulysses_pad_and_slice_inputs
 
-from flash_attn.bert_padding import pad_input, unpad_input, rearrange, index_first_axis
+from .prime_core_algos import compute_ce_dpo_loss_rm, compute_detach_dpo_loss_rm
 
-__all__ = ['DataParallelPRIMERewardModel']
+__all__ = ["DataParallelPRIMERewardModel"]
 
 
 class DataParallelPRIMERewardModel:
-
     def __init__(self, config, reward_module: nn.Module, ref_module: nn.Module, reward_optimizer: optim.Optimizer):
         self.config = config
         self.reward_module = reward_module
         self.ref_module = ref_module
         self.reward_optimizer = reward_optimizer
-        self.use_remove_padding = self.config.model.get('use_remove_padding', False)
-        print(f'Reward model use_remove_padding={self.use_remove_padding}')
+        self.use_remove_padding = self.config.model.get("use_remove_padding", False)
+        print(f"Reward model use_remove_padding={self.use_remove_padding}")
+        self.use_fused_kernels = self.config.model.get("use_fused_kernels", False)
+        print(f"Reward model use_fused_kernels={self.use_fused_kernels}")
 
-        self.ulysses_sequence_parallel_size = self.config.get('ulysses_sequence_parallel_size', 1)
+        self.ulysses_sequence_parallel_size = self.config.get("ulysses_sequence_parallel_size", 1)
 
     def _forward_micro_batch(self, micro_batch, prompt_length):
-        from flash_attn.bert_padding import pad_input, unpad_input, index_first_axis, rearrange
-        from verl.utils.ulysses import ulysses_pad_and_slice_inputs, gather_outpus_and_unpad
-
-        input_ids = micro_batch['input_ids']
+        input_ids = micro_batch["input_ids"]
         batch_size, seqlen = input_ids.shape
-        attention_mask = micro_batch['attention_mask']
-        position_ids = micro_batch['position_ids']
+        attention_mask = micro_batch["attention_mask"]
+        position_ids = micro_batch["position_ids"]
 
-        num_actions = micro_batch['input_ids'].shape[-1] - prompt_length
-        max_positions = micro_batch['attention_mask'][:, prompt_length:].sum(-1)
+        num_actions = micro_batch["input_ids"].shape[-1] - prompt_length
+        max_positions = micro_batch["attention_mask"][:, prompt_length:].sum(-1)
 
         if self.use_remove_padding:
-            input_ids_rmpad, indices, *_ = unpad_input(input_ids.unsqueeze(-1),
-                                                       attention_mask)  # input_ids_rmpad (total_nnz, ...)
+            input_ids_rmpad, indices, *_ = unpad_input(input_ids.unsqueeze(-1), attention_mask)  # input_ids_rmpad (total_nnz, ...)
             input_ids_rmpad = input_ids_rmpad.transpose(0, 1)  # (1, total_nnz)
 
             # unpad the position_ids to align the rotary
-            position_ids_rmpad = index_first_axis(rearrange(position_ids.unsqueeze(-1), "b s ... -> (b s) ..."),
-                                                  indices).transpose(0, 1)
+            position_ids_rmpad = index_first_axis(rearrange(position_ids.unsqueeze(-1), "b s ... -> (b s) ..."), indices).transpose(0, 1)
 
             # for compute the log_prob
             input_ids_rmpad_rolled = torch.roll(input_ids_rmpad, shifts=-1, dims=1)  # (1, total_nnz)

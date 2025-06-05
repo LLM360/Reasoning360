@@ -353,6 +353,7 @@ class PRIMERewardModelWorker(Worker):
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
     def load_checkpoint(self, local_path, del_local_after_load=True):
         import torch
+
         if self._is_offload_param:
             load_fsdp_model_to_gpu(self.reward_module)
 
