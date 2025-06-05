@@ -10,7 +10,6 @@ on:
   pull_request:
     branches:
       - main
-      - v0.2.x
     paths:
       - "verl/utils/**/*.py"
       - .github/workflows/dataset.yml
