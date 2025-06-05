@@ -15,7 +15,6 @@
 from importlib.metadata import PackageNotFoundError, version
 
 from packaging import version as vs
-from verl.utils.import_utils import is_sglang_available
 
 from verl.utils.import_utils import is_sglang_available
 

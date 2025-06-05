@@ -226,6 +226,7 @@ class DataProto:
     def __getitem__(self, item):
         """
         Enhanced indexing for DataProto objects.
+
         Args:
             item: Can be one of:
                 - int: A single index
@@ -233,6 +234,7 @@ class DataProto:
                 - list: A list of indices
                 - numpy.ndarray: An array of indices
                 - torch.Tensor: A tensor of indices
+
         Returns:
             DataProto: For all indexing types except single integers
             DataProtoItem: Only for single integer indices
@@ -469,6 +471,7 @@ class DataProto:
         """
         Slice the DataProto and return a new DataProto object.
         This is an improved version of direct slicing which returns a DataProtoItem.
+
         Args:
             start (int, optional): Start index. Defaults to None (start from beginning).
             end (int, optional): End index (exclusive). Defaults to None (go to end).

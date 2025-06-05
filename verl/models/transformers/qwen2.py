@@ -161,6 +161,7 @@ def qwen2_attn_forward(
     NOTE: This function has been tested only on transformers versions between 4.48.0 and 4.50.0.
     """
     from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
+
     bsz, q_len, _ = hidden_states.shape
     hidden_shape = (bsz, q_len, -1, self.head_dim)
 

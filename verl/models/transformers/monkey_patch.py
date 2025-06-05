@@ -14,8 +14,6 @@
 """
 Apply monkey-patch function to models
 """
-import sys
-from typing import Optional
 
 import importlib.metadata
 import sys

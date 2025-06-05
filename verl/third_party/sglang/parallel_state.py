@@ -17,6 +17,7 @@ from sglang.srt.distributed.parallel_state import (
     init_distributed_environment,
     init_model_parallel_group,
 )
+
 """
 This version is strongly tied with Megatron to implement HybridEngine and weight sharing between vllm and Megatron.
 - We assume the Megatron tp+dp+pp world is already established before calling this function.
