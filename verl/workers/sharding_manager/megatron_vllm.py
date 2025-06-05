@@ -107,6 +107,7 @@ Consider using the `MegatronPPOActor` class directly as a replacement."
         """Build the parameter buffer in each pp rank"""
         if pp_rank == self._pp_rank:
             from verl.utils.memory_buffer import MemoryBuffer
+
             # The code here is very hard-coded, based on the following assumptions:
             # 1. `len(_this_rank_models) == 1`
             # 2. `_this_rank_models[0]` is a instance of `DistributedDataParallel` and `use_distributed_optimizer=True`

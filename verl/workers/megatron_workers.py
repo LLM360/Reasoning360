@@ -149,9 +149,6 @@ class ActorRolloutRefWorker(MegatronWorker):
         self._init_hf_config_and_tf_config(model_path, model_path, self.dtype, override_model_config, override_transformer_config, self.config.model.get("trust_remote_code", False))
         self.generation_config = get_generation_config(self.local_path)
 
-        self.share_embeddings_and_output_weights = getattr(actor_model_config, "tie_word_embeddings", False)
-        self.architecture = getattr(actor_model_config, "architecture", None)
-
         def megatron_actor_model_provider(pre_process, post_process):
             from verl.models.mcore import init_mcore_model
 

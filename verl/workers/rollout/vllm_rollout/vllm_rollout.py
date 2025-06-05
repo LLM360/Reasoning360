@@ -59,9 +59,7 @@ from vllm.lora.request import LoRARequest
 def _pre_process_inputs(pad_token_id, prompt_token_ids: torch.Tensor) -> List[int]:
     # remove the left padding in the prompt token_id
     # pad_token_id = self.llm_engine.tokenizer.pad_token_id if self.llm_engine.tokenizer.pad_token_id is not None else self.llm_engine.tokenizer.eos_token_id
-    non_pad_index = torch.nonzero(prompt_token_ids != pad_token_id, as_tuple=False)[0][
-        0
-    ]
+    non_pad_index = torch.nonzero(prompt_token_ids != pad_token_id, as_tuple=False)[0][0]
     token_ids = prompt_token_ids[non_pad_index:].tolist()
     return token_ids
 
@@ -272,9 +270,7 @@ class vLLMRollout(BaseRollout):
             seq = torch.cat([idx, response], dim=-1)
 
         response_length = response.size(1)
-        delta_position_id = torch.arange(
-            1, response_length + 1, device=position_ids.device
-        )
+        delta_position_id = torch.arange(1, response_length + 1, device=position_ids.device)
         delta_position_id = delta_position_id.unsqueeze(0).repeat(batch_size, 1)
 
         # TODO(sgm): fix position_ids on right_pad
@@ -312,14 +308,14 @@ class vLLMRollout(BaseRollout):
             self.inference_engine.free_cache_engine()
 
         # NOTE: added by Reasoning360
-        metrics = self.report_memory_usage(reset=True)
-        # NOTE: we do not use meta_info because dp collect fn only picks
-        # meta_info of the first data.
-        non_tensor_batch = {
-            'metrics_' + k: np.asarray([v] * seq.size(0), dtype=object) for k, v in metrics.items() 
-        } or None
+        # metrics = self.report_memory_usage(reset=True)
+        # # NOTE: we do not use meta_info because dp collect fn only picks
+        # # meta_info of the first data.
+        # non_tensor_batch = {
+        #     'metrics_' + k: np.asarray([v] * seq.size(0), dtype=object) for k, v in metrics.items() 
+        # } or None
 
-        return DataProto(batch=batch, non_tensor_batch=non_tensor_batch)
+        return DataProto(batch=batch)
 
     def report_memory_usage(self, reset: bool=False):
         # NOTE: added by Reasoning360

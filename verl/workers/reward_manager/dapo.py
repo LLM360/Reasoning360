@@ -32,7 +32,6 @@ class DAPORewardManager:
         max_resp_len=None,
         overlong_buffer_cfg=None,
     ) -> None:
-
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.compute_score = compute_score or default_compute_score

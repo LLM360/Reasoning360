@@ -93,9 +93,7 @@ def get_sharding_strategy(device_mesh):
     elif device_mesh.ndim == 2:
         sharding_strategy = ShardingStrategy.HYBRID_SHARD
     else:
-        raise NotImplementedError(
-            f"Get device mesh ndim={device_mesh.ndim}, but only support 1 or 2"
-        )
+        raise NotImplementedError(f"Get device mesh ndim={device_mesh.ndim}, but only support 1 or 2")
     return sharding_strategy
 
 
@@ -118,9 +116,7 @@ class ActorRolloutRefWorker(Worker):
         # build device mesh for FSDP
         world_size = torch.distributed.get_world_size()
         # TODO(sgm): support FSDP hybrid shard for larger model
-        self.device_mesh = create_device_mesh(
-            world_size=world_size, fsdp_size=self.config.actor.fsdp_config.fsdp_size
-        )
+        self.device_mesh = create_device_mesh(world_size=world_size, fsdp_size=self.config.actor.fsdp_config.fsdp_size)
 
         # build device mesh for Ulysses Sequence Parallel
         self.ulysses_device_mesh = None
@@ -225,9 +221,7 @@ class ActorRolloutRefWorker(Worker):
             "pad_token_id": self.tokenizer.pad_token_id,
         }
         override_config_kwargs.update(override_model_config)
-        update_model_config(
-            actor_model_config, override_config_kwargs=override_config_kwargs
-        )
+        update_model_config(actor_model_config, override_config_kwargs=override_config_kwargs)
         if self.rank == 0:
             print(f"Model config after override: {actor_model_config}")
 
@@ -296,11 +290,7 @@ class ActorRolloutRefWorker(Worker):
             reduce_dtype = torch.float32
             buffer_dtype = torch.float32
 
-        mixed_precision = MixedPrecision(
-            param_dtype=param_dtype,
-            reduce_dtype=reduce_dtype,
-            buffer_dtype=buffer_dtype,
-        )
+        mixed_precision = MixedPrecision(param_dtype=param_dtype, reduce_dtype=reduce_dtype, buffer_dtype=buffer_dtype)
 
         auto_wrap_policy = get_fsdp_wrap_policy(module=actor_module, config=fsdp_config.get("wrap_policy", None), is_lora=self.config.model.get('lora_rank', 0) > 0)
 
@@ -816,9 +806,7 @@ class CriticWorker(Worker):
         from torch.distributed.device_mesh import init_device_mesh
 
         fsdp_size = self.config.model.fsdp_config.fsdp_size
-        self.device_mesh = create_device_mesh(
-            world_size=world_size, fsdp_size=fsdp_size
-        )
+        self.device_mesh = create_device_mesh(world_size=world_size, fsdp_size=fsdp_size)
 
         self.ulysses_device_mesh = None
         self.ulysses_sequence_parallel_size = self.config.get("ulysses_sequence_parallel_size", 1)
@@ -826,9 +814,7 @@ class CriticWorker(Worker):
         if self.ulysses_sequence_parallel_size > 1:
             self.ulysses_device_mesh = init_device_mesh(device_name, mesh_shape=(dp, self.ulysses_sequence_parallel_size), mesh_dim_names=["dp", "sp"])
 
-        self.ulysses_sharding_manager = FSDPUlyssesShardingManager(
-            self.ulysses_device_mesh
-        )
+        self.ulysses_sharding_manager = FSDPUlyssesShardingManager(self.ulysses_device_mesh)
 
         # set FSDP offload params
         self._is_offload_param = self.config.model.fsdp_config.param_offload
@@ -945,11 +931,7 @@ class CriticWorker(Worker):
             reduce_dtype = torch.float32
             buffer_dtype = torch.float32
 
-        mixed_precision = MixedPrecision(
-            param_dtype=param_dtype,
-            reduce_dtype=reduce_dtype,
-            buffer_dtype=buffer_dtype,
-        )
+        mixed_precision = MixedPrecision(param_dtype=param_dtype, reduce_dtype=reduce_dtype, buffer_dtype=buffer_dtype)
 
         auto_wrap_policy = get_fsdp_wrap_policy(module=critic_module, config=self.config.model.fsdp_config.wrap_policy, is_lora=self.config.model.get('lora_rank', 0) > 0)
 
@@ -1162,9 +1144,7 @@ class RewardModelWorker(Worker):
         from torch.distributed.device_mesh import init_device_mesh
 
         fsdp_size = self.config.model.fsdp_config.fsdp_size
-        self.device_mesh = create_device_mesh(
-            world_size=world_size, fsdp_size=fsdp_size
-        )
+        self.device_mesh = create_device_mesh(world_size=world_size, fsdp_size=fsdp_size)
 
         self.ulysses_device_mesh = None
         self.ulysses_sequence_parallel_size = self.config.get("ulysses_sequence_parallel_size", 1)
@@ -1172,9 +1152,7 @@ class RewardModelWorker(Worker):
         if self.ulysses_sequence_parallel_size > 1:
             self.ulysses_device_mesh = init_device_mesh(device_name, mesh_shape=(dp, self.ulysses_sequence_parallel_size), mesh_dim_names=["dp", "sp"])
 
-        self.ulysses_sharding_manager = FSDPUlyssesShardingManager(
-            self.ulysses_device_mesh
-        )
+        self.ulysses_sharding_manager = FSDPUlyssesShardingManager(self.ulysses_device_mesh)
 
         self.use_remove_padding = self.config.model.get("use_remove_padding", False)
 
@@ -1301,9 +1279,7 @@ class RewardModelWorker(Worker):
                     reward_rmpad = gather_outpus_and_unpad(reward_rmpad, gather_dim=0, unpad_dim=0, padding_size=pad_size)
 
                 # pad it back
-                rm_score = pad_input(
-                    reward_rmpad, indices=indices, batch=batch_size, seqlen=seqlen
-                ).squeeze(-1)
+                rm_score = pad_input(reward_rmpad, indices=indices, batch=batch_size, seqlen=seqlen).squeeze(-1)
             else:
                 output = self.reward_module(input_ids=input_ids, attention_mask=attention_mask, position_ids=position_ids, use_cache=False)
                 rm_score = output.logits  # (batch_size, seq_len, 1)
@@ -1321,9 +1297,7 @@ class RewardModelWorker(Worker):
         position_ids = data.batch["position_ids"]
         response_length = data.batch["responses"].shape[-1]
         eos_mask_idx = torch.argmax(position_ids * attention_mask, dim=-1)  # (bsz,)
-        token_level_scores = torch.zeros_like(
-            attention_mask, dtype=scores.dtype
-        )  # (bsz, seqlen)
+        token_level_scores = torch.zeros_like(attention_mask, dtype=scores.dtype)  # (bsz, seqlen)
         token_level_scores[torch.arange(batch_size), eos_mask_idx] = scores
 
         # select the response part
@@ -1432,17 +1406,10 @@ class RewardModelWorker(Worker):
 
             use_dynamic_bsz = self.config.use_dynamic_bsz
             if use_dynamic_bsz:
-                max_token_len = (
-                    self.config.forward_max_token_len_per_gpu
-                    * self.ulysses_sequence_parallel_size
-                )
-                micro_batches, indices = rearrange_micro_batches(
-                    batch=rm_data.batch, max_token_len=max_token_len
-                )
+                max_token_len = self.config.forward_max_token_len_per_gpu * self.ulysses_sequence_parallel_size
+                micro_batches, indices = rearrange_micro_batches(batch=rm_data.batch, max_token_len=max_token_len)
             else:
-                micro_batches = rm_data.batch.split(
-                    self.config.micro_batch_size_per_gpu
-                )
+                micro_batches = rm_data.batch.split(self.config.micro_batch_size_per_gpu)
             output = []
             for micro_batch in micro_batches:
                 rm_score = self._forward_micro_batch(micro_batch)
@@ -1451,12 +1418,8 @@ class RewardModelWorker(Worker):
 
             if use_dynamic_bsz:
                 indices = list(itertools.chain.from_iterable(indices))
-                assert len(indices) == scores.size(
-                    0
-                ), f"{len(indices)} vs. {scores.size()}"
-                revert_indices = torch.tensor(
-                    get_reverse_idx(indices), dtype=torch.long
-                )
+                assert len(indices) == scores.size(0), f"{len(indices)} vs. {scores.size()}"
+                revert_indices = torch.tensor(get_reverse_idx(indices), dtype=torch.long)
                 scores = scores[revert_indices]
 
             token_level_scores = self._expand_to_token_level(data, scores)

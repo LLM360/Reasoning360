@@ -171,7 +171,7 @@ class vLLMRollout(BaseRollout):
             **engine_kwargs,
         )
         # NOTE: added by Reasoning360
-        self._monkey_patch_vllm_engine_v0()
+        # self._monkey_patch_vllm_engine_v0()
 
         # Offload vllm model to reduce peak memory usage
         self.inference_engine.sleep(level=1)
@@ -352,11 +352,12 @@ class vLLMRollout(BaseRollout):
         response_attention_mask = get_response_mask(response_id=response, eos_token=eos_token_id, dtype=attention_mask.dtype)
         attention_mask = torch.cat((attention_mask, response_attention_mask), dim=-1)
 
-        tokens_per_second = torch.sum(response_attention_mask).item() / t()
-        print(
-            f'Tokens per second: {tokens_per_second} t/s on device {os.environ["CUDA_VISIBLE_DEVICES"]} on host {os.uname().nodename}',
-            flush=True,
-        )
+        # NOTE: added by Reasoning360. temporarily disabled to avoid messy logging
+        # tokens_per_second = torch.sum(response_attention_mask).item() / t()
+        # print(
+        #     f'Tokens per second: {tokens_per_second} t/s on device {os.environ["CUDA_VISIBLE_DEVICES"]} on host {os.uname().nodename}',
+        #     flush=True,
+        # )
 
         # all the tp ranks should contain the same data here. data in all ranks are valid
         batch = TensorDict(

@@ -95,9 +95,6 @@ class FSDPVLLMShardingManager(BaseShardingManager):
         self.tp_size = self.device_mesh["infer_tp"].size()
         self.tp_rank = self.device_mesh["infer_tp"].get_local_rank()
 
-        self.tp_size = vllm_ps.get_tensor_model_parallel_world_size()
-        self.tp_rank = vllm_ps.get_tensor_model_parallel_rank()
-
         # Note that torch_random_states may be different on each dp rank
         self.torch_random_states = get_torch_device().get_rng_state()
         # get a random rng states

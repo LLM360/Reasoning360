@@ -15,7 +15,6 @@
 from collections import defaultdict
 
 import torch
-from collections import defaultdict
 
 from verl import DataProto
 from verl.utils.reward_score import default_compute_score

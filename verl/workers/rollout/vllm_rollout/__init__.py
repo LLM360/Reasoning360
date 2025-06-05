@@ -16,11 +16,6 @@ from importlib.metadata import PackageNotFoundError, version
 
 from packaging.version import Version
 
-###
-# [SUPPORT AMD:]
-import torch
-###
-
 
 def get_version(pkg):
     try:

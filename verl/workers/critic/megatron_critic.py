@@ -19,7 +19,6 @@ import itertools
 import logging
 import os
 from functools import partial
-from packaging.version import Version
 from typing import Iterable
 
 import torch
