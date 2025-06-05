@@ -36,7 +36,7 @@ For huggingface TGI integration, it is usually used for debugging and single GPU
 Install from docker image
 -------------------------
 
-We provide pre-built Docker images for quick setup. For SGLang usage, please follow the later sections in this doc.
+We provide pre-built Docker images for quick setup.
 
 For vLLM with Megatron or FSDP, please use the stable version of image ``whatcanyousee/verl:ngc-cu124-vllm0.8.5-sglang0.4.6-mcore0.12.0-te2.3``.
 
@@ -213,8 +213,6 @@ The packages worth checking are:
 
 If you encounter issues about package versions during running verl, please update the outdated ones.
 
-Install with AMD GPUs - ROCM kernel support
-------------------------------------------------------------------
 
 Install with AMD GPUs - ROCM kernel support
 ------------------------------------------------------------------

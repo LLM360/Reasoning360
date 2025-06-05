@@ -8,17 +8,6 @@
 **/*.tar.gz
 **/playground
 **/wandb
-**/slurm_log
-examples/data_preprocess/*.json
-batch_results/
-*.out
-big-math-rl-verified_problems/
-sglang_storage/
-temp_job_scripts/
-SLURM_Logs/
-sgl_job_ids.txt
-dedup_results/
-model_filtering/diff_filter_output/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -29,7 +18,6 @@ tensorflow/my_graph/*
 .idea/
 # C extensions
 *.so
-data_analysis/*.json
 
 # Distribution / packaging
 .Python
@@ -135,10 +123,20 @@ ENV/
 logs
 log
 outputs
-
 .history
 
-# Modified by Reasoning360
+# Below are all Added by Reasoning360
+**/slurm_log
+examples/data_preprocess/*.json
+batch_results/
+*.out
+big-math-rl-verified_problems/
+sglang_storage/
+temp_job_scripts/
+SLURM_Logs/
+sgl_job_ids.txt
+dedup_results/
+model_filtering/diff_filter_output/
 # slurm
 slurm/
 
@@ -148,6 +146,7 @@ backup/
 
 # data
 data
+data_analysis/*.json
 diff_filter_output/
 
 # docker
