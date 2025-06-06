@@ -51,6 +51,9 @@ We provide our own evaluation suite for experiments, which provides consistent r
       "arcagi"         # logic
       "zebra_puzzle"   # logic
       "codeio"         # simulation
+      "cruxeval-i"     # simulation
+      "cruxeval-o"     # simulation
+      "finqa"          # tabular
       "hitab"          # tabular
       "multihier"      # tabular
     )
