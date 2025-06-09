@@ -21,9 +21,13 @@ from typing import Any, Callable, Dict, List
 
 import numpy as np
 import torch
+import wandb
 
 from verl import DataProto
 from verl.utils.import_utils import deprecated
+
+# NOTE: added by Reasoning360.
+_scores_tables = {}  # Global dictionary to store wandb tables
 
 
 @deprecated("verl.utils.metric.reduce_metrics")
