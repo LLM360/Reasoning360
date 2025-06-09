@@ -868,11 +868,7 @@ class RayPPOTrainer:
 
         # we should create rollout at the end so that vllm can have a better estimation of kv cache memory
         self.actor_rollout_wg = all_wg["actor_rollout"]
-        try:
-            self.actor_rollout_wg.init_model()
-        except Exception as e:
-            print(f"Error initializing actor rollout worker: {e}")
-            raise e
+        self.actor_rollout_wg.init_model()
 
         # create async rollout manager and request scheduler
         self.async_rollout_mode = False
