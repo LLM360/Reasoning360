@@ -95,8 +95,7 @@ class vLLMRollout(BaseRollout):
 
         if kwargs.get("train_tp") is not None:
             # deployed with megatron
-            import os
-
+            # NOTE: import os removed by Reasoning360. Definitely a bug of the official code.
             os.environ["CUDA_TIMER_STREAM_KAFKA_ENABLE"] = "0"
             os.environ["MEGATRON_IMPORT_TIMERS"] = "0"
             if vllm_version in (
