@@ -817,7 +817,7 @@ class RayPPOTrainer:
             )
             self.resource_pool_to_cls[resource_pool]["actor_rollout"] = actor_rollout_cls
         else:
-            raise NotImplementedError
+            raise NotImplementedError()
 
         # create critic
         if self.use_critic:
@@ -868,7 +868,11 @@ class RayPPOTrainer:
 
         # we should create rollout at the end so that vllm can have a better estimation of kv cache memory
         self.actor_rollout_wg = all_wg["actor_rollout"]
-        self.actor_rollout_wg.init_model()
+        try:
+            self.actor_rollout_wg.init_model()
+        except Exception as e:
+            print(f"Error initializing actor rollout worker: {e}")
+            raise e
 
         # create async rollout manager and request scheduler
         self.async_rollout_mode = False
