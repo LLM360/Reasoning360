@@ -190,6 +190,23 @@ install SGLang from github (need to be after this [PR](https://github.com/sgl-pr
 
 The script will automatically launch 64 jobs (each on one node) and monitor them. If some job fails unexpectedly, you can launch the job in `temp_job_scripts` and add the new job id to `sgl_job_ids.txt` so that it'll be monitored.
 
+## Evaluation
+In GURU, we provide extensive evaluation (both online and offline) for each domain to monitor and evaluate model performance.
+
+We use verl's rollout engine to generate responses for each test samples from all benchmarks reported in Guru.
+We use `verl/trainer/main_generation.py` to launch the rollout jobs, and use `verl/trainer/main_eval.py` to evaluate the generated responses using the reward functions defined in `verl/utils/reward_score/__init__.py`.
+For more details, please refer to [Evaluation README](./scripts/offline_eval/readme_eval.md) in `scripts/offline_eval`, where we provide the scripts to launch the rollout jobs and evaluate the generated responses.
+
+To do this, we will first need to prepare the test set for each benchmark via generating the formatted input, which is much like the training data generation process.
+
+**Eval data preparation**
+```bash
+# some of the data preparation scripts are already done during training data processing for online evaluation
+bash data_preprocess/run_process_leaderboard.sh
+```
+
+
+
 
 ## Contributing
 
