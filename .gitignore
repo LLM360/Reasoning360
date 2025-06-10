@@ -125,39 +125,36 @@ log
 outputs
 .history
 
-# Below are all Added by Reasoning360
-**/slurm_log
-examples/data_preprocess/*.json
-batch_results/
-*.out
-big-math-rl-verified_problems/
-sglang_storage/
-temp_job_scripts/
-SLURM_Logs/
-sgl_job_ids.txt
-dedup_results/
-model_filtering/diff_filter_output/
-# slurm
+# Below are all added by Reasoning360
+# Ignore all files in root directory, but keep directories
+/*
+!/*/
+
+# But keep these important files/directories
+!/README*
+!/requirements*
+!/.readthedocs.yml
+!/.pre-commit-config.yaml
+!/.gitignore
+!/LICENSE
+!/pyproject.toml
+!/setup.py
+
+# Slurm logs
 slurm/
 
-# sandbox
+# Data
+data
+
+# Sandbox or deprecated files
 sandbox/
 backup/
 
-# data
-data
-data_analysis/*.json
-diff_filter_output/
-
-# docker
+# Docker
 docker/images/
 
-# untracked files
-./*.txt
+# Artifacts
+artifacts/
 
-# toolkits
-toolkits/
-ray_logs/
-SDSB/
+# Analysis
 analysis/
-scripts_moe/
