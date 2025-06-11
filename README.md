@@ -58,7 +58,7 @@ print(json.dumps(train_data[0], indent=2))
 ---
 ## RL Training
 ### (1) Download data
-Download the data and prepare them into `.parquet`, the default format in training script. (TODO: will update a script version directly using data from huggingface download soon)
+Download the data and prepare them into `.parquet`, the expected default format in training script. (TODO: will update a script version directly using data from huggingface download soon)
 
 ### (2) [Optional] Customize chat template
 Run `tools/change_tokenizer_config.py` if you want to apply 'think'-aware chat template. Now only the 'Qwen' families are supported.
@@ -72,7 +72,7 @@ We provide the multi-node training slurm script using a `math3k` subset data for
 sbatch scripts/train/example_multinode_rl_qwen32b_base.sh
 ```
 
-If you need to train on the full data or include STEM data in Guru, host the llm-as-verifier model first before launching the trianing.
+If you need to train on the full data or include STEM data in Guru, host the llm-as-verifier model first before launching the training.
 ```bash
 sbatch scripts/tools/serve_llm_as_verifier.sh
 ```
