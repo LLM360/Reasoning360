@@ -3,8 +3,8 @@
 The processed data will be saved in the `data/train` and `data/test` directories.
 The naming convention is `<domain>__<dataset_name>_<dataset_size>`, where `<domain>` is one of `math`, `codegen`, `logic`, `simulation`, `table` for now.
 
-# Usage
-## Math
+## Prepare the training data from scratch
+### Math
 
 **DAPO+OR1**
 ```bash
@@ -19,10 +19,6 @@ python data_preprocess/math/dapo_or1_merge_dedup_apr30.py
 >
 > After merging and removing instance with too long answer >100 char ([script](../scripts/tools/merge_and_upload_dataset.ipynb)): 116632
 
-**BigMath**
-```bash
-python data_preprocess/math/bigmath_preview_filtered_mar21.py --train-sample-size <train_sample_size>
-```
 
 **DeepScaler**
 ```bash
@@ -30,7 +26,7 @@ python data_preprocess/math/deepscaler_preview.py --train-sample-size <train_sam
 ```
 
 
-## Code
+### Code
 **leetcode2k**
 ```bash
 python data_preprocess/codegen/leetcode2k.py --train-sample-size <train_sample_size>
@@ -56,7 +52,7 @@ python data_preprocess/codegen/mbpp.py
 python data_preprocess/codegen/livecodebench.py
 ```
 
-## Logic
+### Logic
 **zebra_puzzle_dataset**
 ```bash
 python data_preprocess/logic/zebrapuzzle_gen/puzzle_generator.py --output_dir data/raw --num_puzzles <num_puzzles> --num_processes <num_processes>
@@ -81,24 +77,34 @@ python data_preprocess/logic/puzzle_gen.py --test True --num_puzzles <num_puzzle
 python data_preprocess/logic/process_puzzles_dataset.py
 ```
 
-## Simulation
+
+**ARC-AGI**
+```bash
+python data_preprocess/logic/arcagi.py --name arcagi1
+python data_preprocess/logic/arcagi.py --name arcagi2
+python data_preprocess/logic/barc.py --train-sample-size <train_sample_size> --test-sample-size <test_sample_size>
+```
+
+### Simulation
 ```bash
 python data_preprocess/simulation/codeio.py --train-sample-size <train_sample_size> --test-sample-size <test_sample_size>
 ```
 
-## Table
+### Table
 ```bash
 uv pip install gdown
 python data_preprocess/table/multihier.py
 ```
 
-## ARC-AGI
+### STEM
 ```bash
-python data_preprocess/simulation/arcagi.py --name arcagi1
-python data_preprocess/simulation/arcagi.py --name arcagi2
+python data_preprocess/stem/webinstruct.py
 ```
 
-# Add a new dataset
+Congratulations you get all raw data preprocessed into `.parquet`. You can check the `model_filtering/` directory to perform difficulty-level filtering. 
+
+
+## Add a new dataset
 1. Add a new script in `data_preprocess/<domain>/<dataset_name>.py`
 2. Add a new entry in `tests/data_process/test_data_preprocess.py`.
 3. Run `pytest tests/data_process` to check the functionality of the data preprocessing scripts.

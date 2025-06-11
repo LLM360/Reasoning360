@@ -61,7 +61,7 @@ print(json.dumps(train_data[0], indent=2))
 Download the data and prepare them into `.parquet`, the default format in training script. (TODO: will update a script version directly using data from huggingface download soon)
 
 ### (2) [Optional] Customize chat template
-Run `tools/change_tokenizer_config.py` if you want to apply '<think>'-aware chat template. Now only the 'Qwen' families are supported.
+Run `tools/change_tokenizer_config.py` if you want to apply 'think'-aware chat template. Now only the 'Qwen' families are supported.
 ```python
 python tools/change_tokenizer_config.py -i <input_model_directory> -o <output_model_directory>
 ```
@@ -76,20 +76,21 @@ If you need to train on the full data or include STEM data in Guru, host the llm
 ```bash
 sbatch scripts/tools/serve_llm_as_verifier.sh
 ```
-Then fill in the `export STEM_LLM_JUDGE_URL="<STEM_LLM_JUDGE_URL>"` by the llm-as-verifier server ip. It uses one GPU node to serve a 1.5B [general-verifier](https://huggingface.co/TIGER-Lab/general-verifier) now.
+Then fill in the `export STEM_LLM_JUDGE_URL="<STEM_LLM_JUDGE_URL>"` by the llm-as-verifier server IP. It uses one GPU node to serve a 1.5B [general-verifier](https://huggingface.co/TIGER-Lab/general-verifier) now.
 
+(TODO: build a single-node script not using slurm)
 
 ---
 ## Evaluation
-We provide a evaluation suite of of 17 tasks supporting multi-node inference based on [verl](https://github.com/volcengine/verl). To quick start, run
+We provide a evaluation suite of of 17 tasks supporting multi-node inference based on [verl](https://github.com/volcengine/verl). For quick start, run
 ```bash
 sbatch scripts/offline_eval/example_multinode_eval_guru7b.sh
 ```
-Please refer to `scripts/offline_eval/README.md` if you would like to customize more.
+Please refer to `scripts/offline_eval/README.md` if you would like to know and customize evaluation details.
 
 ---
 ## Contributing
-### Add a new dataset into RL
+### Add a new dataset for training (or evaluation)
 
 **Step1: Data preprocessing script**
 

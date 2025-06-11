@@ -84,11 +84,12 @@ We provide a evaluation suite across benchmarks. We tested and derived consisten
 
 ### Step 1 - Prepare Your Data Preprocessing
 
-Refer to [prepare_data](https://verl.readthedocs.io/en/latest/preparation/prepare_data.html) for details.
+Refer to [prepare_data](README.md#add-a-new-dataset-for-training-or-evaluation)
+) for details.
 
 ### Step 2 - Define Your Reward/Score Function
 
-Refer to [reward_function](https://verl.readthedocs.io/en/latest/preparation/reward_function.html) for details.
+Refer to [reward_function](README.md#add-a-new-dataset-for-training-or-evaluation) for details.
 
 ### Step 3 - Generate Responses & Calculate Metric
 
