@@ -8,8 +8,7 @@ from .utils import _ERROR_MSG_PREFIX, _DEFAULT_TIMEOUT_SECONDS
 
 # List of available sandbox URLs
 SANDBOX_URLS = [
-    "http://fs-mbz-gpu-959:8080/run_code",
-    "http://fs-mbz-gpu-954:8080/run_code",
+    # "http://fs-mbz-gpu-xxx:8080/run_code", # Add more servers here
 ]
 
 # Create a thread-safe cycle iterator for round-robin
