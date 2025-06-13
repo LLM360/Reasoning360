@@ -17,6 +17,9 @@ from verl.utils.reward_score.coder1 import (
     fuzzy_equal
 )
 
+# Use higher parallelism with random container selection  
+MAX_PARALLEL_PROCESSES = 64  # Using random containers so can handle more parallelism
+
 EMPTY_EXAMPLE = {
     "data_source": None,
     "prompt": None,
@@ -187,6 +190,10 @@ for i, o in zip(_inputs, _outputs):
 
 
 if __name__ == '__main__':
+
+    import time
+    start_time = time.time()
+
     """Main script execution: parse args, load, process, and save datasets."""
     parser = argparse.ArgumentParser(description="Process and save TACO dataset.")
     parser.add_argument('--data-dir', default='data',
@@ -216,7 +223,8 @@ if __name__ == '__main__':
     # Process the dataset
     process_fn = make_map_fn('train', data_source)
     
-    dataset = dataset.map(function=process_fn, with_indices=True, num_proc=64)
+    # Use reduced number of processes
+    dataset = dataset.map(function=process_fn, with_indices=True, num_proc=MAX_PARALLEL_PROCESSES)
 
     # Filter out examples where processing failed
     dataset = dataset.filter(lambda x: x["data_source"] == data_source)
@@ -225,7 +233,7 @@ if __name__ == '__main__':
     try:
         tokenizer = transformers.AutoTokenizer.from_pretrained("Qwen/Qwen2.5-7B")
         length_filter = LengthFilter(tokenizer=tokenizer, max_length=4096)
-        dataset = dataset.filter(lambda x: length_filter.check(x), num_proc=64)
+        dataset = dataset.filter(lambda x: length_filter.check(x), num_proc=MAX_PARALLEL_PROCESSES)
     except Exception as e:
         print(f"Warning: Could not perform length filtering. Error: {e}")
         print("Proceeding without length filtering.")
@@ -244,3 +252,4 @@ if __name__ == '__main__':
     print(f"\nDone! \n"
           f"Data source: {data_source}\n"
           f"Train data saved to {train_output_path} ({len(dataset)} samples)\n")
+    print(f"Time taken: {time.time() - start_time} seconds")

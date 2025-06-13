@@ -39,6 +39,10 @@ elif CODER1_EXEC == "unsafe_local":
     from .unsafe_local_exec import code_exec_local
 
     code_exec = code_exec_local
+elif CODER1_EXEC == "sandboxfusion":
+    from .sandboxfusion_exec import code_exec_sandboxfusion
+
+    code_exec = code_exec_sandboxfusion
 else:
     raise ValueError(f"Unknown CODER1_EXEC: {CODER1_EXEC}")
 
