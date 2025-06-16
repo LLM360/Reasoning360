@@ -318,6 +318,10 @@ class MegatronCheckpointManager(BaseCheckpointManager):
         # Save RNG States
         if "extra" in self.checkpoint_contents:
             torch.distributed.barrier()
+            # NOTE: bug saving by Reasoning360: here we implicitly create a local path and multiple nodes
+            # may try to access it together.
+            rng_state_parent_path = self.local_mkdir(os.path.join(local_path, "rng_states"))
+            torch.distributed.barrier()
 
             rng_state_path = get_rng_states_checkpoint_path(local_path, only_rank0_save=False)
             rng_state = self.get_rng_state()
