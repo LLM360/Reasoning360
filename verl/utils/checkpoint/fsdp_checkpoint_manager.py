@@ -210,9 +210,7 @@ class FSDPCheckpointManager(BaseCheckpointManager):
             hf_local_path = os.path.join(local_path, "huggingface")
             if self.rank == 0:
                 os.makedirs(hf_local_path, exist_ok=True)
-            else:
-                while not os.path.exists(hf_local_path):
-                    time.sleep(1)
+            torch.distributed.barrier()
 
             # Only rank 0 will save hf model and,
             # offload to cpu to save LLMs which may be too large to fit in one GPU
