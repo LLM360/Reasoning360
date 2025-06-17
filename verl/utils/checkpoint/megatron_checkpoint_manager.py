@@ -167,7 +167,8 @@ class MegatronCheckpointManager(BaseCheckpointManager):
         if expert_parallel:
             common_path = common_path + f"_{expert_rank:03d}"
 
-        os.makedirs(common_path, exist_ok=True)
+        # replace os.makedirs by local_mkdir
+        self.local_mkdir(common_path)
 
         if return_base_dir:
             return common_path
@@ -230,10 +231,18 @@ class MegatronCheckpointManager(BaseCheckpointManager):
             self.remove_previous_save_local_path(self.previous_saved_paths[:keep_start])
             self.previous_saved_paths = self.previous_saved_paths[keep_start:]
 
-        local_path = self.local_mkdir(local_path)
+        if self.rank == 0:
+            # NOTE: bug fix by Reasoning360: avoid multiple nodes creating the same directory
+            local_path = self.local_mkdir(local_path)
+            model_ckpt_path = get_model_checkpoint_path(local_path)
+            model_ckpt_path = self.local_mkdir(model_ckpt_path)
+        torch.distributed.barrier()
 
         # Save Model
-        if "model" in self.checkpoint_contents and mpu.get_data_parallel_rank() == 0:
+        # NOTE: bug fix by Reasoning360: only save one copy for the CP group
+        if ("model" in self.checkpoint_contents and mpu.get_data_parallel_rank() == 0 and
+            (mpu.get_context_parallel_world_size() <= 1 or mpu.get_context_parallel_rank() == 0)
+        ):
             state_dicts = []
 
             for vpp_rank, model in enumerate(self.model):
@@ -317,6 +326,12 @@ class MegatronCheckpointManager(BaseCheckpointManager):
 
         # Save RNG States
         if "extra" in self.checkpoint_contents:
+            torch.distributed.barrier()
+            # NOTE: bug saving by Reasoning360: here we implicitly create a local path and multiple nodes
+            # may try to access it together.
+            if self.rank == 0:
+                rng_state_parent_path = os.path.join(local_path, "rng_states")
+                self.local_mkdir(rng_state_parent_path)
             torch.distributed.barrier()
 
             rng_state_path = get_rng_states_checkpoint_path(local_path, only_rank0_save=False)
