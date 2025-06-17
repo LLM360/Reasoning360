@@ -329,9 +329,13 @@ class MegatronCheckpointManager(BaseCheckpointManager):
             torch.distributed.barrier()
             # NOTE: bug saving by Reasoning360: here we implicitly create a local path and multiple nodes
             # may try to access it together.
+<<<<<<< zhoujun/fix-fsdp-saveckpt
             if self.rank == 0:
                 rng_state_parent_path = os.path.join(local_path, "rng_states")
                 self.local_mkdir(rng_state_parent_path)
+=======
+            rng_state_parent_path = self.local_mkdir(os.path.join(local_path, "rng_states"))
+>>>>>>> main
             torch.distributed.barrier()
 
             rng_state_path = get_rng_states_checkpoint_path(local_path, only_rank0_save=False)

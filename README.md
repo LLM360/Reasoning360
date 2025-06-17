@@ -8,17 +8,20 @@ This is the official repository of **Reasoning360** aiming to produce strong and
 
 ---
 ## Table of Contents
-- [Installation](#installation)
-- [Data preparation](#data-preparation)
-- [RL Training](#rl-training)
-  - [(1) Download data](#1-download-data)
-  - [(2) [Optional] Customize chat template](#2-optional-customize-chat-template)
-  - [(3) Train](#3-train)
-- [Evaluation](#evaluation)
-- [Contributing](#contributing)
-  - [Add a new dataset into RL](#add-a-new-dataset-into-rl)
-  - [Pre-commit](#pre-commit)
-  - [Pull Request](#pull-request)
+- [Reasoning360](#reasoning360)
+  - [News](#news)
+  - [Table of Contents](#table-of-contents)
+  - [Installation](#installation)
+  - [Data preparation](#data-preparation)
+  - [RL Training](#rl-training)
+    - [(1) Download data](#1-download-data)
+    - [(2) \[Optional\] Customize chat template](#2-optional-customize-chat-template)
+    - [(3) Train](#3-train)
+  - [Evaluation](#evaluation)
+  - [Contributing](#contributing)
+    - [Add a new dataset for training (or evaluation)](#add-a-new-dataset-for-training-or-evaluation)
+    - [Pre-commit](#pre-commit)
+    - [Pull Request](#pull-request)
 
 
 ---
@@ -58,7 +61,9 @@ print(json.dumps(train_data[0], indent=2))
 ---
 ## RL Training
 ### (1) Download data
-Download the data and prepare them into `.parquet`, the expected default format in training script. (TODO: will update a script version directly using data from huggingface download soon)
+Download the data and prepare them into `.parquet`, the expected default format in training script. 
+Run `scripts/train/download_hf.py` to download all dataset files for training, online/offline evaluation to local directories.
+Training files will be put in `/dataset/train`. Online evaluation files will be put in `/dataset/online_eval`. Offline evaluation files will be put in `/dataset/offline_eval`.
 
 ### (2) [Optional] Customize chat template
 Run `tools/change_tokenizer_config.py` if you want to apply 'think'-aware chat template. Now only the 'Qwen' families are supported.
