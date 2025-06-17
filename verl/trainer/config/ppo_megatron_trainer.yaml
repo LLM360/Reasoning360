@@ -13,10 +13,10 @@ data:
   return_raw_chat: False
   return_full_prompt: False
   shuffle: True
-  filter_overlong_prompts: True # By Reasoning360. Originally False # for large-scale dataset, filtering overlong prompts could be timeconsuming. You cat set the filter_overlong_prompts_workers to use multiprocessing to speed up.
+  filter_overlong_prompts: False # By Reasoning360. Originally False # for large-scale dataset, filtering overlong prompts could be timeconsuming. You cat set the filter_overlong_prompts_workers to use multiprocessing to speed up.
   filter_overlong_prompts_workers: 1
   truncation: error
-  trust_remote_code: False  # main_ppo will check this config to determine whether to use remote code for tokenizer
+  trust_remote_code: True  # main_ppo will check this config to determine whether to use remote code for tokenizer
   custom_cls:
       path: null
       name: null
