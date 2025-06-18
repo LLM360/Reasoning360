@@ -34,7 +34,7 @@ parts/
 sdist/
 var/
 tmp/
-*.egg-info/
+*.egg-info/*
 .installed.cfg
 *.egg
 

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import time
 import warnings
 from typing import Optional, Union
 
@@ -207,7 +208,9 @@ class FSDPCheckpointManager(BaseCheckpointManager):
 
         if "hf_model" in self.checkpoint_contents:
             hf_local_path = os.path.join(local_path, "huggingface")
-            os.makedirs(hf_local_path, exist_ok=True)
+            if self.rank == 0:
+                os.makedirs(hf_local_path, exist_ok=True)
+            torch.distributed.barrier()
 
             # Only rank 0 will save hf model and,
             # offload to cpu to save LLMs which may be too large to fit in one GPU

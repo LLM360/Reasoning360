@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=server_llm_as_verifier
+#SBATCH --job-name=server_llm_1node
 #SBATCH --account=iq
-#SBATCH --nodes=4  
-#SBATCH --ntasks=4
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=64
 #SBATCH --gres=gpu:8
@@ -10,6 +10,15 @@
 #SBATCH --output=slurm/serve_llm_as_verifier_%j.log
 #SBATCH --error=slurm/serve_llm_as_verifier_%j.err
 
+# Check if model name is provided
+if [ $# -eq 0 ]; then
+    echo "Error: Model name is required"
+    echo "Usage: $0 <model_name>"
+    exit 1
+fi
+
+MODEL_NAME=$1
+echo "Using model: $MODEL_NAME"
 
 # =================== Cluster Environment ===================
 export NCCL_DEBUG=info
@@ -110,12 +119,13 @@ if [ "$SLURM_NODEID" -eq 0 ]; then
     PIPELINE_PARALLEL_SIZE=$SLURM_NNODES  # Use all nodes for pipeline parallelism
 
     echo "Starting vLLM server with tensor_parallel_size=$TENSOR_PARALLEL_SIZE and pipeline_parallel_size=$PIPELINE_PARALLEL_SIZE"
-    ${CONDA_BIN_PATH}vllm serve Qwen/Qwen3-32B \
+    ${CONDA_BIN_PATH}vllm serve "$MODEL_NAME" \
         --host "$head_node_ip" \
         --tensor-parallel-size $TENSOR_PARALLEL_SIZE \
         --pipeline-parallel-size $PIPELINE_PARALLEL_SIZE \
         --max_model_len 32000
 fi
+
 # test the server
 # curl http://$NODE_IP:8000/v1/chat/completions \
 #     -H "Content-Type: application/json" \
