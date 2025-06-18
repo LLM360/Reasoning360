@@ -234,9 +234,18 @@ class MegatronCheckpointManager(BaseCheckpointManager):
         if self.rank == 0:
             # NOTE: bug fix by Reasoning360: avoid multiple nodes creating the same directory
             local_path = self.local_mkdir(local_path)
-            model_ckpt_path = get_model_checkpoint_path(local_path)
-            model_ckpt_path = self.local_mkdir(model_ckpt_path)
+            if "model" in self.checkpoint_contents:
+                model_ckpt_path = get_model_checkpoint_path(local_path)
+                model_ckpt_path = self.local_mkdir(model_ckpt_path)
+            if "optimizer" in self.checkpoint_contents:
+                optimizer_path = os.path.join(local_path, "optim")
+                optimizer_path = self.local_mkdir(optimizer_path)
+            if "extra" in self.checkpoint_contents:
+                rng_state_path = os.path.join(local_path, "rng_states")
+                rng_state_path = self.local_mkdir(rng_state_path)
+
         torch.distributed.barrier()
+        local_path = self.local_mkdir(local_path)
 
         # Save Model
         # NOTE: bug fix by Reasoning360: only save one copy for the CP group
