@@ -1,9 +1,8 @@
 import requests
-from sandbox.server.sandbox_api import RunCodeRequest, RunCodeResponse, RunStatus
 from itertools import cycle
 import threading
 import os
-from .utils import _ERROR_MSG_PREFIX, _DEFAULT_TIMEOUT_SECONDS
+from .utils import _ERROR_MSG_PREFIX, _DEFAULT_TIMEOUT_SECONDS, RunCodeResponse, RunStatus
 
 # Default sandbox servers - can be overridden via environment variable or function parameter
 DEFAULT_SANDBOX_SERVERS = [
