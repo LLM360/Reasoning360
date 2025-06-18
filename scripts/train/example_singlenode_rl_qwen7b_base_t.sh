@@ -32,7 +32,7 @@ export test_files="[$(
 )]"
 echo "test_files = $test_files"
 # =================== Data Mixture ===================
-SHARED_DATA_PATH=/mnt/sharefs/users/zhuojun.cheng
+SHARED_DATA_PATH=""
 
 
 # =================== Model ===================
@@ -58,7 +58,7 @@ rm -rf /tmp/ray/ray_current_cluster
 echo "Starting Ray head at ${address_head}…"
 # Start Ray head node
 ray start --head --node-ip-address="$head_node_ip" --port=$port \
-    --num-cpus "${SLURM_CPUS_PER_TASK}" --num-gpus 8 --include-dashboard=True --block &
+    --num-cpus "${SLURM_CPUS_PER_TASK}" --num-gpus 8 --include-dashboard=False --block &
     
 sleep 10
 
