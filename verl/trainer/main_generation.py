@@ -42,6 +42,61 @@ from verl.utils.model import compute_position_id_with_mask
 from verl.workers.fsdp_workers import ActorRolloutRefWorker
 
 
+def merge_responses(responses):
+    """Merge multiple response lists into one"""
+    merged = []
+    for r in responses:
+        merged.extend(r)
+    return merged
+
+
+def extract_content(p):
+    """Extract content from prompt (handle both string and list formats)"""
+    if isinstance(p, str):
+        try:
+            p = json.loads(p)
+        except Exception:
+            return p
+    if isinstance(p, list) and len(p) > 0 and isinstance(p[0], dict):
+        return p[0].get("content", "")
+    return str(p)
+
+
+def merge_aime_responses(dataset, output_lst, prompt_key="prompt", response_key="responses"):
+    """Merge responses for AIME dataset based on prompt content"""
+    # Convert to pandas DataFrame if it's not already
+    if hasattr(dataset, 'to_pandas'):  # polars DataFrame
+        df = dataset.to_pandas()
+        is_polars_df = True
+    else:
+        df = dataset.copy()
+        is_polars_df = False
+    
+    # Add responses to dataframe
+    df[response_key] = output_lst
+    
+    # Extract prompt content
+    df["prompt_content"] = df[prompt_key].apply(extract_content)
+    
+    # Merge responses by prompt content
+    group_keys = ["prompt_content"]
+    agg_dict = {response_key: merge_responses}
+    
+    # Keep first value for other columns
+    for col in df.columns:
+        if col not in group_keys + [response_key]:
+            agg_dict[col] = "first"
+    
+    df_merged = df.groupby(group_keys, as_index=False).agg(agg_dict)
+    
+    # Convert back to original format if needed
+    if is_polars_df:
+        import polars as pl
+        return pl.DataFrame(df_merged)
+    else:
+        return df_merged
+
+
 @hydra.main(config_path="config", config_name="generation", version_base=None)
 def main(config):
     run_generation(config)
@@ -173,32 +228,72 @@ def main_task(config):
     original_chat_lst = chat_lst[:original_data_size]
     original_ground_truth_lst = ground_truth_lst[:original_data_size]
 
-    # add to the data frame
-    if is_polars_df:
-        dataset = dataset.with_columns(pl.Series("responses", output_lst))
-        # write to a new parquet
+    # Check if 'aime' is in the output path to determine if we should merge responses
+    should_merge_aime = 'aime' in config.data.output_path.lower()
+    
+    if should_merge_aime:
+        print("Detected 'aime' in output path, merging responses by prompt content...")
+        # Use merge logic for AIME dataset
+        merged_dataset = merge_aime_responses(dataset, output_lst, config.data.prompt_key, "responses")
+        
+        # Save merged dataset
         output_dir = os.path.dirname(config.data.output_path)
         makedirs(output_dir, exist_ok=True)
-        dataset.write_parquet(config.data.output_path)
+        
+        if hasattr(merged_dataset, 'write_parquet'):  # polars DataFrame
+            merged_dataset.write_parquet(config.data.output_path)
+        else:  # pandas DataFrame
+            merged_dataset.to_parquet(config.data.output_path)
+        
+        print(f"Saved merged AIME responses to {config.data.output_path}")
+        
+        # Also save the merged results as JSON
+        merged_results = []
+        df_to_iterate = merged_dataset if hasattr(merged_dataset, 'iterrows') else merged_dataset.to_pandas()
+        for _, row in df_to_iterate.iterrows():
+            merged_results.append({
+                "prompt": row[config.data.prompt_key],
+                "prompt_content": row["prompt_content"],
+                "responses": row["responses"],
+                "ground_truth": str(row.get("reward_model", "")),
+            })
+        
+        model_name = config.model.path.split('/')[-1]
+        json_output_path = config.data.output_path.replace('.parquet', f'_merged_{model_name}.json')
+        with open(json_output_path, 'w', encoding='utf-8') as f:
+            json.dump(merged_results, f, indent=2, ensure_ascii=False)
+        print(f"Saved merged AIME results as JSON to {json_output_path}")
+        
     else:
-        # For pandas, use standard bracket assignment
-        dataset['responses'] = output_lst
-        # write to a new parquet
-        output_dir = os.path.dirname(config.data.output_path)
-        makedirs(output_dir, exist_ok=True)
-        dataset.to_parquet(config.data.output_path)
-    # NOTE: added by Reasoning360. dump results
-    result_list = [
-        {
-            "prompt": chat,
-            "response": output,
-            "ground_truth": str(ground_truth),
-        } 
-        for chat, output, ground_truth in zip(original_chat_lst, output_lst, original_ground_truth_lst)
-    ]
-    model_name = config.model.path.split('/')[-1]
-    with open(config.data.output_path.replace('.parquet', f'_{model_name}.json'), 'w', encoding='utf-8') as f:
-        json.dump(result_list, f, indent=2, ensure_ascii=False)
+        # Original logic for non-AIME datasets
+        # add to the data frame
+        if is_polars_df:
+            import polars as pl
+            dataset = dataset.with_columns(pl.Series("responses", output_lst))
+            # write to a new parquet
+            output_dir = os.path.dirname(config.data.output_path)
+            makedirs(output_dir, exist_ok=True)
+            dataset.write_parquet(config.data.output_path)
+        else:
+            # For pandas, use standard bracket assignment
+            dataset['responses'] = output_lst
+            # write to a new parquet
+            output_dir = os.path.dirname(config.data.output_path)
+            makedirs(output_dir, exist_ok=True)
+            dataset.to_parquet(config.data.output_path)
+        
+        # NOTE: added by Reasoning360. dump results
+        result_list = [
+            {
+                "prompt": chat,
+                "response": output,
+                "ground_truth": str(ground_truth),
+            } 
+            for chat, output, ground_truth in zip(original_chat_lst, output_lst, original_ground_truth_lst)
+        ]
+        model_name = config.model.path.split('/')[-1]
+        with open(config.data.output_path.replace('.parquet', f'_{model_name}.json'), 'w', encoding='utf-8') as f:
+            json.dump(result_list, f, indent=2, ensure_ascii=False)
 
 
 if __name__ == "__main__":
