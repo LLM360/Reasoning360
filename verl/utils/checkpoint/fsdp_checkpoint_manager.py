@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import os
-import time
 import warnings
 from typing import Optional, Union
 
@@ -157,8 +156,10 @@ class FSDPCheckpointManager(BaseCheckpointManager):
             self.remove_previous_save_local_path(self.previous_saved_paths[:keep_start])
             self.previous_saved_paths = self.previous_saved_paths[keep_start:]
 
-        local_path = self.local_mkdir(local_path)
+        if self.rank == 0:  # added by Reasoning360: file system got problem on rank0 when co-current making dirs, so we make dirs on rank0 only
+            local_path = self.local_mkdir(local_path)
         torch.distributed.barrier()
+        local_path = self.local_mkdir(local_path)  # hack fix: to get the local path for non-rank0
 
         # every rank will save its own model and optim shard
         state_dict_cfg = ShardedStateDictConfig(offload_to_cpu=True if is_cuda_available else False)
