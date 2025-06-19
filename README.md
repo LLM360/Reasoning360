@@ -13,7 +13,7 @@
 </p>
 
 
-This is the official repository of **Reasoning360** aiming to produce strong and provide fully-open researhc on large reasoning models, currently containing data processing and filtering, RL training, and evaluation suite. It's initialized from [verl](https://github.com/volcengine/verl).
+This is the official repository of Reasoning360, a project dedicated to *open research on large-scale reasoning models*. The repository currently includes data processing and filtering tools, reinforcement learning (RL) training pipelines, and an evaluation suite. It's initialized from [verl](https://github.com/volcengine/verl).
 
 ## 🔥News
 + Our paper to analyze and improve multi-domain RL for LLM reasoning with Guru data "[Revisiting Reinforcement Learning for LLM Reasoning from A Cross-Domain Perspective](https://arxiv.org/abs/2506.14965)" is out on arxiv.
