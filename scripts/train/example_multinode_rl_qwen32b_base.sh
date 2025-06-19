@@ -41,58 +41,62 @@ export HYDRA_FULL_ERROR=1
 export VLLM_USE_V1=0
 
 # =================== Data Mixture ===================
-SHARED_DATA_PATH=/mnt/sharefs/users/zhuojun.cheng
-TRAIN_DATA_DIR=${SHARED_DATA_PATH}/guru_data/train/guru18k
-TEST_DATA_DIR=${SHARED_DATA_PATH}/guru_data/test/online
+SHARED_DATA_PATH=./data
+TRAIN_DATA_DIR=${SHARED_DATA_PATH}/train/
+TEST_DATA_DIR=${SHARED_DATA_PATH}/offline_eval/
 
 # Math (train)
-math_train_path=${TRAIN_DATA_DIR}/math__combined_3.1k.parquet
+math_train_path=${TRAIN_DATA_DIR}/math__combined_54.4k.parquet
 # Math (test)
 math_test_path=${TEST_DATA_DIR}/math__math_500.parquet
 aime_test_path=${TEST_DATA_DIR}/math__aime_repeated_8x_240.parquet
 amc_test_path=${TEST_DATA_DIR}/math__amc_repeated_4x_332.parquet
+
 # Code (train)
-leetcode_train_path=${TRAIN_DATA_DIR}/codegen__deduped_leetcode2k_216.parquet
-livecodebench_train_path=${TRAIN_DATA_DIR}/codegen__deduped_livecodebench_75.parquet
-primeintellect_train_path=${TRAIN_DATA_DIR}/codegen__deduped_primeintellect_1.3k.parquet
-taco_train_path=${TRAIN_DATA_DIR}/codegen__deduped_taco_1.5k.parquet
+leetcode_train_path=${TRAIN_DATA_DIR}/codegen__leetcode2k_1.3k.parquet
+livecodebench_train_path=${TRAIN_DATA_DIR}/codegen__livecodebench_440.parquet
+primeintellect_train_path=${TRAIN_DATA_DIR}/codegen__primeintellect_7.5k.parquet
+taco_train_path=${TRAIN_DATA_DIR}/codegen__taco_8.8k.parquet
 # Code (test)
 humaneval_test_path=${TEST_DATA_DIR}/codegen__humaneval_164.parquet
-mbpp_test_path=${TEST_DATA_DIR}/codegen__mbpp_500_sampled_200.parquet
+mbpp_test_path=${TEST_DATA_DIR}/codegen__mbpp_500.parquet
 livecodebench_test_path=${TEST_DATA_DIR}/codegen__livecodebench_279.parquet
+
 # Logic (train)
-arcagi1_train_path=${TRAIN_DATA_DIR}/logic__arcagi1_54.parquet
-arcagi2_train_path=${TRAIN_DATA_DIR}/logic__arcagi2_93.parquet
-barc_train_path=${TRAIN_DATA_DIR}/logic__barc_765.parquet
-graph_train_path=${TRAIN_DATA_DIR}/logic__graph_logical_dataset_605.parquet
-ordering_train_path=${TRAIN_DATA_DIR}/logic__ordering_puzzle_dataset_918.parquet
-zebra_train_path=${TRAIN_DATA_DIR}/logic__zebra_puzzle_dataset_637.parquet
+arcagi1_train_path=${TRAIN_DATA_DIR}/logic__arcagi1_111.parquet
+arcagi2_train_path=${TRAIN_DATA_DIR}/logic__arcagi2_190.parquet
+barc_train_path=${TRAIN_DATA_DIR}/logic__barc_1.6k.parquet
+graph_train_path=${TRAIN_DATA_DIR}/logic__graph_logical_1.2k.parquet
+ordering_train_path=${TRAIN_DATA_DIR}/logic__ordering_puzzle_1.9k.parquet
+zebra_train_path=${TRAIN_DATA_DIR}/logic__zebra_puzzle_1.3k.parquet
 # Logic (test)
-zebralogic_test_path=${TEST_DATA_DIR}/logic__zebra_puzzle_dataset_300_sampled_200.parquet
-graph_test_path=${TEST_DATA_DIR}/logic__graph_logical_dataset_150_sampled_77.parquet
-ordering_puzzle_test_path=${TEST_DATA_DIR}/logic__ordering_puzzle_dataset_150_sampled_100.parquet
-arcagi1_test_path=${TEST_DATA_DIR}/simulation__arcagi1_200.parquet
+zebralogic_test_path=${TEST_DATA_DIR}/logic__zebra_puzzle_dataset_300.parquet
+ordering_puzzle_test_path=${TEST_DATA_DIR}/logic__ordering_puzzle_dataset_150.parquet
+
 # Simulation (train)
-codeio_train_path=${TRAIN_DATA_DIR}/simulation__codeio_fixed_12.1k_3.1k.parquet
+codeio_train_path=${TRAIN_DATA_DIR}/simulation__codeio_3.7k.parquet
 # Simulation (test)
-codeio_test_path=${TEST_DATA_DIR}/simulation__codeio_500_sampled_200.parquet
+codeio_test_path=${TEST_DATA_DIR}/simulation__codeio_500.parquet
+arcagi1_test_path=${TEST_DATA_DIR}/simulation__arcagi1_200.parquet
+
 # Table (train)
-hitab_train_path=${TRAIN_DATA_DIR}/table__hitab_2.3k.parquet
-multihier_train_path=${TRAIN_DATA_DIR}/table__multihier_803.parquet
+hitab_train_path=${TRAIN_DATA_DIR}/table__hitab_4.3k.parquet
+multihier_train_path=${TRAIN_DATA_DIR}/table__multihier_1.5k.parquet
 # Table (test)
-multihier_test_path=${TEST_DATA_DIR}/table__multihier_300_sampled_200.parquet
-hitab_test_path=${TEST_DATA_DIR}/table__hitab_300_sampled_200.parquet
+multihier_test_path=${TEST_DATA_DIR}/table__multihier_300.parquet
+hitab_test_path=${TEST_DATA_DIR}/table__hitab_300.parquet
+
 # Stem (train)
-webinstruct_train_path=${TRAIN_DATA_DIR}/stem__web_3.1k.parquet
+webinstruct_train_path=${TRAIN_DATA_DIR}/stem__web_3.6k.parquet
 # Stem (test)
 gpqa_diamond_test_path=${TEST_DATA_DIR}/stem__gpqa_diamond_198.parquet
 supergpqa_test_path=${TEST_DATA_DIR}/stem__supergpqa_200.parquet
 
-train_files="['${math_train_path}']"
-test_files="['${math_test_path}']"
+train_files="['${math_train_path}']"  # Use math as example, add to more tasks as needed
+test_files="['${math_test_path}']"  # Use math as example, add to more tasks as needed
 
 # =================== Model ===================
-BASE_MODEL=${SHARED_DATA_PATH}/Qwen2.5-32B-think  # Note: this is Qwen32B-Base model with 'think' system prompt
+BASE_MODEL=Qwen/Qwen2.5-32B  # Note: This is the original Qwen32B-Base model. In training, we add 'think' system prompt to it (see README).
 
 # =================== Logging ===================
 WANDB_PROJECT=Reasoning360
@@ -170,8 +174,8 @@ gen_tp=4
 infer_micro_batch_size=null
 train_micro_batch_size=null
 use_dynamic_bsz=True
-actor_ppo_max_token_len=$(( (max_prompt_length + max_response_length)))  # increase this to speed up model forward & backward but note memory overflow
-infer_ppo_max_token_len=$(( (max_prompt_length + max_response_length)))  # increase this to speed up modelforward, but note memory overflow
+actor_ppo_max_token_len=$(( (max_prompt_length + max_response_length) * 2))  # increase this to speed up model forward & backward but note memory overflow
+infer_ppo_max_token_len=$(( (max_prompt_length + max_response_length) * 2))  # increase this to speed up modelforward, but note memory overflow
 offload=True
 
 # =================== Start RL training ===================
@@ -247,9 +251,9 @@ offload=True
     reward_model.overlong_buffer.len=${overlong_buffer_len} \
     reward_model.overlong_buffer.penalty_factor=${overlong_penalty_factor} \
     trainer.logger=['console','wandb'] \
-    trainer.project_name=${WANDB_PROJECT}· \
+    trainer.project_name=${WANDB_PROJECT} \
     trainer.experiment_name=${WANDB_EXPERIMENT_NAME} \
-    trainer.val_before_train=True \
+    trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes="${NNODES}" \
     trainer.nnodes=$worker_num \
