@@ -1,9 +1,24 @@
 # Reasoning360
 
+<p align="center">
+  <a href="https://arxiv.org/abs/2506.14965">
+    <img alt="Paper" src="https://img.shields.io/badge/Paper-arXiv%3A2506.14965-b31b1b?style=flat&logo=arxiv">
+  </a>
+  <a href="https://huggingface.co/datasets/LLM360/guru-RL-92k">
+    <img alt="Dataset" src="https://img.shields.io/badge/Data-guru--92k-blue?logo=huggingface&logoColor=yellow">
+  </a>
+  <a href="https://huggingface.co/LLM360/guru-7B">
+    <img alt="Model" src="https://img.shields.io/badge/Model-guru--model-ffcc00?logo=huggingface&logoColor=yellow">
+  </a>
+</p>
+
+
 This is the official repository of **Reasoning360** aiming to produce strong and provide fully-open researhc on large reasoning models, currently containing data processing and filtering, RL training, and evaluation suite. It's initialized from [verl](https://github.com/volcengine/verl).
 
-## News
-+ The ready-to-train 92K Guru RL data across six domains is released under [LLM360 huggingface](https://huggingface.co/datasets/LLM360/guru_RL)!
+## 🔥News
++ Our paper to analyze and improve multi-domain RL for LLM reasoning with Guru data "[Revisiting Reinforcement Learning for LLM Reasoning from A Cross-Domain Perspective](https://arxiv.org/abs/2506.14965)" is out on arxiv.
+
++ The ready-to-train 92K Guru RL data across six domains is released under [LLM360 huggingface](https://huggingface.co/datasets/LLM360/guru_RL).
 
 
 ---
