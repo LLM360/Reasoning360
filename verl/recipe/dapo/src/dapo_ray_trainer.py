@@ -227,6 +227,8 @@ class RayDAPOTrainer(RayPPOTrainer):
                             batch_keys=["responses", "input_ids", "attention_mask", "position_ids"],
                             non_tensor_batch_keys=["uid"],
                         )
+                        if self.global_steps <= 1:
+                            print(f"removing keys {set(batch.batch.keys()) - set(log_prob_input_batch.batch.keys())} for old logprob.", flush=True)
                         old_log_prob = self.actor_rollout_wg.compute_log_prob(log_prob_input_batch)
                         entropys = old_log_prob.batch["entropys"]
                         response_masks = batch.batch["response_mask"]
@@ -268,6 +270,8 @@ class RayDAPOTrainer(RayPPOTrainer):
                                 batch_keys=["responses", "input_ids", "attention_mask", "position_ids"],
                                 non_tensor_batch_keys=["uid"],
                             )
+                            if self.global_steps <= 1:
+                                print(f"removing keys {set(batch.batch.keys()) - set(ref_log_prob_input_batch.batch.keys())} for ref logprob.", flush=True)
                             if not self.ref_in_actor:
                                 ref_log_prob = self.ref_policy_wg.compute_ref_log_prob(ref_log_prob_input_batch)
                             else:
@@ -304,9 +308,13 @@ class RayDAPOTrainer(RayPPOTrainer):
                     # implement critic warmup
                     if self.config.trainer.critic_warmup <= self.global_steps:
                         # update actor
+                        train_batch_keys = ["responses", "input_ids", "attention_mask", "position_ids", "old_log_probs", "advantages"]
+                        if self.global_steps <= 1:
+                            print(f"removing keys {set(batch.batch.keys()) - set(train_batch_keys)} for training.", flush=True)
+                        train_batch = batch.select(batch_keys=train_batch_keys, non_tensor_batch_keys=set())
                         with _timer("update_actor", timing_raw):
-                            batch.meta_info["multi_turn"] = self.config.actor_rollout_ref.rollout.multi_turn.enable
-                            actor_output = self.actor_rollout_wg.update_actor(batch)
+                            train_batch.meta_info["multi_turn"] = self.config.actor_rollout_ref.rollout.multi_turn.enable
+                            actor_output = self.actor_rollout_wg.update_actor(train_batch)
                         actor_output_metrics = reduce_metrics(actor_output.meta_info["metrics"])
                         metrics.update(actor_output_metrics)
 

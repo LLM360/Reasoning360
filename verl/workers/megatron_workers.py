@@ -415,7 +415,7 @@ class ActorRolloutRefWorker(MegatronWorker):
         torch.cuda.empty_cache()
         log_gpu_memory_usage("After init_model finish", logger=logger)
 
-    @register(dispatch_mode=Dispatch.MEGATRON_COMPUTE_PROTO)
+    @register(dispatch_mode=Dispatch.MEGATRON_PP_DUMMY_PROTO)
     @GPUMemoryLogger(role="update_actor", logger=logger)
     def update_actor(self, data: DataProto):
         assert self._is_actor
@@ -426,6 +426,8 @@ class ActorRolloutRefWorker(MegatronWorker):
             load_megatron_optimizer(self.actor_optimizer)
             log_gpu_memory_usage("After load actor optimizer during update_actor", logger=logger)
         data.batch = data.batch.cuda()
+
+        broadcast_dict_tensor(data.batch, src=mpu.get_tensor_model_parallel_src_rank(), group=mpu.get_tensor_model_parallel_group())
 
         micro_batch_size = self.config.actor.ppo_micro_batch_size_per_gpu
         data.meta_info["micro_batch_size"] = micro_batch_size
