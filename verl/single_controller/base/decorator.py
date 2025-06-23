@@ -402,6 +402,8 @@ def collect_dp_compute_data_proto(worker_group, output):
 MAGIC_PREFIX = "__verl_dummy_tensor_"
 def _materialize_dummy_data_proto(arg):
     from verl.protocol import DataProto
+    from tensordict import TensorDict
+    import numpy as np
 
     if not isinstance(arg, DataProto):
         return arg
@@ -411,38 +413,49 @@ def _materialize_dummy_data_proto(arg):
     if not all(v.shape[1] == 1 and len(v.shape) == 1 for v in arg.batch.values()):
         return arg
 
+    new_batch = TensorDict({}, batch_size=[1])
+    new_non_tensor_batch = {}
     for k, v in arg.batch.items():
         assert f"{MAGIC_PREFIX}batch_{k}_shape" in arg.meta_info
         shape = arg.meta_info[f"{MAGIC_PREFIX}batch_{k}_shape"]
-        arg.batch[k] = torch.zeros(shape, dtype=v.dtype, device=v.device)
+        new_batch[k] = torch.zeros(shape, dtype=v.dtype, device=v.device)
         arg.meta_info.pop(f"{MAGIC_PREFIX}batch_{k}_shape")
     for k, v in arg.non_tensor_batch.items():
         assert f"{MAGIC_PREFIX}batch_{k}_shape" in arg.meta_info
         shape = arg.meta_info[f"{MAGIC_PREFIX}non_tensor_batch_{k}_shape"]
-        arg.non_tensor_batch[k] = torch.zeros(shape, dtype=v.dtype, device=v.device)
+        new_non_tensor_batch[k] = np.zeros(shape, dtype=v.dtype)
         arg.meta_info.pop(f"{MAGIC_PREFIX}non_tensor_batch_{k}_shape")
-    return arg
+    return DataProto(
+        batch=new_batch,
+        non_tensor_batch=new_non_tensor_batch,
+        meta_info=arg.meta_info,
+    )
 
 
 def _make_dummy_data_proto(arg):
     from verl.protocol import DataProto
+    import numpy as np
+    from tensordict import TensorDict
 
     if not isinstance(arg, DataProto):
         return arg
+
+    new_batch = TensorDict({}, batch_size=[1])
+    new_non_tensor_batch = {}
 
     empty_shape = [1]
     for k, v in arg.batch.items():
         shape = v.shape
         # empty_shape = [0] + list(shape[1:])
-        arg.batch[k] = torch.zeros(empty_shape, dtype=v.dtype, device=v.device)
+        new_batch[k] = torch.zeros(empty_shape, dtype=v.dtype, device=v.device)
         arg.meta_info[f"{MAGIC_PREFIX}batch_{k}_shape"] = shape
 
     for k, v in arg.non_tensor_batch.items():
         shape = v.shape
         # empty_shape = [0] + list(shape[1:])
-        arg.non_tensor_batch[k] = torch.zeros(empty_shape, dtype=v.dtype, device=v.device)
+        new_non_tensor_batch[k] = np.zeros(empty_shape, dtype=v.dtype)
         arg.meta_info[f"{MAGIC_PREFIX}non_tensor_batch_{k}_shape"] = shape
-    return arg
+    return DataProto(batch=new_batch, non_tensor_batch=new_non_tensor_batch, meta_info=arg.meta_info)
 
 
 def dispatch_megatron_pp_dummy_data_proto(worker_group, *args, **kwargs):
@@ -463,8 +476,7 @@ def dispatch_megatron_pp_dummy_data_proto(worker_group, *args, **kwargs):
     # Extract the special keyword argument for PP send ranks
     verl_pp_send_rank = kwargs.pop("verl_pp_send_rank", None)
     if verl_pp_send_rank is None:
-        # Fall back to normal megatron compute behavior if no PP send rank specified
-        return dispatch_megatron_compute_data_proto(worker_group, *args, **kwargs)
+        verl_pp_send_rank = (0, worker_group.pp_size - 1)
 
     # First, split the DataProto arguments by dp_size like in megatron_compute_data_proto
     splitted_args, splitted_kwargs = _split_args_kwargs_data_proto(worker_group.dp_size, *args, **kwargs)
