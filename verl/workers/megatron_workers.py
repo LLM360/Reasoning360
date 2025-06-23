@@ -41,6 +41,7 @@ from verl.utils.megatron_utils import (
     offload_megatron_optimizer,
 )
 from verl.utils.model import load_mcore_dist_weights, load_megatron_gptmodel_weights
+from verl.utils.torch_functional import broadcast_dict_tensor
 from verl.workers.actor.megatron_actor import MegatronPPOActor
 from verl.workers.critic.megatron_critic import MegatronPPOCritic
 from verl.workers.reward_model.megatron.reward_model import MegatronRewardModel
@@ -66,6 +67,17 @@ def set_random_seed(seed):
     # https://github.com/pytorch/pytorch/issues/89492
     # torch.use_deterministic_algorithms(True, warn_only=True)
     # os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+
+
+def megatron_pp_dummy_output(data: DataProto):
+    from verl.single_controller.base.decorator import _make_dummy_data_proto
+
+    if (
+        mpu.get_pipeline_model_parallel_rank() != mpu.get_pipeline_model_parallel_world_size() - 1   # not the last stage
+        or mpu.get_tensor_model_parallel_rank() != 0    # not the first tensor parallel rank
+    ):
+        return _make_dummy_data_proto(data)
+    return data
 
 
 class ActorRolloutRefWorker(MegatronWorker):
@@ -492,6 +504,9 @@ class ActorRolloutRefWorker(MegatronWorker):
         data.meta_info["use_dynamic_bsz"] = self.config.ref.log_prob_use_dynamic_bsz
         data.meta_info["temperature"] = self.config.rollout.temperature
         data = data.to(torch.cuda.current_device())
+
+        broadcast_dict_tensor(data.batch, src=mpu.get_tensor_model_parallel_src_rank(), group=mpu.get_tensor_model_parallel_group())
+
         # NOTE: this function internally broadcasts the last stage's input and output to all ranks.
         output, _ = self.ref_policy.compute_log_prob(data=data, calculate_entropy=False)
         output = DataProto.from_dict(tensors={"ref_log_prob": output})
@@ -500,7 +515,7 @@ class ActorRolloutRefWorker(MegatronWorker):
             offload_megatron_model_to_cpu(self.ref_module)
             log_gpu_memory_usage("After offload ref params and grad during compute_ref_log_prob", logger=logger)
         torch.cuda.empty_cache()
-        return output
+        return megatron_pp_dummy_output(output)
 
     @register(dispatch_mode=Dispatch.MEGATRON_PP_DUMMY_PROTO)
     @GPUMemoryLogger(role="compute_log_prob", logger=logger)
@@ -515,6 +530,9 @@ class ActorRolloutRefWorker(MegatronWorker):
         data.meta_info["use_dynamic_bsz"] = self.config.rollout.log_prob_use_dynamic_bsz
         data.meta_info["temperature"] = self.config.rollout.temperature
         data = data.to(torch.cuda.current_device())
+
+        broadcast_dict_tensor(data.batch, src=mpu.get_tensor_model_parallel_src_rank(), group=mpu.get_tensor_model_parallel_group())
+
         # NOTE: this function internally broadcasts the last stage's input and output to all ranks.
         output, entropys = self.actor.compute_log_prob(data=data, calculate_entropy=True)
         output = DataProto.from_dict(tensors={"old_log_probs": output, "entropys": entropys}, meta_info={"temperature": self.config.rollout.temperature})
@@ -524,7 +542,7 @@ class ActorRolloutRefWorker(MegatronWorker):
             offload_megatron_model_to_cpu(self.actor_module)
             log_gpu_memory_usage("After offload actor params and grad during compute_log_prob", logger=logger)
         torch.cuda.empty_cache()
-        return output
+        return megatron_pp_dummy_output(output)
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
     def load_checkpoint(self, checkpoint_path, hdfs_path=None, del_local_after_load=True):

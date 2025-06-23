@@ -409,24 +409,28 @@ def _materialize_dummy_data_proto(arg):
         return arg
 
     # This is not a dummy data proto
-    # TODO: when make the data dummy, add a flag at the key.
-    if not all(v.shape[1] == 1 and len(v.shape) == 1 for v in arg.batch.values()):
+    if not arg.meta_info.get(f"{MAGIC_PREFIX}is_dummy", False):
         return arg
+    arg.meta_info.pop(f"{MAGIC_PREFIX}is_dummy")
 
-    new_batch = TensorDict({}, batch_size=[1])
+    new_batch = {}
     new_non_tensor_batch = {}
+    batch_size = None
     for k, v in arg.batch.items():
         assert f"{MAGIC_PREFIX}batch_{k}_shape" in arg.meta_info
         shape = arg.meta_info[f"{MAGIC_PREFIX}batch_{k}_shape"]
         new_batch[k] = torch.zeros(shape, dtype=v.dtype, device=v.device)
         arg.meta_info.pop(f"{MAGIC_PREFIX}batch_{k}_shape")
+        batch_size = batch_size or shape[0]
+        assert batch_size == shape[0], f"{batch_size=}, {shape=}"
     for k, v in arg.non_tensor_batch.items():
-        assert f"{MAGIC_PREFIX}batch_{k}_shape" in arg.meta_info
+        assert f"{MAGIC_PREFIX}non_tensor_batch_{k}_shape" in arg.meta_info
         shape = arg.meta_info[f"{MAGIC_PREFIX}non_tensor_batch_{k}_shape"]
         new_non_tensor_batch[k] = np.zeros(shape, dtype=v.dtype)
         arg.meta_info.pop(f"{MAGIC_PREFIX}non_tensor_batch_{k}_shape")
+        assert batch_size == shape[0], f"{batch_size=}, {shape=}"
     return DataProto(
-        batch=new_batch,
+        batch=TensorDict(new_batch, batch_size=batch_size),
         non_tensor_batch=new_non_tensor_batch,
         meta_info=arg.meta_info,
     )
@@ -442,20 +446,22 @@ def _make_dummy_data_proto(arg):
 
     new_batch = TensorDict({}, batch_size=[1])
     new_non_tensor_batch = {}
+    meta_info = arg.meta_info.copy()
 
     empty_shape = [1]
     for k, v in arg.batch.items():
         shape = v.shape
         # empty_shape = [0] + list(shape[1:])
         new_batch[k] = torch.zeros(empty_shape, dtype=v.dtype, device=v.device)
-        arg.meta_info[f"{MAGIC_PREFIX}batch_{k}_shape"] = shape
+        meta_info[f"{MAGIC_PREFIX}batch_{k}_shape"] = shape
 
     for k, v in arg.non_tensor_batch.items():
         shape = v.shape
         # empty_shape = [0] + list(shape[1:])
         new_non_tensor_batch[k] = np.zeros(empty_shape, dtype=v.dtype)
-        arg.meta_info[f"{MAGIC_PREFIX}non_tensor_batch_{k}_shape"] = shape
-    return DataProto(batch=new_batch, non_tensor_batch=new_non_tensor_batch, meta_info=arg.meta_info)
+        meta_info[f"{MAGIC_PREFIX}non_tensor_batch_{k}_shape"] = shape
+    meta_info[f"{MAGIC_PREFIX}is_dummy"] = True
+    return DataProto(batch=new_batch, non_tensor_batch=new_non_tensor_batch, meta_info=meta_info)
 
 
 def dispatch_megatron_pp_dummy_data_proto(worker_group, *args, **kwargs):
@@ -488,9 +494,10 @@ def dispatch_megatron_pp_dummy_data_proto(worker_group, *args, **kwargs):
     for rank in range(worker_group.world_size):
         local_rank_info = worker_group.get_megatron_rank_info(rank=rank)
         pp_rank = local_rank_info.pp_rank
+        tp_rank = local_rank_info.tp_rank
 
         # If this worker's PP rank is not in the send list, replace with empty DataProto
-        if pp_rank not in verl_pp_send_rank:
+        if pp_rank not in verl_pp_send_rank or tp_rank != 0:
             # Create empty DataProto with shape information from original args
             for arg_idx, arg in enumerate(all_args):
                 if isinstance(arg[rank], (DataProto, DataProtoFuture)):

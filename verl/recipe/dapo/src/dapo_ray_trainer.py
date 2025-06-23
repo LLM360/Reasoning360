@@ -223,7 +223,11 @@ class RayDAPOTrainer(RayPPOTrainer):
 
                     # recompute old_log_probs
                     with _timer("old_log_prob", timing_raw):
-                        old_log_prob = self.actor_rollout_wg.compute_log_prob(batch)
+                        log_prob_input_batch = batch.select(
+                            batch_keys=["responses", "input_ids", "attention_mask", "position_ids"],
+                            non_tensor_batch_keys=["uid"],
+                        )
+                        old_log_prob = self.actor_rollout_wg.compute_log_prob(log_prob_input_batch)
                         entropys = old_log_prob.batch["entropys"]
                         response_masks = batch.batch["response_mask"]
                         loss_agg_mode = self.config.actor_rollout_ref.actor.loss_agg_mode
@@ -260,10 +264,14 @@ class RayDAPOTrainer(RayPPOTrainer):
                     if self.use_reference_policy:
                         # compute reference log_prob
                         with _timer("ref", timing_raw):
+                            ref_log_prob_input_batch = batch.select(
+                                batch_keys=["responses", "input_ids", "attention_mask", "position_ids"],
+                                non_tensor_batch_keys=["uid"],
+                            )
                             if not self.ref_in_actor:
-                                ref_log_prob = self.ref_policy_wg.compute_ref_log_prob(batch)
+                                ref_log_prob = self.ref_policy_wg.compute_ref_log_prob(ref_log_prob_input_batch)
                             else:
-                                ref_log_prob = self.actor_rollout_wg.compute_ref_log_prob(batch)
+                                ref_log_prob = self.actor_rollout_wg.compute_ref_log_prob(ref_log_prob_input_batch)
                             batch = batch.union(ref_log_prob)
 
                     # compute values
