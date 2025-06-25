@@ -70,11 +70,10 @@ import json
 from datasets import load_dataset
 
 # Load dataset
-dataset = load_dataset("LLM360/guru-RL-92k")
-train_data = dataset["train"]
+train_data = load_dataset("LLM360/guru-RL-92k", split="train", streaming=True)
 
 print(f"Columns: {train_data.column_names}")
-print(json.dumps(train_data[0], indent=2))
+print(f"First item: {next(iter(train_data))}")
 ```
 
 ---
@@ -222,3 +221,16 @@ pre-commit run --all-files
 
 Please make a pull request including the data preprocessing script, reward function, and the training script.
 
+
+## Citation
+If you find the repo helpful, please cite:
+```
+@misc{cheng2025revisiting,
+  title         = {Revisiting Reinforcement Learning for LLM Reasoning from A Cross-Domain Perspective},
+  author        = {Zhoujun Cheng and Shibo Hao and Tianyang Liu and Fan Zhou and Yutao Xie and Feng Yao and Yuexin Bian and Yonghao Zhuang and Nilabjo Dey and Yuheng Zha and Yi Gu and Kun Zhou and Yuqi Wang and Yuan Li and Richard Fan and Jianshu She and Chengqian Gao and Abulhair Saparov and Haonan Li and Taylor W. Killian and Mikhail Yurochkin and Zhengzhong Liu and Eric P. Xing and Zhiting Hu},
+  journal       = {arXiv preprint arXiv:2506.14965},
+  year          = {2025},
+  doi           = {10.48550/arXiv.2506.14965},
+  url           = {https://arxiv.org/abs/2506.14965}
+}
+```
