@@ -502,14 +502,14 @@ def dispatch_megatron_pp_dummy_data_proto(worker_group, *args, **kwargs):
             for arg_idx, arg in enumerate(all_args):
                 if isinstance(arg[rank], (DataProto, DataProtoFuture)):
                     # Get the original DataProto to extract shape information
-                    original_arg = args[arg_idx] if arg_idx < len(args) else None
+                    original_arg = arg[rank]
                     if original_arg is not None and isinstance(original_arg, DataProto):
                         all_args[arg_idx][rank] = _make_dummy_data_proto(original_arg)
 
             # Handle kwargs similarly
             for key, val_list in all_kwargs.items():
                 if isinstance(val_list[rank], (DataProto, DataProtoFuture)):
-                    original_val = kwargs.get(key)
+                    original_val = val_list[rank]
                     if original_val is not None and isinstance(original_val, DataProto):
                         all_kwargs[key][rank] = _make_dummy_data_proto(original_val)
 
