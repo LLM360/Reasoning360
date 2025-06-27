@@ -17,6 +17,8 @@ from functools import wraps
 from types import FunctionType
 from typing import Dict, List, Tuple
 
+import torch
+
 from verl.protocol import DataProtoFuture, _padding_size_key
 from verl.utils.py_functional import DynamicEnum
 
@@ -49,6 +51,7 @@ def init_predefined_dispatch_mode():
     Dispatch.register("DP_COMPUTE_PROTO")
     Dispatch.register("DP_COMPUTE_PROTO_WITH_FUNC")
     Dispatch.register("DP_COMPUTE_METRIC")
+    Dispatch.register("MEGATRON_PP_DUMMY_PROTO")
     # This is a special dispatch mode for vllm ExternalRayDistributedExecutor
     Dispatch.register("DIRECT_ROLLOUT_METHOD")
 
@@ -396,6 +399,123 @@ def collect_dp_compute_data_proto(worker_group, output):
     return _concat_data_proto_or_future(output)
 
 
+MAGIC_PREFIX = "__verl_dummy_tensor_"
+def _materialize_dummy_data_proto(arg):
+    from verl.protocol import DataProto
+    from tensordict import TensorDict
+    import numpy as np
+
+    if not isinstance(arg, DataProto):
+        return arg
+
+    # This is not a dummy data proto
+    if not arg.meta_info.get(f"{MAGIC_PREFIX}is_dummy", False):
+        return arg
+    arg.meta_info.pop(f"{MAGIC_PREFIX}is_dummy")
+
+    new_batch = {}
+    new_non_tensor_batch = {}
+    batch_size = None
+    for k, v in arg.batch.items():
+        assert f"{MAGIC_PREFIX}batch_{k}_shape" in arg.meta_info
+        shape = arg.meta_info[f"{MAGIC_PREFIX}batch_{k}_shape"]
+        new_batch[k] = torch.zeros(shape, dtype=v.dtype, device=v.device)
+        arg.meta_info.pop(f"{MAGIC_PREFIX}batch_{k}_shape")
+        batch_size = batch_size or shape[0]
+        assert batch_size == shape[0], f"{batch_size=}, {shape=}"
+    for k, v in arg.non_tensor_batch.items():
+        assert f"{MAGIC_PREFIX}non_tensor_batch_{k}_shape" in arg.meta_info
+        shape = arg.meta_info[f"{MAGIC_PREFIX}non_tensor_batch_{k}_shape"]
+        new_non_tensor_batch[k] = np.zeros(shape, dtype=v.dtype)
+        arg.meta_info.pop(f"{MAGIC_PREFIX}non_tensor_batch_{k}_shape")
+        assert batch_size == shape[0], f"{batch_size=}, {shape=}"
+    return DataProto(
+        batch=TensorDict(new_batch, batch_size=batch_size),
+        non_tensor_batch=new_non_tensor_batch,
+        meta_info=arg.meta_info,
+    )
+
+
+def _make_dummy_data_proto(arg):
+    from verl.protocol import DataProto
+    import numpy as np
+    from tensordict import TensorDict
+
+    if not isinstance(arg, DataProto):
+        return arg
+
+    new_batch = TensorDict({}, batch_size=[1])
+    new_non_tensor_batch = {}
+    meta_info = arg.meta_info.copy()
+
+    empty_shape = [1]
+    for k, v in arg.batch.items():
+        shape = v.shape
+        # empty_shape = [0] + list(shape[1:])
+        new_batch[k] = torch.zeros(empty_shape, dtype=v.dtype, device=v.device)
+        meta_info[f"{MAGIC_PREFIX}batch_{k}_shape"] = shape
+
+    for k, v in arg.non_tensor_batch.items():
+        shape = v.shape
+        # empty_shape = [0] + list(shape[1:])
+        new_non_tensor_batch[k] = np.zeros(empty_shape, dtype=v.dtype)
+        meta_info[f"{MAGIC_PREFIX}non_tensor_batch_{k}_shape"] = shape
+    meta_info[f"{MAGIC_PREFIX}is_dummy"] = True
+    return DataProto(batch=new_batch, non_tensor_batch=new_non_tensor_batch, meta_info=meta_info)
+
+
+def dispatch_megatron_pp_dummy_data_proto(worker_group, *args, **kwargs):
+    """
+    NOTE: added by Reasoning360. It reads from a special keyword argument `verl_pp_send_rank: Sequence[int]`
+    It handles other arguments the same as `dispatch_megatron_compute_data_proto`, but the DataProto args are different that:
+    For Data Parallel Group (DP), the dispatch pattern is the same as `dispatch_megatron_compute_data_proto`.
+    For Pipeline Parallel Group (PP), only workers with a PP rank within `verl_pp_send_rank` will be dispatched. Other workers
+    wil receive an empty DataProto, with meta_info pairs of `batch_{key}_shape: value.shape for key, value in arg.batch`.
+    NOTE: this function cannot handle DataProtoFuture now.
+    TODO: broadcast within TP ranks after receiving, then TP ranks > 0 will also receive dummy data.
+    """
+    from verl.single_controller.base.megatron.worker_group import MegatronWorkerGroup
+    from verl.protocol import DataProto, DataProtoFuture
+
+    assert isinstance(worker_group, MegatronWorkerGroup)
+
+    # Extract the special keyword argument for PP send ranks
+    verl_pp_send_rank = kwargs.pop("verl_pp_send_rank", None)
+    if verl_pp_send_rank is None:
+        verl_pp_send_rank = (0, worker_group.pp_size - 1)
+
+    # First, split the DataProto arguments by dp_size like in megatron_compute_data_proto
+    splitted_args, splitted_kwargs = _split_args_kwargs_data_proto(worker_group.dp_size, *args, **kwargs)
+
+    # Now apply the megatron compute dispatch pattern
+    all_args, all_kwargs = dispatch_megatron_compute(worker_group, *splitted_args, **splitted_kwargs)
+
+    # For each worker, check if it should receive data or empty DataProto
+    for rank in range(worker_group.world_size):
+        local_rank_info = worker_group.get_megatron_rank_info(rank=rank)
+        pp_rank = local_rank_info.pp_rank
+        tp_rank = local_rank_info.tp_rank
+
+        # If this worker's PP rank is not in the send list, replace with empty DataProto
+        if pp_rank not in verl_pp_send_rank or tp_rank != 0:
+            # Create empty DataProto with shape information from original args
+            for arg_idx, arg in enumerate(all_args):
+                if isinstance(arg[rank], (DataProto, DataProtoFuture)):
+                    # Get the original DataProto to extract shape information
+                    original_arg = arg[rank]
+                    if original_arg is not None and isinstance(original_arg, DataProto):
+                        all_args[arg_idx][rank] = _make_dummy_data_proto(original_arg)
+
+            # Handle kwargs similarly
+            for key, val_list in all_kwargs.items():
+                if isinstance(val_list[rank], (DataProto, DataProtoFuture)):
+                    original_val = val_list[rank]
+                    if original_val is not None and isinstance(original_val, DataProto):
+                        all_kwargs[key][rank] = _make_dummy_data_proto(original_val)
+
+    return all_args, all_kwargs
+
+
 # Global registry for dispatch mode.
 DISPATCH_MODE_FN_REGISTRY = {
     Dispatch.ONE_TO_ALL: {
@@ -436,6 +556,10 @@ DISPATCH_MODE_FN_REGISTRY = {
     Dispatch.DIRECT_ROLLOUT_METHOD: {
         "dispatch_fn": dummy_direct_rollout_call,
         "collect_fn": dummy_direct_rollout_call,
+    },
+    Dispatch.MEGATRON_PP_DUMMY_PROTO: {
+        "dispatch_fn": dispatch_megatron_pp_dummy_data_proto,
+        "collect_fn": collect_megatron_compute_data_proto,
     },
 }
 
@@ -502,6 +626,20 @@ def _materialize_futures(*args, **kwargs):
     return new_args, kwargs
 
 
+def _materialize_dummy(*args, **kwargs):
+    from verl.protocol import DataProto
+
+    new_args = []
+    for arg in args:
+        if isinstance(arg, DataProto):
+            arg = _materialize_dummy_data_proto(arg)
+        new_args.append(arg)
+    for k in kwargs:
+        if isinstance(kwargs[k], DataProto):
+            kwargs[k] = _materialize_dummy_data_proto(kwargs[k])
+    return tuple(new_args), kwargs
+
+
 def register(dispatch_mode=Dispatch.ALL_TO_ALL, execute_mode=Execute.ALL, blocking=True, materialize_futures=True):
     """Register a function with distributed execution configuration.
 
@@ -518,6 +656,10 @@ def register(dispatch_mode=Dispatch.ALL_TO_ALL, execute_mode=Execute.ALL, blocki
             Whether the execution should be blocking. Defaults to True.
         materialize_futures:
             Whether to materialize the data before dispatching. Defaults to True.
+        materialize_dummy:
+            Whether it receives a dummy DataProto. If so, it will materialize a dummy
+            tensor based on the metadata in the DataProto. This is to receive unused
+            data for intermediate ranks of pipeline parallel.
 
     Returns:
         A decorator that wraps the original function with distributed execution
@@ -526,17 +668,23 @@ def register(dispatch_mode=Dispatch.ALL_TO_ALL, execute_mode=Execute.ALL, blocki
     _check_dispatch_mode(dispatch_mode=dispatch_mode)
     _check_execute_mode(execute_mode=execute_mode)
 
+    materialize_dummy = dispatch_mode == Dispatch.MEGATRON_PP_DUMMY_PROTO
+
     def decorator(func):
         @wraps(func)
         def inner(*args, **kwargs):
             if materialize_futures:
                 args, kwargs = _materialize_futures(*args, **kwargs)
+            if materialize_dummy:
+                args, kwargs = _materialize_dummy(*args, **kwargs)
             return func(*args, **kwargs)
 
         @wraps(func)
         async def async_inner(*args, **kwargs):
             if materialize_futures:
                 args, kwargs = _materialize_futures(*args, **kwargs)
+            if materialize_dummy:
+                args, kwargs = _materialize_dummy(*args, **kwargs)
             return await func(*args, **kwargs)
 
         wrapper = async_inner if inspect.iscoroutinefunction(func) else inner
