@@ -134,7 +134,11 @@ def main(config):
     remote_tasks = [process_item.remote(compute_score, data_sources[i], responses[i], reward_model_data[i], extra_info_data[i]) for i in range(total)]
 
     # Compute max_k (number of responses per item) and candidate k values (powers of 2)
-    max_k = len(responses.tolist()[-1])
+    if isinstance(responses, pd.Series):
+        max_k = len(responses.to_list()[-1])
+    else:
+        # numpy array
+        max_k = len(responses.tolist()[-1])
     candidate_ks = [2**i for i in range(int(np.log2(max_k)) + 1) if 2**i <= max_k]
     pass_k_stat = {k: 0 for k in candidate_ks if k <= max_k}
     avg_pass = 0  # Sum of average scores for all items
