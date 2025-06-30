@@ -131,7 +131,7 @@ def main(config):
     compute_score = get_custom_reward_fn(config) or default_compute_score
 
     # Create Ray remote tasks for each data item
-    remote_tasks = [process_item.remote(compute_score, data_sources[i], responses[i], reward_model_data[i], extra_info_data[i] if extra_info_data is not None else None) for i in range(total)]
+    remote_tasks = [process_item.remote(compute_score, data_sources[i], responses[i], reward_model_data[i], extra_info_data[i] if extra_info_data is not None else dict()) for i in range(total)]
 
     # Compute max_k (number of responses per item) and candidate k values (powers of 2)
     if isinstance(responses, pd.Series) or isinstance(responses, pl.Series):
