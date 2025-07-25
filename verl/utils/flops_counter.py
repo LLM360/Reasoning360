@@ -16,7 +16,17 @@ from transformers import PretrainedConfig
 
 from verl.utils.device import get_torch_device
 
-VALID_CONFIG_TYPE = {"llama", "qwen2", "qwen2_vl", "qwen2_5_vl", "qwen3", "qwen3_moe", "deepseek_v3"}
+VALID_CONFIG_TYPE = {
+    "llama",
+    "qwen2",
+    "qwen2_vl",
+    "qwen2_5_vl",
+    "qwen3",
+    "qwen3_moe",
+    "deepseek_v3",
+    "minicpmv",
+    "minicpmo",
+}
 
 
 def get_device_flops(unit="T"):
@@ -35,7 +45,7 @@ def get_device_flops(unit="T"):
 
     if "MI300X" in device_name:
         flops = 1336e12
-    elif "H100" in device_name or "H800" in device_name:
+    elif "H100" in device_name or "H800" in device_name or "H200" in device_name:
         flops = 989e12
     elif "A100" in device_name or "A800" in device_name:
         flops = 312e12
@@ -47,6 +57,8 @@ def get_device_flops(unit="T"):
         flops = 148e12
     elif "910B" in device_name:
         flops = 354e12
+    elif "RTX 3070 Ti" in device_name:
+        flops = 21.75e12
     flops_unit = unit_convert(flops, unit)
     return flops_unit
 
@@ -63,16 +75,22 @@ class FlopsCounter:
 
     def __init__(self, config: PretrainedConfig):
         if config.model_type not in VALID_CONFIG_TYPE:
-            print(f"Only support config type of {VALID_CONFIG_TYPE}, but got {config.model_type}. MFU will always be zero.")
+            print(
+                f"Only support config type of {VALID_CONFIG_TYPE}, but got {config.model_type}. MFU will always be "
+                f"zero."
+            )
 
         self.estimate_func = {
             "qwen2": self._estimate_qwen2_flops,
             "llama": self._estimate_qwen2_flops,
+            "qwen2_moe": self._estimate_qwen2_moe_flops,
             "qwen2_vl": self._estimate_qwen2_flops,
             "qwen2_5_vl": self._estimate_qwen2_flops,
             "qwen3": self._estimate_qwen2_flops,
-            "qwen3_moe": self._estimate_qwen3_moe_flops,
+            "qwen3_moe": self._estimate_qwen2_moe_flops,
             "deepseek_v3": self._estimate_deepseek_v3_flops,
+            "minicpmv": self._estimate_qwen2_flops,
+            "minicpmo": self._estimate_qwen2_flops,
         }
         self.config = config
 
@@ -139,11 +157,19 @@ class FlopsCounter:
             attn_linear_N += num_query_heads * q_head_dim * self.config.q_lora_rank
 
         attn_linear_N += hidden_size * (self.config.kv_lora_rank + self.config.qk_rope_head_dim)
-        attn_linear_N += num_query_heads * (q_head_dim - self.config.qk_rope_head_dim + self.config.v_head_dim) * self.config.kv_lora_rank
+        attn_linear_N += (
+            num_query_heads
+            * (q_head_dim - self.config.qk_rope_head_dim + self.config.v_head_dim)
+            * self.config.kv_lora_rank
+        )
         attn_linear_N += num_query_heads * self.config.v_head_dim * hidden_size
         emd_and_lm_head_N = vocab_size * hidden_size * 2
         # non-attn all_layer parm
-        moe_N = (moe_gata_N + moe_expertmlp_N + attn_linear_N) * (num_hidden_layers - first_k_dense_replace) + (hidden_size * self.config.intermediate_size * 3 + attn_linear_N) * first_k_dense_replace + emd_and_lm_head_N
+        moe_N = (
+            (moe_gata_N + moe_expertmlp_N + attn_linear_N) * (num_hidden_layers - first_k_dense_replace)
+            + (hidden_size * self.config.intermediate_size * 3 + attn_linear_N) * first_k_dense_replace
+            + emd_and_lm_head_N
+        )
         # non-attn all_layer & all_token fwd & bwd flops
         dense_N_flops = 6 * moe_N * tokens_sum
 
@@ -159,13 +185,13 @@ class FlopsCounter:
 
         return flops_achieved
 
-    def _estimate_qwen3_moe_flops(self, tokens_sum, batch_seqlens, delta_time):
+    def _estimate_qwen2_moe_flops(self, tokens_sum, batch_seqlens, delta_time):
         hidden_size = self.config.hidden_size
         vocab_size = self.config.vocab_size
         num_hidden_layers = self.config.num_hidden_layers
         num_key_value_heads = self.config.num_key_value_heads
         num_attention_heads = self.config.num_attention_heads
-        moe_intermediate_size = self.config.moe_intermediate_size       
+        moe_intermediate_size = self.config.moe_intermediate_size
         moe_topk = self.config.num_experts_per_tok
         num_experts = self.config.num_experts
 
@@ -195,13 +221,13 @@ class FlopsCounter:
         flops_achieved = flops_all_token * (1.0 / delta_time) / 1e12
         return flops_achieved
 
-
     def estimate_flops(self, batch_seqlens, delta_time):
         """
         Estimate the FLOPS based on the number of valid tokens in the current batch and the time taken.
 
         Args:
-            batch_seqlens (List[int]): A list where each element represents the number of valid tokens in the current batch.
+            batch_seqlens (List[int]): A list where each element represents the number of valid tokens in the
+                current batch.
             delta_time (float): The time taken to process the batch, in seconds.
 
         Returns:

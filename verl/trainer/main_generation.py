@@ -35,7 +35,6 @@ from verl import DataProto
 from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
 from verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, RayWorkerGroup
 from verl.utils import hf_tokenizer
-from verl.utils.device import is_cuda_available
 from verl.utils.fs import copy_to_local
 from verl.utils.hdfs_io import makedirs
 from verl.utils.model import compute_position_id_with_mask
@@ -176,7 +175,11 @@ def main_task(config):
 
     ray_cls_with_init = RayClassWithInitArgs(cls=ray.remote(ActorRolloutRefWorker), config=config, role="rollout")
     resource_pool = RayResourcePool(process_on_nodes=[config.trainer.n_gpus_per_node] * config.trainer.nnodes)
-    wg = RayWorkerGroup(resource_pool=resource_pool, ray_cls_with_init=ray_cls_with_init, device_name="cuda" if is_cuda_available else "npu")
+    wg = RayWorkerGroup(
+        resource_pool=resource_pool,
+        ray_cls_with_init=ray_cls_with_init,
+        device_name=config.trainer.device,
+    )
     wg.init_model()
 
     # NOTE: updated by Reasoning360. Sample n times together
@@ -246,6 +249,8 @@ def main_task(config):
 
     # Check if 'aime' is in the output path to determine if we should merge responses
     should_merge_aime = "aime" in config.data.output_path.lower()
+    # add to the data frame
+    dataset["responses"] = output_lst
 
     if should_merge_aime:
         print("Detected 'aime' in output path, merging responses by prompt content...")
@@ -263,8 +268,7 @@ def main_task(config):
 
         print(f"Saved merged AIME responses to {config.data.output_path}")
     else:
-        # Original logic for non-AIME datasets
-        # add to the data frame
+        # NOTE: added by Reasoning360. dump results
         if is_polars_df:
             import polars as pl
 

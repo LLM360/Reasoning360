@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# The file is temporarily reverted by Reasoning360 to use `dataframe` rather than `Dataset`, to support heterogeneous keys of multi-domain data
+# The file is temporarily reverted by Reasoning360 to use `dataframe` rather than `Dataset`,
+# to support heterogeneous keys of multi-domain data
 
 import copy
 import os
 from collections import defaultdict
-from typing import List, Optional, Union
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -82,7 +83,7 @@ class RLHFDataset(Dataset):
 
     def __init__(
         self,
-        data_files: Union[str, List[str]],
+        data_files: str | list[str],
         tokenizer: PreTrainedTokenizer,
         processor: Optional[ProcessorMixin] = None,
         prompt_key="prompt",
@@ -132,7 +133,7 @@ class RLHFDataset(Dataset):
             self.filter_prompts = filter_prompts
 
         parquet_files = data_files
-        if not isinstance(parquet_files, (List, ListConfig)):
+        if not isinstance(parquet_files, list | ListConfig):
             parquet_files = [parquet_files]
         self.parquet_files = copy.deepcopy(parquet_files)
         self.original_parquet_files = copy.deepcopy(parquet_files)  # use for resume
@@ -182,7 +183,12 @@ class RLHFDataset(Dataset):
             prompt_key = self.prompt_key
             self.dataframe = self.dataframe[
                 self.dataframe.apply(
-                    lambda doc: len(tokenizer.apply_chat_template(doc[prompt_key], add_generation_prompt=True) if doc["apply_chat_template"] else tokenizer.encode(doc["raw_prompt"])) <= self.max_prompt_length,
+                    lambda doc: len(
+                        tokenizer.apply_chat_template(doc[prompt_key], add_generation_prompt=True)
+                        if doc["apply_chat_template"]
+                        else tokenizer.encode(doc["raw_prompt"])
+                    )
+                    <= self.max_prompt_length,
                     axis=1,
                 )
             ]
@@ -209,7 +215,11 @@ class RLHFDataset(Dataset):
 
         chat = row_dict.pop(self.prompt_key)
 
-        prompt_with_chat_template = self.tokenizer.apply_chat_template(chat, add_generation_prompt=True, tokenize=False) if row_dict["apply_chat_template"] else row_dict["raw_prompt"]
+        prompt_with_chat_template = (
+            self.tokenizer.apply_chat_template(chat, add_generation_prompt=True, tokenize=False)
+            if row_dict["apply_chat_template"]
+            else row_dict["raw_prompt"]
+        )
 
         is_multi_modal = self.image_key in row_dict
         if is_multi_modal:  # expand image token
@@ -225,12 +235,16 @@ class RLHFDataset(Dataset):
                 while "<image>" in prompt_with_chat_template:
                     prompt_with_chat_template = prompt_with_chat_template.replace(
                         "<image>",
-                        "<|vision_start|>" + "<|placeholder|>" * (image_grid_thw[index].prod() // merge_length) + "<|vision_end|>",
+                        "<|vision_start|>"
+                        + "<|placeholder|>" * (image_grid_thw[index].prod() // merge_length)
+                        + "<|vision_end|>",
                         1,
                     )
                     index += 1
 
-                prompt_with_chat_template = prompt_with_chat_template.replace("<|placeholder|>", self.processor.image_token)
+                prompt_with_chat_template = prompt_with_chat_template.replace(
+                    "<|placeholder|>", self.processor.image_token
+                )
         else:
             raw_prompt = prompt_with_chat_template
 

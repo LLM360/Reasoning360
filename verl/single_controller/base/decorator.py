@@ -15,9 +15,8 @@
 import inspect
 from functools import wraps
 from types import FunctionType
-from typing import Dict, List, Tuple
 
-import torch
+import torch # Added by Reasoning360
 
 from verl.protocol import DataProtoFuture, _padding_size_key
 from verl.utils.py_functional import DynamicEnum
@@ -82,12 +81,12 @@ def _split_args_kwargs_data_proto(chunks, *args, **kwargs):
 
     splitted_args = []
     for arg in args:
-        assert isinstance(arg, (DataProto, DataProtoFuture))
+        assert isinstance(arg, DataProto | DataProtoFuture)
         splitted_args.append(arg.chunk(chunks=chunks))
 
     splitted_kwargs = {}
     for key, val in kwargs.items():
-        assert isinstance(val, (DataProto, DataProtoFuture))
+        assert isinstance(val, DataProto | DataProtoFuture)
         splitted_kwargs[key] = val.chunk(chunks=chunks)
 
     return splitted_args, splitted_kwargs
@@ -156,11 +155,19 @@ def dispatch_megatron_compute(worker_group, *args, **kwargs):
     """
     from verl.single_controller.base.megatron.worker_group import MegatronWorkerGroup
 
-    assert isinstance(worker_group, MegatronWorkerGroup), f"worker_group must be MegatronWorkerGroup, Got {type(worker_group)}"
+    assert isinstance(worker_group, MegatronWorkerGroup), (
+        f"worker_group must be MegatronWorkerGroup, Got {type(worker_group)}"
+    )
+
+    # ray put all the args in advance to avoid duplicate serialization cost
+    import ray
+
+    args = [[ray.put(dp_arg) for dp_arg in arg] for arg in args]
+    kwargs = {k: [ray.put(dp_v) for dp_v in v] for k, v in kwargs.items()}
 
     all_args = []
     for arg in args:
-        assert isinstance(arg, (Tuple, List)) and len(arg) == worker_group.dp_size
+        assert isinstance(arg, tuple | list) and len(arg) == worker_group.dp_size
         transformed_args = []
         for i in range(worker_group.world_size):
             local_dp_rank = worker_group.get_megatron_rank_info(rank=i).dp_rank
@@ -170,7 +177,7 @@ def dispatch_megatron_compute(worker_group, *args, **kwargs):
 
     all_kwargs = {}
     for k, v in kwargs.items():
-        assert isinstance(v, (Tuple, List)) and len(v) == worker_group.dp_size
+        assert isinstance(v, tuple | list) and len(v) == worker_group.dp_size
         transformed_v = []
         for i in range(worker_group.world_size):
             local_dp_rank = worker_group.get_megatron_rank_info(rank=i).dp_rank
@@ -207,7 +214,7 @@ def dispatch_megatron_compute_data_proto(worker_group, *args, **kwargs):
     return dispatch_megatron_compute(worker_group, *splitted_args, **splitted_kwargs)
 
 
-def _concat_data_proto_or_future(output: List):
+def _concat_data_proto_or_future(output: list):
     import ray
 
     from verl.protocol import DataProto, DataProtoFuture
@@ -236,7 +243,7 @@ def collect_megatron_compute_data_proto(worker_group, output):
 
     output = collect_megatron_compute(worker_group, output)
     for o in output:
-        assert isinstance(o, (DataProto, ray.ObjectRef)), f"expecting {o} to be DataProto, but got {type(o)}"
+        assert isinstance(o, DataProto | ray.ObjectRef), f"expecting {o} to be DataProto, but got {type(o)}"
 
     return _concat_data_proto_or_future(output)
 
@@ -256,14 +263,15 @@ def dispatch_megatron_pp_as_dp(worker_group, *args, **kwargs):
 
     all_args = []
     for arg in args:
-        assert isinstance(arg, (List, Tuple)) and len(arg) == pp_dp_cp_size
+        assert isinstance(arg, list | tuple) and len(arg) == pp_dp_cp_size
         transformed_args = []
         for i in range(worker_group.world_size):
             local_dp_rank = worker_group.get_megatron_rank_info(rank=i).dp_rank
             local_pp_rank = worker_group.get_megatron_rank_info(rank=i).pp_rank
             local_cp_rank = worker_group.get_megatron_rank_info(rank=i).cp_rank
             # compute the rank in arg. Note that the order is dp then cp then pp
-            # Also note that the outputs within a pp group will be firstly allgathered, then only the output of pp0 will be collected.
+            # Also note that the outputs within a pp group will be firstly allgathered, then only the
+            # output of pp0 will be collected.
             # For pp=2 dp=4, a batch of data "ABCDEFGH" should be dispatched and collected in below order:
             #    dispatch:       pp_allgther:        collect:
             #   dp 0 1 2 3      dp  0  1  2  3
@@ -280,7 +288,7 @@ def dispatch_megatron_pp_as_dp(worker_group, *args, **kwargs):
 
     all_kwargs = {}
     for k, v in kwargs.items():
-        assert isinstance(v, (List, Tuple)) and len(v) == pp_dp_cp_size, f"expect len(v)=={pp_dp_cp_size}, got {len(v)}"
+        assert isinstance(v, list | tuple) and len(v) == pp_dp_cp_size, f"expect len(v)=={pp_dp_cp_size}, got {len(v)}"
         transformed_v = []
         for i in range(worker_group.world_size):
             local_dp_rank = worker_group.get_megatron_rank_info(rank=i).dp_rank
@@ -349,9 +357,9 @@ def dispatch_dp_compute(worker_group, *args, **kwargs):
 
     assert isinstance(worker_group, WorkerGroup)
     for arg in args:
-        assert isinstance(arg, (Tuple, List)) and len(arg) == worker_group.world_size
+        assert isinstance(arg, tuple | list) and len(arg) == worker_group.world_size
     for k, v in kwargs.items():
-        assert isinstance(v, (Tuple, List)) and len(v) == worker_group.world_size
+        assert isinstance(v, tuple | list) and len(v) == worker_group.world_size
     return args, kwargs
 
 
@@ -393,12 +401,13 @@ def collect_dp_compute_data_proto(worker_group, output):
     from verl.protocol import DataProto
 
     for o in output:
-        assert isinstance(o, (DataProto, ray.ObjectRef)), f"expecting {o} to be DataProto, but got {type(o)}"
+        assert isinstance(o, DataProto | ray.ObjectRef), f"expecting {o} to be DataProto, but got {type(o)}"
 
     output = collect_dp_compute(worker_group, output)
     return _concat_data_proto_or_future(output)
 
 
+#### Added by Reasoning360
 MAGIC_PREFIX = "__verl_dummy_tensor_"
 def _materialize_dummy_data_proto(arg):
     from verl.protocol import DataProto
@@ -557,6 +566,7 @@ DISPATCH_MODE_FN_REGISTRY = {
         "dispatch_fn": dummy_direct_rollout_call,
         "collect_fn": dummy_direct_rollout_call,
     },
+    # Added by Reasoning360
     Dispatch.MEGATRON_PP_DUMMY_PROTO: {
         "dispatch_fn": dispatch_megatron_pp_dummy_data_proto,
         "collect_fn": collect_megatron_compute_data_proto,
@@ -600,8 +610,10 @@ def get_predefined_execute_fn(execute_mode):
 
 
 def _check_dispatch_mode(dispatch_mode):
-    assert isinstance(dispatch_mode, (Dispatch, Dict)), f"dispatch_mode must be a Dispatch or a Dict. Got {dispatch_mode}"
-    if isinstance(dispatch_mode, Dict):
+    assert isinstance(dispatch_mode, Dispatch | dict), (
+        f"dispatch_mode must be a Dispatch or a Dict. Got {dispatch_mode}"
+    )
+    if isinstance(dispatch_mode, dict):
         necessary_keys = ["dispatch_fn", "collect_fn"]
         for key in necessary_keys:
             assert key in dispatch_mode, f"key {key} should be in dispatch_mode if it is a dictionary"
@@ -656,10 +668,6 @@ def register(dispatch_mode=Dispatch.ALL_TO_ALL, execute_mode=Execute.ALL, blocki
             Whether the execution should be blocking. Defaults to True.
         materialize_futures:
             Whether to materialize the data before dispatching. Defaults to True.
-        materialize_dummy:
-            Whether it receives a dummy DataProto. If so, it will materialize a dummy
-            tensor based on the metadata in the DataProto. This is to receive unused
-            data for intermediate ranks of pipeline parallel.
 
     Returns:
         A decorator that wraps the original function with distributed execution
@@ -668,6 +676,7 @@ def register(dispatch_mode=Dispatch.ALL_TO_ALL, execute_mode=Execute.ALL, blocki
     _check_dispatch_mode(dispatch_mode=dispatch_mode)
     _check_execute_mode(execute_mode=execute_mode)
 
+    # Added by Reasoning360
     materialize_dummy = dispatch_mode == Dispatch.MEGATRON_PP_DUMMY_PROTO
 
     def decorator(func):
@@ -683,6 +692,7 @@ def register(dispatch_mode=Dispatch.ALL_TO_ALL, execute_mode=Execute.ALL, blocki
         async def async_inner(*args, **kwargs):
             if materialize_futures:
                 args, kwargs = _materialize_futures(*args, **kwargs)
+            # Added by Reasoning360
             if materialize_dummy:
                 args, kwargs = _materialize_dummy(*args, **kwargs)
             return await func(*args, **kwargs)

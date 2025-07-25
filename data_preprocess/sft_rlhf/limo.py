@@ -27,25 +27,26 @@ from verl.utils.hdfs_io import copy, makedirs
 def extract_solution(solution_str):
     solution = re.search(r"\\boxed\{(.*?)\}", solution_str)
     assert solution is not None
-    final_solution = solution.group(1)
+    final_solution = solution.group(0)
+    final_solution = final_solution.split("#### ")[1].replace(",", "")
     return final_solution
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--local_dir', default='~/data/limo')
-    parser.add_argument('--hdfs_dir', default=None)
+    parser.add_argument("--local_dir", default="~/data/gsm8k")
+    parser.add_argument("--hdfs_dir", default=None)
 
     args = parser.parse_args()
 
-    data_source = 'GAIR/LIMO'
+    data_source = "openai/gsm8k"
 
-    dataset = datasets.load_dataset(data_source)
+    dataset = datasets.load_dataset(data_source, "main")
 
-    train_dataset = dataset['train']
-    test_dataset = dataset['train']
+    train_dataset = dataset["train"]
+    test_dataset = dataset["test"]
 
-    instruction_following = "Let's think step by step and output the final answer in \\boxed\{\}."
+    instruction_following = 'Let\'s think step by step and output the final answer after "####".'
 
     # add a row to each data item that represents a unique id
     def make_map_fn(split):
@@ -54,8 +55,8 @@ if __name__ == "__main__":
 
             question = question_raw + " " + instruction_following
 
-            solution = example.pop('solution')
-            exact_answer = example.pop('answer')
+            answer_raw = example.pop("answer")
+            solution = extract_solution(answer_raw)
             data = {
                 "data_source": data_source,
                 "prompt": [
@@ -65,16 +66,13 @@ if __name__ == "__main__":
                     }
                 ],
                 "ability": "math",
-                "reward_model": {
-                    "style": "rule",
-                    "ground_truth": exact_answer
-                },
+                "reward_model": {"style": "rule", "ground_truth": solution},
                 "extra_info": {
-                    'split': split,
-                    'index': idx,
-                    'answer': solution,
-                    "question": question, # TODO: use prompt \\boxed later
-                }
+                    "split": split,
+                    "index": idx,
+                    "answer": answer_raw,
+                    "question": question_raw,
+                },
             }
             return data
 
@@ -86,8 +84,8 @@ if __name__ == "__main__":
     local_dir = args.local_dir
     hdfs_dir = args.hdfs_dir
 
-    train_dataset.to_parquet(os.path.join(local_dir, 'train_w_prompt.parquet'))
-    test_dataset.to_parquet(os.path.join(local_dir, 'test_w_prompt.parquet'))
+    train_dataset.to_parquet(os.path.join(local_dir, "train.parquet"))
+    test_dataset.to_parquet(os.path.join(local_dir, "test.parquet"))
 
     if hdfs_dir is not None:
         makedirs(hdfs_dir)

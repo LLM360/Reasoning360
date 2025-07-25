@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .registry import get_reward_manager_cls, register  # noqa: I001
 from .batch import BatchRewardManager
 from .dapo import DAPORewardManager
 from .naive import NaiveRewardManager
@@ -19,10 +20,19 @@ from .prime import PrimeRewardManager
 
 # Added by Reasoning360
 from .naive_parallel import NaiveParallelRewardManager
-from .async_dapo import AsyncDAPORewardManager
+from .async_mp import AsyncMultiProcessRewardManager
 from .llm_judge import LLMJudgeRewardManager
 
-__all__ = ["BatchRewardManager", "DAPORewardManager", "NaiveRewardManager", "PrimeRewardManager",
-           # Added by Reasoning360
-           "NaiveParallelRewardManager", "AsyncDAPORewardManager", "LLMJudgeRewardManager",
-           ]
+# Note(haibin.lin): no need to include all reward managers here in case of complicated dependencies
+__all__ = [
+    "BatchRewardManager",
+    "DAPORewardManager",
+    "NaiveRewardManager",
+    "PrimeRewardManager",
+    "register",
+    "get_reward_manager_cls",
+    # Added by Reasoning360
+    "NaiveParallelRewardManager",
+    "AsyncMultiProcessRewardManager",
+    "LLMJudgeRewardManager",
+]

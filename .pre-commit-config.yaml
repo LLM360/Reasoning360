@@ -1,8 +1,16 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: "v0.11.4"
+    rev: "v0.12.2"
     hooks:
       - id: ruff
         args: ["--fix", "--show-fixes", "--output-format=full"]
         exclude: ^.*\.(ipynb)$
       - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: autogen-trainer-cfg
+        name: Generate and verify verl/trainer/config/_generated_*.yaml
+        entry: scripts/generate_trainer_config.sh
+        language: script
+        pass_filenames: false
