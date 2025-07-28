@@ -20,3 +20,4 @@ wandb
 packaging>=20.0
 uvicorn
 fastapi
+reasoning_gym

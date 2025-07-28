@@ -32,7 +32,10 @@ def default_compute_score(data_source, solution_str, ground_truth, extra_info=No
     Raises:
         NotImplementedError: If the reward function is not implemented for the given data source.
     """
-    reward_metric = extra_info.get("reward_metric", None)
+    # Handle extra_info format robustly
+    reward_metric = None
+    if extra_info and isinstance(extra_info, dict):
+        reward_metric = extra_info.get("reward_metric", None)
 
     # math
     if data_source.startswith("math"):
@@ -90,6 +93,9 @@ def default_compute_score(data_source, solution_str, ground_truth, extra_info=No
     elif data_source.startswith('stem_web'):
         from . import stem_llm_judge
         res = stem_llm_judge.compute_score(data_source=data_source, model_output=solution_str, ground_truth=ground_truth, extra_info=extra_info)
+    elif data_source in ["reasoning_gym"]:
+        from . import reasoning_gym
+        res = reasoning_gym.compute_score(solution_str, ground_truth, extra_info=extra_info)
     elif data_source in ["ood__ifeval"]:
         from . import ifeval
         res = ifeval.compute_score(solution_str, ground_truth, extra_info=extra_info)
@@ -102,7 +108,6 @@ def default_compute_score(data_source, solution_str, ground_truth, extra_info=No
     # NOTE: above is added by Reasoning360
     elif data_source == "openai/gsm8k":
         from . import gsm8k
-
         res = gsm8k.compute_score(solution_str, ground_truth)
     elif data_source in ["lighteval/MATH", "DigitalLearningGmbH/MATH-lighteval"]:
         from . import math
