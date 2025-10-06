@@ -119,6 +119,13 @@ def default_compute_score(
     elif data_source in ["ood__ifbench"]:
         from . import ifbench
         res = ifbench.compute_score(solution_str, ground_truth, extra_info=extra_info)
+    elif data_source in ["deepmath", "DeepMath", "zwhe99/DeepMath-103K"]:
+        from . import deepmath
+        res = deepmath.compute_score(solution_str, ground_truth, extra_info=extra_info)
+    elif data_source in ["stem_nemotron", "nemotron_stem"]:
+        from . import nemotron_stem
+        res = nemotron_stem.compute_score(solution_str, ground_truth, extra_info=extra_info)
+
     # NOTE: above is added by Reasoning360
     elif data_source == "openai/gsm8k":
         from . import gsm8k
@@ -181,6 +188,24 @@ def default_compute_score(
 
         res = search_r1_like_qa_em.compute_score(solution_str, ground_truth)
 
+    elif data_source.startswith("synlogic"):
+        from .synlogic.synlogic import verifier_classes
+        from .synlogic.data import Data
+        
+        form_solution = solution_str.strip().split('</think>')[-1].strip()
+        # with open("solution_str_Qwen3-4B.txt_maze", "a") as f:
+        #     f.write("data_source: " + data_source + '\n')
+        #     f.write("solution_str: " + solution_str + '\n')
+        #     f.write("form_solution: " + form_solution + '\n')
+        #     f.write('-'*32 + '\n')
+        data = Data.from_json_str(extra_info["game_data_str"])
+        verifier = verifier_classes[data_source.replace("synlogic_", "")]()
+        res = verifier.verify(data, form_solution)
+        if res:
+            res = 1.0
+        else:
+            res = 0.0
+    
     else:
         raise NotImplementedError(f"Reward function is not implemented for {data_source=}")
 
