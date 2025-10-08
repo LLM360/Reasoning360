@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=k2plus_polarisv1_noOverlong
+#SBATCH --job-name=k2plus_polarisv1
 #SBATCH --nodes=32
 #SBATCH --ntasks=32
 #SBATCH --ntasks-per-node=1
@@ -14,7 +14,7 @@
 
 
 # =================== Frequently Used Variables ===================
-RESUME_CKPT_DIR_NAME=""  # Fill in the checkpoint directory name to resume from, otherwise from scratch
+RESUME_CKPT_DIR_NAME="364311-k2plus_polarisv1-checkpoint_0002250"  # Fill in the checkpoint directory name to resume from, otherwise from scratch
 export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-013:8000"
 # export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-135:8000"
 # export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-100:8000"
@@ -24,7 +24,7 @@ export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-013:8000"
 # =================== Cluster Environment ===================
 export CONDA_BIN_PATH=/lustrefs/users/taylor.killian/miniconda3/envs/sync-rl-v2/bin/
 export ROCR_VISIBLE_DEVICES=None
-export NCCL_TIMEOUT_SECONDS=9600
+export NCCL_TIMEOUT_SECONDS=14400
 export OMPI_MCA_coll_hcoll_enable=0 \
 TORCH_NCCL_ENABLE_MONITORING=0 \
 CUDA_DEVICE_ORDER=PCI_BUS_ID \
@@ -189,8 +189,8 @@ clip_ratio_high=0.28
 
 max_prompt_length=$((1024 * 4))
 max_response_length=$((1024 * 32))
-enable_overlong_buffer=False
-overlong_buffer_len=$((1024 * 12))
+enable_overlong_buffer=True
+overlong_buffer_len=$((1024 * 4))
 overlong_penalty_factor=1.0
 
 loss_agg_mode="token-mean"
@@ -305,7 +305,7 @@ offload=True
     trainer.logger=['console','wandb'] \
     trainer.project_name=${WANDB_PROJECT} \
     trainer.experiment_name=${WANDB_EXPERIMENT_NAME} \
-    trainer.val_before_train=True \
+    trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=$worker_num \
     trainer.save_freq=10 \
