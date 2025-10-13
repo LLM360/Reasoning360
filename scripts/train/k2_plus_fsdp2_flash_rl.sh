@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=flash_rl_tip_1_bf16_k2_plus_fsdp2
+#SBATCH --job-name=flash_rl_tip_1_fp8_k2_plus_fsdp2
 #SBATCH --nodes=32
 #SBATCH --ntasks=32
 #SBATCH --ntasks-per-node=1
@@ -21,7 +21,7 @@ RESUME_CKPT_DIR_NAME=""  # Fill in the checkpoint directory name to resume from,
 # Fill in the llm-as-judge hosted URL, currently used only in 'STEM' domain
 IDX=0
 TIP_IMP_RATIO_CAP=(1.0 2.0 3.0 4.0 7.0 8.0 9.0 10.0)
-NODE_NAME=(015 099 133 134 135 136 139 266)
+NODE_NAME=(135 015 133 134 135 136 139 266)
 export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-${NODE_NAME[IDX]}:8000"
 echo "STEM_LLM_JUDGE_URL: ${STEM_LLM_JUDGE_URL}"
 
@@ -209,10 +209,11 @@ top_k=-1 # 0 for HF rollout, -1 for vLLM rollout
 # Training config
 sp_size=16  # Reduced from 32 to reduce memory pressure
 gen_tp=4
-gen_max_num_seqs=1024  # Reduced from 1024 to reduce memory pressure
+gen_max_num_seqs=50  # Reduced from 1024 to reduce memory pressure
 infer_micro_batch_size=null
 train_micro_batch_size=null
 use_dynamic_bsz=True
+rollout_max_num_batched_tokens=$(( (max_prompt_length + max_response_length) * 2))
 actor_ppo_max_token_len=$(( (max_prompt_length + max_response_length) * 1))  # increase this to speed up model forward & backward but note memory overflow
 infer_ppo_max_token_len=$(( (max_prompt_length + max_response_length) * 1))  # increase this to speed up modelforward, but note memory overflow
 offload=True
@@ -282,7 +283,7 @@ calculate_log_probs=True
     actor_rollout_ref.rollout.log_prob_micro_batch_size=${infer_micro_batch_size} \
     actor_rollout_ref.rollout.tensor_model_parallel_size=${gen_tp} \
     actor_rollout_ref.rollout.enable_chunked_prefill=True \
-    actor_rollout_ref.rollout.max_num_batched_tokens=${infer_ppo_max_token_len} \
+    actor_rollout_ref.rollout.max_num_batched_tokens=${rollout_max_num_batched_tokens} \
     actor_rollout_ref.rollout.max_num_seqs=${gen_max_num_seqs} \
     actor_rollout_ref.rollout.disable_log_stats=False \
     actor_rollout_ref.rollout.enforce_eager=False \
