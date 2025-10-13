@@ -107,6 +107,8 @@ class RayDAPOTrainer(RayPPOTrainer):
         timing_raw = defaultdict(float)
         batch = None
         num_prompt_in_batch = 0
+        num_total_prompts = 0
+        # Added by Reasoning360
         num_gen_batches = 0
         for epoch in range(self.config.trainer.total_epochs):
             for batch_dict in self.train_dataloader:
@@ -229,6 +231,9 @@ class RayDAPOTrainer(RayPPOTrainer):
                         prompt_uid2metric_std = {}
                         for prompt_uid, metric_vals in prompt_uid2metric_vals.items():
                             prompt_uid2metric_std[prompt_uid] = np.std(metric_vals)
+
+                        # Added by Reasoning360
+                        num_total_prompts += len(prompt_uid2metric_vals)
 
                         kept_prompt_uids = [
                             uid
@@ -373,8 +378,11 @@ class RayDAPOTrainer(RayPPOTrainer):
                 timing_raw = defaultdict(float)  # clear timing
 
                 metrics["train/num_gen_batches"] = num_gen_batches
+                # Added by Reasoning360 Track the proportion of prompts that are discarded by the filtering mechanism
+                metrics["train/filtered_ratio"] = 1 - (num_prompt_in_batch / num_total_prompts) if num_total_prompts > 0 else 0.0
                 batch = None
                 num_prompt_in_batch = 0
+                num_total_prompts = 0
                 num_gen_batches = 0
 
                 # TODO: make a canonical logger that supports various backend

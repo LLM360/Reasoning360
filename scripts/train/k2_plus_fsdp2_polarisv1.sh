@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=k2plus_polarisv1
+#SBATCH --job-name=polarisv1-stg4_5-valtemp1_0-64k
 #SBATCH --nodes=32
 #SBATCH --ntasks=32
 #SBATCH --ntasks-per-node=1
@@ -14,8 +14,8 @@
 
 
 # =================== Frequently Used Variables ===================
-RESUME_CKPT_DIR_NAME="364311-k2plus_polarisv1-checkpoint_0002250"  # Fill in the checkpoint directory name to resume from, otherwise from scratch
-export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-013:8000"
+RESUME_CKPT_DIR_NAME=""  # Fill in the checkpoint directory name to resume from, otherwise from scratch
+export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-131:8000"
 # export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-135:8000"
 # export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-100:8000"
 # export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-065:8000"
@@ -134,7 +134,8 @@ test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${a
 
 
 # =================== Model ===================
-BASE_MODEL=/lustrefs/users/runner/workspace/checkpoints/huggingface/sft/mid4_sft_reasoning_am_cos_epoch/checkpoints/checkpoint_0002250
+# BASE_MODEL=/lustrefs/users/runner/workspace/checkpoints/huggingface/sft/mid4_sft_reasoning_am_cos_epoch/checkpoints/checkpoint_0002250
+BASE_MODEL=/lustrefs/users/runner/workspace/checkpoints/huggingface/sft/mid4.5_sft_reasoning_am_cos_epoch/checkpoints/checkpoint_0004500
 
 # =================== Logging ===================
 WANDB_PROJECT=k2plus_rl
@@ -188,9 +189,9 @@ clip_ratio_low=0.2
 clip_ratio_high=0.28
 
 max_prompt_length=$((1024 * 4))
-max_response_length=$((1024 * 32))
+max_response_length=$((1024 * 64))
 enable_overlong_buffer=True
-overlong_buffer_len=$((1024 * 4))
+overlong_buffer_len=$((1024 * 12))
 overlong_penalty_factor=1.0
 
 loss_agg_mode="token-mean"
@@ -200,11 +201,12 @@ filter_groups_metric=acc
 max_num_gen_batches=10
 train_prompt_bsz=256  # on-policy model update batchsize: train_prompt_bsz * rollout.n
 gen_prompt_bsz=$((train_prompt_bsz * 1))
-n_resp_per_prompt=8 # Changed from 16 to mirror PolarisV1 training setup
+n_resp_per_prompt=16
 train_prompt_mini_bsz=32  # model grad update batchsize
 
 # Algorithm
 temperature=1.6
+val_temperature=1.0
 top_p=1.0
 top_k=-1 # 0 for HF rollout, -1 for vLLM rollout
 
@@ -286,7 +288,7 @@ offload=True
     actor_rollout_ref.rollout.top_k=${top_k} \
     actor_rollout_ref.rollout.val_kwargs.top_k=${top_k} \
     actor_rollout_ref.rollout.val_kwargs.top_p=${top_p}\
-    actor_rollout_ref.rollout.val_kwargs.temperature=${temperature} \
+    actor_rollout_ref.rollout.val_kwargs.temperature=${val_temperature} \
     actor_rollout_ref.rollout.val_kwargs.n=1 \
     actor_rollout_ref.rollout.val_kwargs.do_sample=True \
     actor_rollout_ref.model.path=$BASE_MODEL \
@@ -309,7 +311,7 @@ offload=True
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=$worker_num \
     trainer.save_freq=10 \
-    trainer.test_freq=10 \
+    trainer.test_freq=5 \
     trainer.total_epochs=5 \
     trainer.log_val_generations=50 \
     trainer.resume_mode=auto \
