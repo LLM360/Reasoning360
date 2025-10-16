@@ -21,7 +21,7 @@ RESUME_CKPT_DIR_NAME=""  # Fill in the checkpoint directory name to resume from,
 # Fill in the llm-as-judge hosted URL, currently used only in 'STEM' domain
 IDX=0
 TIP_IMP_RATIO_CAP=(1.0 2.0 3.0 4.0 7.0 8.0 9.0 10.0)
-NODE_NAME=(135 015 133 134 135 136 139 266)
+NODE_NAME=(015 099 133 134 135 136 139 266)
 export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-${NODE_NAME[IDX]}:8000"
 echo "STEM_LLM_JUDGE_URL: ${STEM_LLM_JUDGE_URL}"
 
