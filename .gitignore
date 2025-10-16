@@ -128,9 +128,10 @@ outputs
 /*
 !/*/
 
-/rollout_data/
+# But ignore these specific directories completely
 /checkpoints/
-/outputs/
+/load_data/
+/rollout_data/
 
 # But keep these important files/directories
 !/README*
