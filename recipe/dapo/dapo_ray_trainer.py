@@ -344,10 +344,22 @@ class RayDAPOTrainer(RayPPOTrainer):
                                 for item in batch
                             ]
 
+                            def _to_sequence(value):
+                                if isinstance(value, torch.Tensor):
+                                    return value.detach().cpu().tolist()
+                                if hasattr(value, "tolist"):
+                                    return value.tolist()
+                                return list(value)
+
+                            reward_dump_infos = {}
+                            if reward_extra_infos_dict:
+                                for key in reward_extra_infos_dict:
+                                    if key in batch.non_tensor_batch:
+                                        reward_dump_infos[key] = _to_sequence(batch.non_tensor_batch[key])
+
                             if "request_id" in batch.non_tensor_batch:
-                                reward_extra_infos_dict.setdefault(
-                                    "request_id",
-                                    batch.non_tensor_batch["request_id"].tolist(),
+                                reward_dump_infos.setdefault(
+                                    "request_id", _to_sequence(batch.non_tensor_batch["request_id"])
                                 )
 
                             self._dump_generations(
@@ -355,7 +367,7 @@ class RayDAPOTrainer(RayPPOTrainer):
                                 outputs=outputs,
                                 gts=sample_gts,
                                 scores=scores,
-                                reward_extra_infos_dict=reward_extra_infos_dict,
+                                reward_extra_infos_dict=reward_dump_infos,
                                 dump_path=rollout_data_dir,
                             )
 
