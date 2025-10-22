@@ -361,6 +361,8 @@ def create_rl_dataset(data_paths, data_config, tokenizer, processor, is_train=Tr
         tokenizer=tokenizer,
         processor=processor,
         config=data_config,
+        validation=not is_train,
+        # NOTE: added by Reasoning360 for dynamic SFT/RL switching
     )
 
     return dataset

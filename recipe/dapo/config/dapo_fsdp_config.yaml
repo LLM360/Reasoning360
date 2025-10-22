@@ -23,3 +23,8 @@ algorithm:
     enable: False # We try to avoid forgetting to set enable
     metric: null # acc / score / seq_reward / seq_final_reward / ...
     max_num_gen_batches: 0 # Non-positive values mean no upper limit
+  # NOTE: added by Reasoning360 for dynamic SFT/RL switching
+  dynamic_sft_rl:
+    enable: False # Set to True to enable dynamic SFT/RL switching
+    advantage_threshold: 0.0 # Use SFT if advantage <= threshold, else RL
+    use_first_teacher_response: True # If False, could implement response selection logic

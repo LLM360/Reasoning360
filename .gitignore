@@ -126,11 +126,6 @@ log
 outputs
 .history
 
-# Below are all added by Reasoning360
-# Ignore all files in root directory, but keep directories
-/*
-!/*/
-
 # But keep these important files/directories
 !/README*
 !/requirements*

@@ -93,6 +93,7 @@ class RLHFDataset(Dataset):
         tokenizer: PreTrainedTokenizer,
         config: DictConfig,
         processor: Optional[ProcessorMixin] = None,
+        validation: bool = False,  # Added by Reasoning360 for validation dataset
     ):
         if not isinstance(data_files, list | ListConfig):
             data_files = [data_files]
@@ -102,7 +103,7 @@ class RLHFDataset(Dataset):
         self.tokenizer = tokenizer
         self.processor = processor
         self.config = config
-
+        self.validation = validation
         self.cache_dir = os.path.expanduser(config.get("cache_dir", "~/.cache/verl/rlhf"))
         self.prompt_key = config.get("prompt_key", "prompt")
         self.image_key = config.get("image_key", "images")
@@ -136,23 +137,39 @@ class RLHFDataset(Dataset):
     def _read_files_and_tokenize(self):
         dataframes = []
         for parquet_file in self.data_files:
-            # read parquet files and cache
-            # dataframe = datasets.load_dataset("parquet", data_files=parquet_file)["train"]
-            try:
-                dataframe = pd.read_parquet(parquet_file)
-            except Exception:
-                # if pandas fails (most likely due to nested columns), use polars
-                # NOTE: added by Reasoning360
-                import polars as pl
-                dataframe = pl.read_parquet(parquet_file).to_pandas()
+
+            # NOTE: added by Reasoning360 for dynamic SFT/RL switching
+            import polars as pl
+            dataframe = pl.read_parquet(parquet_file).to_pandas()
             dataframes.append(dataframe)
-        
         # NOTE: added by Reasoning360
         # self.dataframe: datasets.Dataset = datasets.concatenate_datasets(dataframes)
         self.dataframe = pd.concat(dataframes)
 
         print(f"dataset len: {len(self.dataframe)}")
-
+        # NOTE: added by Reasoning360 for dynamic SFT/RL switching
+        # Filter out samples missing r1_0528_responses when dynamic SFT/RL is enabled
+        dynamic_sft_rl_enabled = self.config.get("dynamic_sft_rl_enabled", False)
+        if dynamic_sft_rl_enabled and not self.validation:
+            if "r1_0528_responses" not in self.dataframe.columns:
+                raise ValueError(f"r1_0528_responses column not found in dataframe for self.data_files: {self.data_files}")
+            
+            # Filter out samples that are missing or have None/empty r1_0528_responses
+            original_len = len(self.dataframe)
+            self.dataframe = self.dataframe.dropna(subset=['r1_0528_responses'])
+            self.dataframe = self.dataframe[self.dataframe['r1_0528_responses'].apply(
+                lambda x: x is not None and (
+                    (isinstance(x, (list, tuple)) and len(x) > 0) or 
+                    (isinstance(x, np.ndarray) and x.size > 0)
+                )
+            )]
+            filtered_len = len(self.dataframe)
+            print(f"Filtered out {original_len - filtered_len} samples missing valid 'r1_0528_responses' field")
+            print(f"Remaining dataset len: {filtered_len}")
+        elif not self.validation and "r1_0528_responses" not in self.dataframe.columns:
+            # print("Warning: r1_0528_responses column not found in dataframe for self.data_files: {self.data_files}")
+            raise ValueError(f"r1_0528_responses column not found in dataframe for self.data_files: {self.data_files}")
+        
         # Safely check if apply_chat_template exists in dataframe
         # NOTE: added by Reasoning360
         if "apply_chat_template" not in self.dataframe:
@@ -376,6 +393,46 @@ class RLHFDataset(Dataset):
         row_dict["index"] = index
         row_dict["tools_kwargs"] = tools_kwargs
         row_dict["interaction_kwargs"] = interaction_kwargs
+
+        # NOTE: added by Reasoning360 for dynamic SFT/RL
+        # Only process teacher responses if dynamic_sft_rl is enabled (to avoid overhead)
+        dynamic_sft_rl_enabled = self.config.get("dynamic_sft_rl_enabled", False)
+
+        if dynamic_sft_rl_enabled and not self.validation:
+            # When dynamic SFT/RL is enabled, all samples should have teacher responses
+            # (filtered out during initialization, but add safety check)
+            if "r1_0528_responses" not in row_dict or row_dict["r1_0528_responses"] is None:
+                logger.warning(
+                    f"Sample at index {index} is missing 'r1_0528_responses' field. "
+                    f"This should have been filtered out during initialization."
+                )
+                # Skip processing teacher responses for this sample
+                return row_dict
+
+            teacher_responses_list = row_dict["r1_0528_responses"]
+            if not (isinstance(teacher_responses_list, (list, tuple, np.ndarray)) and 
+                    (len(teacher_responses_list) > 0 if isinstance(teacher_responses_list, (list, tuple)) else teacher_responses_list.size > 0)):
+                logger.warning(
+                    f"Sample at index {index} has empty 'r1_0528_responses'. "
+                    f"This should have been filtered out during initialization."
+                )
+                # Skip processing teacher responses for this sample
+                return row_dict
+
+            # Use the first teacher response
+            teacher_text = teacher_responses_list[0]
+
+            # Tokenize teacher response (without special tokens, just like responses)
+            teacher_tokens = self.tokenizer.encode(teacher_text, add_special_tokens=False)
+
+            # Truncate to max_response_length to match response format
+            max_resp_len = self.config.get("max_response_length", 2048)
+            if len(teacher_tokens) > max_resp_len:
+                teacher_tokens = teacher_tokens[:max_resp_len]
+
+            row_dict["teacher_response_tokens"] = teacher_tokens
+        # If feature is disabled, don't add the key at all to save memory
+
         return row_dict
 
     def __getstate__(self):

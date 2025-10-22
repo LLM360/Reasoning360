@@ -703,7 +703,7 @@ def compute_rewards(token_level_scores, old_log_prob, ref_log_prob, kl_ratio):
 
 def agg_loss(loss_mat: torch.Tensor, loss_mask: torch.Tensor, loss_agg_mode: str):
     """
-    Aggregate the loss matrix into a scalar.
+    Aggregate the loss matrix into a scalar or per-sample tensor.
 
     Args:
         loss_mat: `(torch.Tensor)`:
@@ -713,7 +713,7 @@ def agg_loss(loss_mat: torch.Tensor, loss_mask: torch.Tensor, loss_agg_mode: str
         loss_agg_mode: (str) choices:
             method to aggregate the loss matrix into a scalar.
     Returns:
-        loss: `a scalar torch.Tensor`
+        loss: `a scalar torch.Tensor or (bs,) tensor if loss_agg_mode='sample'`
             aggregated loss
     """
     if loss_agg_mode == "token-mean":
@@ -731,6 +731,15 @@ def agg_loss(loss_mat: torch.Tensor, loss_mask: torch.Tensor, loss_agg_mode: str
         # throughout training to well-replicate the DrGRPO paper.
         # TODO: Perhaps add user-defined normalizer argument to
         # agg_loss to ensure divisor stays constant throughout.
+    # NOTE: added by Reasoning360 for dynamic SFT/RL switching
+    # This mode returns per-sample loss instead of a scalar, which allows
+    # us to selectively combine SFT and RL losses for different samples
+    # based on average reward thresholds
+    elif loss_agg_mode == "sample":
+        # Return per-sample loss (token-mean per sample)
+        # Shape: (bs,)
+        seq_losses = torch.sum(loss_mat * loss_mask, dim=-1) / torch.sum(loss_mask, dim=-1).clamp(min=1e-8)
+        loss = seq_losses  # (bs,)
     else:
         raise ValueError(f"Invalid loss_agg_mode: {loss_agg_mode}")
 
