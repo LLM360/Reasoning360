@@ -320,9 +320,7 @@ class RayDAPOTrainer(RayPPOTrainer):
                         # Dynamic SFT/RL mode decision based on advantages
                         # NOTE: added by Reasoning360 for dynamic SFT/RL switching
                         dynamic_sft_rl_config = self.config.algorithm.get("dynamic_sft_rl", {})
-                        print(f"DEBUG: in dapo trainer, dynamic_sft_rl_config: {dynamic_sft_rl_config}")
                         enable_dynamic_sft_rl = dynamic_sft_rl_config.get("enable", False)
-                        print(f"DEBUG: in dapo trainer, enable_dynamic_sft_rl: {enable_dynamic_sft_rl}")
                         if enable_dynamic_sft_rl:
                             # Decision based on average reward per question (across all responses)
                             # For each question (uid), calculate avg reward across all its responses
@@ -331,7 +329,6 @@ class RayDAPOTrainer(RayPPOTrainer):
 
                             # Get total reward per response (sum over tokens)
                             response_total_rewards = batch.batch["token_level_rewards"].sum(dim=-1)  # (batch_size,)
-                            print(f"DEBUG: in dapo trainer, response_total_rewards: {response_total_rewards}")
                             # Group by uid to calculate average reward per question
                             uids = batch.non_tensor_batch["uid"]
                             unique_uids = {}  # uid -> list of indices
@@ -339,11 +336,9 @@ class RayDAPOTrainer(RayPPOTrainer):
                                 if uid not in unique_uids:
                                     unique_uids[uid] = []
                                 unique_uids[uid].append(idx)
-                            print(f"DEBUG: in dapo trainer, unique_uids: {unique_uids}")
                             # Calculate average reward per question and create mask
                             use_sft_mask = torch.zeros(len(response_total_rewards), dtype=torch.bool, device=response_total_rewards.device)
-                            question_avg_rewards = []
-                            print(f"DEBUG: in dapo trainer, question_avg_rewards: {question_avg_rewards}")   
+                            question_avg_rewards = [] 
                             for uid, indices in unique_uids.items():
                                 # Average reward across all responses for this question
                                 question_rewards = response_total_rewards[indices]
@@ -355,7 +350,6 @@ class RayDAPOTrainer(RayPPOTrainer):
                                     use_sft_mask[indices] = True
 
                             batch.batch["use_sft_mode"] = use_sft_mask
-                            print(f"DEBUG: in dapo trainer, use_sft_mask: {use_sft_mask}")
                             # Log detailed statistics
                             num_sft = use_sft_mask.sum().item()
                             num_rl = len(use_sft_mask) - num_sft
@@ -370,7 +364,6 @@ class RayDAPOTrainer(RayPPOTrainer):
                             metrics["mode/num_sft_questions"] = num_sft_questions
                             metrics["mode/num_rl_questions"] = num_rl_questions
                             metrics["mode/sft_question_ratio"] = num_sft_questions / num_questions if num_questions > 0 else 0.0
-                            print(f"DEBUG: in dapo trainer, metrics: {metrics}")
                             # Log reward statistics for both modes (at question level)
                             question_avg_rewards_tensor = torch.tensor(question_avg_rewards, device=response_total_rewards.device)
                             if num_sft_questions > 0:
@@ -380,7 +373,6 @@ class RayDAPOTrainer(RayPPOTrainer):
                                 metrics["mode/sft_avg_reward"] = sft_question_rewards.mean().item()
                                 metrics["mode/sft_min_reward"] = sft_question_rewards.min().item()
                                 metrics["mode/sft_max_reward"] = sft_question_rewards.max().item()
-                                print(f"DEBUG: in dapo trainer, metrics: {metrics}")
                             if num_rl_questions > 0:
                                 rl_question_mask = torch.tensor([not use_sft_mask[indices[0]].item() for indices in unique_uids.values()],
                                                                   device=response_total_rewards.device)
@@ -388,7 +380,6 @@ class RayDAPOTrainer(RayPPOTrainer):
                                 metrics["mode/rl_avg_reward"] = rl_question_rewards.mean().item()
                                 metrics["mode/rl_min_reward"] = rl_question_rewards.min().item()
                                 metrics["mode/rl_max_reward"] = rl_question_rewards.max().item()
-                                print(f"DEBUG: in dapo trainer, metrics: {metrics}")
 
                     # update critic
                     if self.use_critic:

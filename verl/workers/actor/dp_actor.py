@@ -511,7 +511,6 @@ class DataParallelPPOActor(BasePPOActor):
 
                         # NOTE: added by Reasoning360 for dynamic SFT/RL switching
                         # Debug logging to verify per-sample losses are correctly computed
-                        print(f"DEBUG: in dp_actor, pg_loss_per_sample: {pg_loss_per_sample}")
 
                         # Add entropy loss for RL samples
                         if entropy_coeff != 0:
@@ -531,7 +530,6 @@ class DataParallelPPOActor(BasePPOActor):
                         # Compute SFT loss per sample
                         sft_loss_per_sample = agg_loss(loss_mat=sft_loss_per_token, loss_mask=response_mask, loss_agg_mode="sample")
 
-                        print(f"DEBUG: in dp_actor, sft_loss_per_sample: {sft_loss_per_sample}")
 
                         # Combine losses using mask
                         # Where use_sft_mask=True, use SFT loss; otherwise use RL loss
@@ -541,7 +539,6 @@ class DataParallelPPOActor(BasePPOActor):
                             rl_policy_loss_per_sample
                         )
 
-                        print(f"DEBUG: in dp_actor, combined_loss_per_sample: {combined_loss_per_sample}")
 
                         # Aggregate to final loss
                         total_loss = combined_loss_per_sample.mean()
@@ -607,6 +604,7 @@ class DataParallelPPOActor(BasePPOActor):
                             "actor/pg_clipfrac": pg_clipfrac.detach().item(),
                             "actor/ppo_kl": ppo_kl.detach().item(),
                             "actor/pg_clipfrac_lower": pg_clipfrac_lower.detach().item(),
+                            "actor/total_loss": total_loss.detach().item(),
                         }
                     )
 
