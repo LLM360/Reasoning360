@@ -11,29 +11,49 @@ WANDB_PROJECT="HFT" # Your wandb project name
 # --- External Services ---
 # export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-099:8000"  # Optional: Fill in the llm-as-judge hosted URL for 'STEM' domain evaluation
 
-# =================== Environment Setup ===================
-export NCCL_DEBUG=info
-export CUDA_DEVICE_MAX_CONNECTIONS=1
-# export CUDA_LAUNCH_BLOCKING=1 # Uncomment for easier debugging of CUDA errors
-# export NCCL_TIMEOUT_MS=4800000
-export NCCL_TIMEOUT_SECONDS=4800
-export TORCH_NCCL_ENABLE_MONITORING=0 
+# =================== Environment Setup M1 ===================
+# export NCCL_DEBUG=info
+# export CUDA_DEVICE_MAX_CONNECTIONS=1
+# # export CUDA_LAUNCH_BLOCKING=1 # Uncomment for easier debugging of CUDA errors
+# # export NCCL_TIMEOUT_MS=4800000
+# export NCCL_TIMEOUT_SECONDS=4800
+# export TORCH_NCCL_ENABLE_MONITORING=0 
 
+# export HYDRA_FULL_ERROR=1
+# export VLLM_USE_V1=0
+# export ROCR_VISIBLE_DEVICES=None
+# export CONDA_BIN_PATH=/lustrefs/users/zhuojun.cheng/miniconda3/envs/sync-rl-zj-vllm-v010/bin/
+
+# =================== Environment Setup M2 ===================
+export NCCL_DEBUG=warn
+export NCCL_NET=IB
+export NCCL_IB_HCA="mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7"
+export NCCL_CROSS_NIC=1            
+export NCCL_IB_TC=136
+export NCCL_SOCKET_IFNAME="^lo,docker,virbr"
+export NCCL_TIMEOUT_SECONDS=4800
+export CUDA_DEVICE_MAX_CONNECTIONS=8
+export NCCL_NVLS_ENABLE=1
+export TORCH_NCCL_ENABLE_MONITORING=0
 export HYDRA_FULL_ERROR=1
 export VLLM_USE_V1=0
 export ROCR_VISIBLE_DEVICES=None
-export CONDA_BIN_PATH=/lustrefs/users/zhuojun.cheng/miniconda3/envs/sync-rl-zj-vllm-v010/bin/
+export CONDA_BIN_PATH=/mnt/weka/home/shibo.hao/miniforge3/envs/Reasoning360-Oct-2025/bin/
 
 
 # =================== Data Mixture ===================
 # Assumes data is in a directory named 'data' in the same directory as the script
-SHARED_DATA_PATH=/lustrefs/users/zhuojun.cheng/vpim/guru_data/
-TRAIN_DATA_DIR=${SHARED_DATA_PATH}/train/postprocessed_dedup_am_semantic_filtered_0.05_0.94_thresh_ratio0.5_sample1.0_balanced_step2
-TEST_DATA_DIR=${SHARED_DATA_PATH}/test/online/
+
+# SHARED_DATA_PATH=/lustrefs/users/zhuojun.cheng/vpim/guru_data/
+SHARED_DATA_PATH=/mnt/sharefs/users/haonan.li/data/k2
+TRAIN_DATA_DIR=${SHARED_DATA_PATH}/train_scored_dedup_am_12k_len_rm_flipscore_4
+TEST_DATA_DIR=${SHARED_DATA_PATH}/test_12k_len
+
+# /mnt/sharefs/users/haonan.li/data/k2/train_scored_dedup_am_12k_len_rm_flipscore_4/math__combined_118.2k.part1.parquet
 
 # # Math (train)
-math_train_path1=${TRAIN_DATA_DIR}/math__combined_118.2k.part1_scored.parquet
-# math_train_path2=${TRAIN_DATA_DIR}/math__combined_118.2k.part2_scored.parquet
+math_train_path1=${TRAIN_DATA_DIR}/math__combined_118.2k.part1.parquet
+# math_train_path2=${TRAIN_DATA_DIR}/math__combined_118.2k.part2.parquet
 # Math (test)
 math_test_path=${TEST_DATA_DIR}/math__math_500.parquet
 aime_test_path=${TEST_DATA_DIR}/math__aime_repeated_8x_240.parquet
@@ -87,23 +107,24 @@ gpqa_diamond_test_path=${TEST_DATA_DIR}/stem__gpqa_diamond_198.parquet
 
 # train_files="['${math_train_path1}','${math_train_path2}','${leetcode_train_path}','${livecodebench_train_path}','${primeintellect_train_path}','${taco_train_path}','${if_train_path}']"
 train_files="['${math_train_path1}']"
-
 test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${gpqa_diamond_test_path}']"
 
 # =================== Model ===================
-BASE_MODEL=Qwen/Qwen3-0.6B
+BASE_MODEL=$HOME/Qwen2.5-7B
 
 # =================== Logging ===================
 # Generate a unique experiment name if not resuming
+export WANDB_API_KEY=70b335e45d7d3d600fd3bfe251927ba2d561c8d2
+
 if [[ -n "$RESUME_CKPT_DIR_NAME" ]]; then
     WANDB_EXPERIMENT_NAME="$RESUME_CKPT_DIR_NAME"
 else
     TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-    WANDB_EXPERIMENT_NAME="Qwen3-0.6B-32kgen-bs128-rollout8-hybrid-${TIMESTAMP}-${BASE_MODEL##*/}"
+    WANDB_EXPERIMENT_NAME="Qwen2.5-7B-8kgen-bs32-rollout2-hybrid-${TIMESTAMP}-${BASE_MODEL##*/}"
 fi
 
 # Create slurm log directory if it doesn't exist
-SLURM_LOG_DIR="/lustrefs/users/shibo.hao/Reasoning360-Oct-2025/slurm"
+SLURM_LOG_DIR="$HOME/Reasoning360-Oct-2025/slurm"
 mkdir -p "$SLURM_LOG_DIR"
 
 # Set up log file names
@@ -143,7 +164,7 @@ clip_ratio_low=0.2
 clip_ratio_high=0.28
 
 max_prompt_length=$((1024 * 4))
-max_response_length=$((1024 * 32))
+max_response_length=$((1024 * 8))
 enable_overlong_buffer=False
 overlong_buffer_len=$((1024 * 4))
 overlong_penalty_factor=1.0
@@ -153,10 +174,10 @@ loss_agg_mode="token-mean"
 enable_filter_groups=False
 filter_groups_metric=acc
 max_num_gen_batches=1
-train_prompt_bsz=128  # on-policy model update batchsize: train_prompt_bsz * rollout.n
+train_prompt_bsz=32  # on-policy model update batchsize: train_prompt_bsz * rollout.n
 gen_prompt_bsz=$((train_prompt_bsz * 1))
-n_resp_per_prompt=8
-train_prompt_mini_bsz=128  # model grad update batchsize
+n_resp_per_prompt=2
+train_prompt_mini_bsz=32  # model grad update batchsize
 
 # Algorithm
 temperature=1.0

@@ -387,6 +387,7 @@ class DataParallelPPOActor(BasePPOActor):
 
         # NOTE: added by Reasoning360 for dynamic SFT/RL switching
         # Add SFT mode flag and teacher responses if available
+        enable_dynamic_sft_rl = False
         if "use_sft_mode" in data.batch.keys():  
             enable_dynamic_sft_rl = True
             # as long as this key is in the data (no matter True or False)

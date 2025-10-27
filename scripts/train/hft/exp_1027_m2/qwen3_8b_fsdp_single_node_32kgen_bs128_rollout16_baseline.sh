@@ -1,4 +1,15 @@
 #!/bin/bash
+#SBATCH --job-name=hft-qwen2_5_7b
+#SBATCH --output=slurm/%x-%j.log
+#SBATCH --error=slurm/%x-%j.log
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=96
+#SBATCH --mem=0
+#SBATCH --gres=gpu:8
+#SBATCH --qos=iq
+#SBATCH --time=4-00:00:00
+#SBATCH --exclusive
 
 # =================== User-Configurable Settings ===================
 # --- Execution Environment ---
@@ -12,28 +23,48 @@ WANDB_PROJECT="HFT" # Your wandb project name
 # export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-099:8000"  # Optional: Fill in the llm-as-judge hosted URL for 'STEM' domain evaluation
 
 # =================== Environment Setup ===================
-export NCCL_DEBUG=info
-export CUDA_DEVICE_MAX_CONNECTIONS=1
-# export CUDA_LAUNCH_BLOCKING=1 # Uncomment for easier debugging of CUDA errors
-# export NCCL_TIMEOUT_MS=4800000
+export NCCL_DEBUG=warn
+export NCCL_NET=IB
+export NCCL_IB_HCA="mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7"
+export NCCL_CROSS_NIC=1            
+export NCCL_IB_TC=136
+export NCCL_SOCKET_IFNAME="^lo,docker,virbr"
 export NCCL_TIMEOUT_SECONDS=4800
-export TORCH_NCCL_ENABLE_MONITORING=0 
-
+export CUDA_DEVICE_MAX_CONNECTIONS=8
+export NCCL_NVLS_ENABLE=1
+export TORCH_NCCL_ENABLE_MONITORING=0
 export HYDRA_FULL_ERROR=1
 export VLLM_USE_V1=0
 export ROCR_VISIBLE_DEVICES=None
-export CONDA_BIN_PATH=/lustrefs/users/zhuojun.cheng/miniconda3/envs/sync-rl-zj-vllm-v010/bin/
+export CONDA_BIN_PATH=/mnt/weka/home/shibo.hao/miniforge3/envs/Reasoning360-Oct-2025/bin/
+export TRITON_HOME=/tmp/triton_cache
 
+# Get the list of allocated nodes
+nodes=( $(scontrol show hostnames "$SLURM_JOB_NODELIST") )
+echo "Nodes to check: ${nodes[@]}"
+
+# We'll track PIDs so we can wait on them and detect errors
+declare -A pids
+export head_node=${nodes[0]}
+head_node_ip=$(srun --nodes=1 --ntasks=1 -w "$head_node" hostname --ip-address)
+port=6379
+address_head=$head_node_ip:$port
+
+export worker_num=$SLURM_NNODES
 
 # =================== Data Mixture ===================
 # Assumes data is in a directory named 'data' in the same directory as the script
-SHARED_DATA_PATH=/lustrefs/users/zhuojun.cheng/vpim/guru_data/
-TRAIN_DATA_DIR=${SHARED_DATA_PATH}/train/postprocessed_dedup_am_semantic_filtered_0.05_0.94_thresh_ratio0.5_sample1.0_balanced_step2
-TEST_DATA_DIR=${SHARED_DATA_PATH}/test/online/
+
+# SHARED_DATA_PATH=/lustrefs/users/zhuojun.cheng/vpim/guru_data/
+SHARED_DATA_PATH=/mnt/sharefs/users/haonan.li/data/k2/
+TRAIN_DATA_DIR=${SHARED_DATA_PATH}/train_scored_dedup_am_12k_len_rm_flipscore_4
+TEST_DATA_DIR=${SHARED_DATA_PATH}/test_12k_len
+
+# /mnt/sharefs/users/haonan.li/data/k2/train_scored_dedup_am_12k_len_rm_flipscore_4/math__combined_118.2k.part1.parquet
 
 # # Math (train)
-math_train_path1=${TRAIN_DATA_DIR}/math__combined_118.2k.part1_scored.parquet
-# math_train_path2=${TRAIN_DATA_DIR}/math__combined_118.2k.part2_scored.parquet
+math_train_path1=${TRAIN_DATA_DIR}/math__combined_118.2k.part1.parquet
+# math_train_path2=${TRAIN_DATA_DIR}/math__combined_118.2k.part2.parquet
 # Math (test)
 math_test_path=${TEST_DATA_DIR}/math__math_500.parquet
 aime_test_path=${TEST_DATA_DIR}/math__aime_repeated_8x_240.parquet
@@ -91,38 +122,48 @@ train_files="['${math_train_path1}']"
 test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${gpqa_diamond_test_path}']"
 
 # =================== Model ===================
-BASE_MODEL=Qwen/Qwen3-0.6B
+BASE_MODEL=$HOME/Qwen3-8B
 
 # =================== Logging ===================
 # Generate a unique experiment name if not resuming
+export WANDB_API_KEY=70b335e45d7d3d600fd3bfe251927ba2d561c8d2
 if [[ -n "$RESUME_CKPT_DIR_NAME" ]]; then
     WANDB_EXPERIMENT_NAME="$RESUME_CKPT_DIR_NAME"
 else
     TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-    WANDB_EXPERIMENT_NAME="Qwen3-0.6B-32kgen-bs128-rollout8-hybrid-${TIMESTAMP}-${BASE_MODEL##*/}"
+    WANDB_EXPERIMENT_NAME="Qwen3-8B-32kgen-bs128-rollout16-baseline-${TIMESTAMP}-${BASE_MODEL##*/}"
 fi
 
 # Create slurm log directory if it doesn't exist
-SLURM_LOG_DIR="/lustrefs/users/shibo.hao/Reasoning360-Oct-2025/slurm"
+SLURM_LOG_DIR="$HOME/Reasoning360-Oct-2025/slurm"
 mkdir -p "$SLURM_LOG_DIR"
-
-# Set up log file names
-LOG_FILE="$SLURM_LOG_DIR/${WANDB_EXPERIMENT_NAME}.log"
-ERR_FILE="$SLURM_LOG_DIR/${WANDB_EXPERIMENT_NAME}.err"
-
-echo "Logging stdout to: $LOG_FILE"
-echo "Logging stderr to: $ERR_FILE"
 
 # =================== Ray Start (Single Node) ===================
 # Stop any previous Ray instances
-${CONDA_BIN_PATH}ray stop -f
+srun --nodes=$worker_num --ntasks=$worker_num --ntasks-per-node=1 ${CONDA_BIN_PATH}ray stop
 
-# Start a new Ray cluster on the local machine
-# The number of CPUs is often best left for Ray to determine automatically.
-echo "Starting Ray on the local node with ${NUM_GPUS} GPUs..."
-env -u ROCR_VISIBLE_DEVICES -u HIP_VISIBLE_DEVICES ${CONDA_BIN_PATH}ray start --head --num-gpus ${NUM_GPUS} --include-dashboard=True --dashboard-port 8265
-sleep 5
+sleep 10
+# Remove existing Ray cluster
+srun --nodes=$worker_num --ntasks=$worker_num --ntasks-per-node=1 rm -rf /tmp/ray/ray_current_cluster
 
+# Start Ray head node
+srun --nodes=1 --ntasks=1 -w "$head_node" --export=ALL \
+    env -u ROCR_VISIBLE_DEVICES -u HIP_VISIBLE_DEVICES \
+    ${CONDA_BIN_PATH}ray start --head --node-ip-address="$head_node_ip" --port=$port \
+    --num-cpus "${SLURM_CPUS_PER_TASK}" --num-gpus 8 --include-dashboard=True --block &
+
+sleep 30
+
+# Start Ray worker nodes
+for ((i = 1; i < worker_num; i++)); do
+    node_i=${nodes[$i]}
+    echo "Starting WORKER $i at $node_i"
+    srun --nodes=1 --ntasks=1 -w "$node_i" --export=ALL \
+        env -u ROCR_VISIBLE_DEVICES -u HIP_VISIBLE_DEVICES \
+        ${CONDA_BIN_PATH}ray start --address "$address_head" \
+        --num-cpus "${SLURM_CPUS_PER_TASK}" --num-gpus 8 --block &    
+done
+sleep 30
 
 # =================== RL Config ===================
 # Note, we borrowed the config format from DAPO while here disabled all DAPO features to run the naive RL baseline.
@@ -131,7 +172,7 @@ adv_estimator=grpo
 
 # Dynamic SFT/RL switching (added by Reasoning360)
 # Set enable_dynamic_sft_rl=True to use SFT loss for samples with advantage <= threshold
-enable_dynamic_sft_rl=True  # Set to True to enable the feature
+enable_dynamic_sft_rl=False  # Set to True to enable the feature
 dynamic_sft_rl_advantage_threshold=0.01  # Use SFT if advantage <= this value, otherwise use RL
 
 use_kl_in_reward=False
@@ -155,7 +196,7 @@ filter_groups_metric=acc
 max_num_gen_batches=1
 train_prompt_bsz=128  # on-policy model update batchsize: train_prompt_bsz * rollout.n
 gen_prompt_bsz=$((train_prompt_bsz * 1))
-n_resp_per_prompt=8
+n_resp_per_prompt=16
 train_prompt_mini_bsz=128  # model grad update batchsize
 
 # Algorithm
@@ -174,8 +215,8 @@ gen_max_num_seqs=512
 infer_micro_batch_size=null
 train_micro_batch_size=null
 use_dynamic_bsz=True
-actor_ppo_max_token_len=$(( (max_prompt_length + max_response_length) * 2))  # increase this to speed up model forward & backward but note memory overflow
-infer_ppo_max_token_len=$(( (max_prompt_length + max_response_length) * 2))  # increase this to speed up model forward, but note memory overflow
+actor_ppo_max_token_len=$(( (max_prompt_length + max_response_length) * 1))  # increase this to speed up model forward & backward but note memory overflow
+infer_ppo_max_token_len=$(( (max_prompt_length + max_response_length) * 1))  # increase this to speed up model forward, but note memory overflow
 offload=True
 
 # =================== Start RL training ===================
@@ -272,5 +313,4 @@ echo "Starting training..."
     trainer.log_val_generations=50 \
     trainer.resume_mode=auto \
     trainer.validation_data_dir=rollout_data/validation/${WANDB_EXPERIMENT_NAME} \
-    trainer.rollout_data_dir=rollout_data/train/${WANDB_EXPERIMENT_NAME} \
-    2>&1 | tee -a "$LOG_FILE" 2> >(tee -a "$ERR_FILE" >&2)
+    trainer.rollout_data_dir=rollout_data/train/${WANDB_EXPERIMENT_NAME}
