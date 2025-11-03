@@ -12,7 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# import flash_rl # noqa: F401
+# use this if conda environment is sync-rl-v3 otherwise don't import it
+import os
+if os.getenv("CONDA_DEFAULT_ENV") == "sync-rl-v3":
+    import flash_rl # noqa: F401
+else:
+    pass
 
 import importlib
 import logging

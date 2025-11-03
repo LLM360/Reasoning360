@@ -336,6 +336,45 @@ class RayDAPOTrainer(RayPPOTrainer):
                             actor_output = self.actor_rollout_wg.update_actor(batch)
                         actor_output_metrics = reduce_metrics(actor_output.meta_info["metrics"])
                         metrics.update(actor_output_metrics)
+                    
+                    # Log rollout generations if enabled
+                    rollout_data_dir = self.config.trainer.get("rollout_data_dir", None)
+                    if rollout_data_dir:
+                        with marked_timer("dump_rollout_generations", timing_raw, color="green"):
+                            inputs = self.tokenizer.batch_decode(batch.batch["prompts"], skip_special_tokens=True)
+                            outputs = self.tokenizer.batch_decode(batch.batch["responses"], skip_special_tokens=True)
+                            scores = batch.batch["token_level_scores"].sum(-1).cpu().tolist()
+                            sample_gts = [
+                                item.non_tensor_batch.get("reward_model", {}).get("ground_truth", None)
+                                for item in batch
+                            ]
+
+                            def _to_sequence(value):
+                                if isinstance(value, torch.Tensor):
+                                    return value.detach().cpu().tolist()
+                                if hasattr(value, "tolist"):
+                                    return value.tolist()
+                                return list(value)
+
+                            reward_dump_infos = {}
+                            if reward_extra_infos_dict:
+                                for key in reward_extra_infos_dict:
+                                    if key in batch.non_tensor_batch:
+                                        reward_dump_infos[key] = _to_sequence(batch.non_tensor_batch[key])
+
+                            if "request_id" in batch.non_tensor_batch:
+                                reward_dump_infos.setdefault(
+                                    "request_id", _to_sequence(batch.non_tensor_batch["request_id"])
+                                )
+
+                            self._dump_generations(
+                                inputs=inputs,
+                                outputs=outputs,
+                                gts=sample_gts,
+                                scores=scores,
+                                reward_extra_infos_dict=reward_dump_infos,
+                                dump_path=rollout_data_dir,
+                            )
 
                 # validate
                 if (

@@ -9,7 +9,7 @@ RESUME_CKPT_DIR_NAME=""  # Fill in the W&B experiment name to resume from, other
 WANDB_PROJECT="DebugVERL" # Your wandb project name
 
 # --- External Services ---
-export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-139:8000"  # Optional: Fill in the llm-as-judge hosted URL for 'STEM' domain evaluation
+export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-099:8000"  # Optional: Fill in the llm-as-judge hosted URL for 'STEM' domain evaluation
 
 # =================== Environment Setup ===================
 export NCCL_DEBUG=info
@@ -84,7 +84,7 @@ train_files="['${math_train_path1}','${math_train_path2}','${leetcode_train_path
 test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${humaneval_test_path}','${mbpp_test_path}','${livecodebench_test_path}','${gpqa_diamond_test_path}','${supergpqa_test_path}']"
 
 # =================== Model ===================
-BASE_MODEL=Qwen/Qwen2.5-7B
+BASE_MODEL=Qwen/Qwen2.5-0.5B
 
 # =================== Logging ===================
 # Generate a unique experiment name if not resuming
@@ -120,7 +120,7 @@ clip_ratio_low=0.2
 clip_ratio_high=0.2
 
 max_prompt_length=$((1024 * 4))
-max_response_length=$((1024 * 8))
+max_response_length=$((1024 * 2))
 enable_overlong_buffer=False
 overlong_buffer_len=$((1024 * 4))
 overlong_penalty_factor=1.0
@@ -235,11 +235,13 @@ python -m recipe.dapo.main_dapo \
     trainer.logger=['console','wandb'] \
     trainer.project_name=${WANDB_PROJECT} \
     trainer.experiment_name=${WANDB_EXPERIMENT_NAME} \
-    trainer.val_before_train=True \
+    trainer.val_before_train=False \
     trainer.n_gpus_per_node=${NUM_GPUS} \
     trainer.nnodes=1 \
     trainer.save_freq=10 \
     trainer.test_freq=10 \
     trainer.total_epochs=10 \
     trainer.log_val_generations=50 \
-    trainer.resume_mode=auto
+    trainer.resume_mode=auto \
+    trainer.validation_data_dir=rollout_data/validation/${WANDB_EXPERIMENT_NAME} \
+    trainer.rollout_data_dir=rollout_data/train/${WANDB_EXPERIMENT_NAME}
