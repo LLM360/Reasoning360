@@ -1163,6 +1163,63 @@ def compute_policy_loss_kl_cov(
 
     return pg_loss, torch.tensor(0.0), ppo_kl_abs, torch.tensor(0.0)
 
+@register_policy_loss("cispo")
+def compute_policy_loss_cispo(
+    old_log_prob: torch.Tensor,
+    log_prob: torch.Tensor,
+    advantages: torch.Tensor,
+    response_mask: torch.Tensor,
+    loss_agg_mode: str = "token-mean",
+    config: Optional[DictConfig | AlgoConfig] = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """ 
+    Compute the CISPO policy objective and related metrics.
+    CISPO (Clipped Importance Sampling Policy Optimization) clips importance sampling weights
+    instead of dropping tokens, which is beneficial for training on sparse but critical tokens 
+    and long-context reasoning in RL.
+    Reference: https://www.arxiv.org/abs/2506.13585
+    Args:
+        old_log_prob (torch.Tensor):
+            Log-probabilities of actions under the old policy, shape (batch_size, response_length).
+        log_prob (torch.Tensor):
+            Log-probabilities of actions under the current policy, shape (batch_size, response_length).
+        advantages (torch.Tensor):
+            Advantage estimates for each action, shape (batch_size, response_length).
+        response_mask (torch.Tensor):
+            Mask indicating which tokens to include in the loss, shape (batch_size, response_length).
+        loss_agg_mode (str, optional):
+            Aggregation mode for loss computation
+        config (AlgoConfig):
+            Algorithm configuration containing CISPO parameters
+    Returns:
+        tuple: (pg_loss, pg_clipfrac, ppo_kl, pg_clipfrac_lower)
+    """
+    # Setup CISPO configuration
+    assert config.policy_loss.loss_mode == "cispo", "CISPO loss mode not set in config"
+    cispo_clip_ratio_high = config.policy_loss.cispo_clip_ratio_high
+    cispo_clip_ratio_low = config.policy_loss.cispo_clip_ratio_low
+    clip_ratio_c = config.get("clip_ratio_c", 3.0)
+
+    # Same code as compute_policy_loss
+    assert clip_ratio_c > 1.0, (
+        "The lower bound of the clip_ratio_c for dual-clip PPO should be greater than 1.0,"
+        + f" but get the value: {clip_ratio_c}."
+    )
+
+    negative_approx_kl = log_prob - old_log_prob
+    # Clamp negative_approx_kl for stability
+    negative_approx_kl = torch.clamp(negative_approx_kl, min=-20.0, max=20.0)
+    ratio = torch.exp(negative_approx_kl)
+    ppo_kl = verl_F.masked_mean(-negative_approx_kl, response_mask)
+
+    # CISPO specific loss
+    ratio = ratio.detach() # Stop gradient on IS ratio
+    importance_sampling_weight = torch.clamp(ratio, min=1-cispo_clip_ratio_low, max=1+cispo_clip_ratio_high)
+    pg_losses = -advantages * log_prob * importance_sampling_weight
+
+    pg_loss = agg_loss(loss_mat=pg_losses, loss_mask=response_mask, loss_agg_mode=loss_agg_mode)
+
+    return pg_loss, torch.tensor(0.0), ppo_kl, torch.tensor(0.0) # Not computing clip fractions for CISPO
 
 @register_policy_loss("geo_mean")
 def compute_policy_loss_geo_mean(
