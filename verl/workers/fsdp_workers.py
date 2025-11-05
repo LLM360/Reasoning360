@@ -305,7 +305,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
             else:
                 self.tokenizer.chat_template = self.config.model.custom_chat_template
 
-        vllm_dtype = PrecisionType.to_dtype(self.config.rollout.dtype)
+        vllm_dtype = PrecisionType.to_dtype(self.config.rollout.get("dtype", "bfloat16"))
         torch_dtype = fsdp_config.get("model_dtype", None)
         if torch_dtype is None:
             torch_dtype = torch.float32 if self._is_actor else vllm_dtype
@@ -438,7 +438,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
             reduce_dtype = PrecisionType.to_dtype(mixed_precision_config.get("reduce_dtype", "fp32"))
             buffer_dtype = PrecisionType.to_dtype(mixed_precision_config.get("buffer_dtype", "fp32"))
         else:
-            param_dtype = PrecisionType.to_dtype(self.config.actor.get("dtype", "float16"))
+            param_dtype = PrecisionType.to_dtype(self.config.actor.get("dtype", "bfloat16"))
             reduce_dtype = torch.float32
             buffer_dtype = torch.float32
 

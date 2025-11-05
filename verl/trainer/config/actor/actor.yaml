@@ -11,7 +11,7 @@ _target_: verl.workers.config.ActorConfig
 # fsdp, fsdp2 or megatron. must be set.
 strategy: ???
 
-dtype: float16
+dtype: bfloat16
 
 # Split each sample into sub-batches of this size for PPO
 ppo_mini_batch_size: 256

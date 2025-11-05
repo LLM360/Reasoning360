@@ -114,7 +114,7 @@ class DataParallelPPOActor(BasePPOActor):
                     )
 
         from verl.utils.torch_dtypes import PrecisionType
-        torch_dtype = PrecisionType.to_dtype(self.config.dtype)
+        torch_dtype = PrecisionType.to_dtype(self.config.get("dtype", "bfloat16"))
         with torch.autocast(device_type=self.device_name, dtype=torch_dtype):
             input_ids = micro_batch["input_ids"]
             batch_size, seqlen = input_ids.shape
