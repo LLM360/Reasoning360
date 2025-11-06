@@ -1172,6 +1172,7 @@ def compute_policy_loss_cispo(
     response_mask: torch.Tensor,
     loss_agg_mode: str = "token-mean",
     config: Optional[DictConfig | AlgoConfig] = None,
+    rollout_log_probs: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """ 
     Compute the CISPO policy objective and related metrics.
@@ -1192,6 +1193,8 @@ def compute_policy_loss_cispo(
             Aggregation mode for loss computation
         config (AlgoConfig):
             Algorithm configuration containing CISPO parameters
+        rollout_log_probs: `(torch.Tensor)`:
+            log probabilities of actions under the rollout policy, shape (batch_size, response_length).
     Returns:
         tuple: (pg_loss, pg_clipfrac, ppo_kl, pg_clipfrac_lower)
     """
@@ -1217,6 +1220,12 @@ def compute_policy_loss_cispo(
     ratio = ratio.detach() # Stop gradient on IS ratio
     importance_sampling_weight = torch.clamp(ratio, min=1-cispo_clip_ratio_low, max=1+cispo_clip_ratio_high)
     pg_losses = -advantages * log_prob * importance_sampling_weight
+
+    if config.tis_imp_ratio_cap > 0 and rollout_log_probs is not None:
+        # Apply truncated importance sampling -> https://fengyao.notion.site/off-policy-rl
+        tis_imp_ratio = torch.exp(old_log_prob - rollout_log_probs)
+        tis_imp_ratio = torch.clamp(tis_imp_ratio, max=config.tis_imp_ratio_cap)
+        pg_losses = pg_losses * tis_imp_ratio
 
     pg_loss = agg_loss(loss_mat=pg_losses, loss_mask=response_mask, loss_agg_mode=loss_agg_mode)
     # For compatibility, return zero for pg_clipfrac_lower and pg_clipfrac (not used in CISPO)
