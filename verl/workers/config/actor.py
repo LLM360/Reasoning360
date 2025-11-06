@@ -49,6 +49,8 @@ class PolicyLossConfig(BaseConfig):
     clip_cov_ub: float = 5.0
     kl_cov_ratio: float = 0.0002
     ppo_kl_coef: float = 0.1
+    cispo_clip_ratio_high: float = 0.2
+    cispo_clip_ratio_low: float = 0.2
 
 
 @dataclass
@@ -225,6 +227,7 @@ class FSDPActorConfig(ActorConfig):
     """
 
     strategy: str = "fsdp"
+    dtype: str = "bfloat16"
     grad_clip: float = 1.0
     ulysses_sequence_parallel_size: int = 1
     entropy_from_logits_with_chunking: bool = False

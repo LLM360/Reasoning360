@@ -1163,6 +1163,7 @@ def compute_policy_loss_kl_cov(
 
     return pg_loss, torch.tensor(0.0), ppo_kl_abs, torch.tensor(0.0)
 
+
 @register_policy_loss("cispo")
 def compute_policy_loss_cispo(
     old_log_prob: torch.Tensor,
@@ -1218,8 +1219,12 @@ def compute_policy_loss_cispo(
     pg_losses = -advantages * log_prob * importance_sampling_weight
 
     pg_loss = agg_loss(loss_mat=pg_losses, loss_mask=response_mask, loss_agg_mode=loss_agg_mode)
+    # For compatibility, return zero for pg_clipfrac_lower and pg_clipfrac (not used in CISPO)
+    pg_clipfrac = torch.tensor(0.0, device=pg_loss.device)
+    pg_clipfrac_lower = torch.tensor(0.0, device=pg_loss.device)
 
-    return pg_loss, torch.tensor(0.0), ppo_kl, torch.tensor(0.0) # Not computing clip fractions for CISPO
+    return pg_loss, pg_clipfrac, ppo_kl, pg_clipfrac_lower
+
 
 @register_policy_loss("geo_mean")
 def compute_policy_loss_geo_mean(
