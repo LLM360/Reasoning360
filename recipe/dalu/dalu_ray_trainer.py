@@ -56,6 +56,7 @@ class RayDALUTrainer(RayPPOTrainer):
         # Initialize the drop count attributes to ensure they're always available
         self.n_drop_easy = 0
         self.n_drop_hard = 0
+        self.epoch = None
 
     def _create_priority_dataloader(self, epoch_idx, dynamic_filtering, enable_budget):
         """
@@ -67,15 +68,15 @@ class RayDALUTrainer(RayPPOTrainer):
         from torchdata.stateful_dataloader import StatefulDataLoader
 
         # Initialize columns for the first epoch
-        max_easy_ratio = self.config.data.get("max_easy_ratio", 0.1)
+        max_easy_ratio = self.config.data.get("max_easy_ratio", 0.3)
         max_hard_ratio = self.config.data.get("max_hard_ratio", 0.2)
         if epoch_idx == 0:
             # Get the initial pass rate column name from config, with default fallback
             initial_pass_rate_column = self.config.data.get("initial_pass_rate_column", "qwen3_30b_pass_rate")
             self.train_dataset.dataframe["prev_pass_rate"] = self.train_dataset.dataframe[initial_pass_rate_column]
             # use half of the max response length as the average length for the first epoch
-            self.train_dataset.dataframe["prev_passed_avg_length"] = self.config.data.get("max_response_length", 1024*28) * 3 / 4
-            self.train_dataset.dataframe["prev_passed_max_length"] = self.config.data.get("max_response_length", 1024*28) * 3 / 4
+            self.train_dataset.dataframe["prev_passed_avg_length"] = self.config.data.get("max_response_length", 1024*28) * 1 / 2
+            self.train_dataset.dataframe["prev_passed_max_length"] = self.config.data.get("max_response_length", 1024*28) * 1 / 2
             self.train_dataset.dataframe["prev_passed_80th_length"] = self.config.data.get("max_response_length", 1024*28)
             self.train_dataset.dataframe["prev_passed_50th_length"] = self.config.data.get("max_response_length", 1024*28)
 
@@ -257,17 +258,31 @@ class RayDALUTrainer(RayPPOTrainer):
         batch = None
         num_prompt_in_batch = 0
         num_gen_batches = 0
-        for epoch in range(self.config.trainer.total_epochs):
-            train_dataset = self._create_priority_dataloader(
-                epoch_idx=epoch,
-                dynamic_filtering=self.config.data.get("dynamic_filtering", False),
-                enable_budget=self.config.trainer.get("enable_budget", False),
-            )
-            # create create the default_local_dir if not exists
-            if not os.path.exists(self.config.trainer.default_local_dir):
-                os.makedirs(self.config.trainer.default_local_dir)
-            train_dataset.dataframe.to_csv(os.path.join(self.config.trainer.default_local_dir,
-                f"train_dataset_epoch_{epoch}.csv"), index=False)
+        
+        if self.epoch is None:
+            resuming = False
+            start_epoch = 0
+        else:
+            resuming = True
+            start_epoch = self.epoch
+        
+        for epoch in range(start_epoch, self.config.trainer.total_epochs):
+            self.epoch = epoch  # update current epoch for checkpointing
+            if resuming:
+                # self.train_dataloader will be created in _load_dataset_state automatically
+                print(f"Resuming training at epoch {epoch}, dataloader already exists.")
+                resuming = False
+            else:
+                train_dataset = self._create_priority_dataloader(
+                    epoch_idx=epoch,
+                    dynamic_filtering=self.config.data.get("dynamic_filtering", False),
+                    enable_budget=self.config.trainer.get("enable_budget", False),
+                )
+                # create create the default_local_dir if not exists
+                if not os.path.exists(self.config.trainer.default_local_dir):
+                    os.makedirs(self.config.trainer.default_local_dir)
+                train_dataset.dataframe.to_csv(os.path.join(self.config.trainer.default_local_dir,
+                    f"train_dataset_epoch_{epoch}.csv"), index=False)
 
             for batch_dict in self.train_dataloader:
                 metrics = {}
@@ -633,35 +648,29 @@ class RayDALUTrainer(RayPPOTrainer):
                     if len(batch_df) > 0:
                         metrics.update({
                             "dalu_curr/num_unique_prompts": len(unique_prompt_ids),
+                            'dalu_curr/num_gen_batches': num_gen_batches,
                             "dalu_curr/per_prompt_len_budget_avg": batch_df["per_prompt_length_budget"].mean(),
-                            "dalu_curr/per_prompt_len_budget_std": batch_df["per_prompt_length_budget"].std(),
                             "dalu_curr/per_prompt_len_budget_min": batch_df["per_prompt_length_budget"].min(),
                             "dalu_curr/per_prompt_len_budget_max": batch_df["per_prompt_length_budget"].max(),
                             "dalu_prev/per_prompt_pr_avg": batch_df["prev_pass_rate"].mean(),
-                            "dalu_prev/per_prompt_pr_std": batch_df["prev_pass_rate"].std(),
                             "dalu_prev/per_prompt_pr_min": batch_df["prev_pass_rate"].min(),
                             "dalu_prev/per_prompt_pr_max": batch_df["prev_pass_rate"].max(),
                             "dalu_prev/passed_max_len_avg": batch_df["prev_passed_max_length"].mean(),
-                            "dalu_prev/passed_max_len_std": batch_df["prev_passed_max_length"].std(),
                             "dalu_prev/passed_max_len_min": batch_df["prev_passed_max_length"].min(),
                             "dalu_prev/passed_max_len_max": batch_df["prev_passed_max_length"].max(),
                             "dalu_prev/passed_avg_len_avg": batch_df["prev_passed_avg_length"].mean(),
-                            "dalu_prev/passed_avg_len_std": batch_df["prev_passed_avg_length"].std(),
                             "dalu_prev/passed_avg_len_min": batch_df["prev_passed_avg_length"].min(),
                             "dalu_prev/passed_avg_len_max": batch_df["prev_passed_avg_length"].max(),
                             'dalu_prev/passed_80th_len_avg': batch_df["prev_passed_80th_length"].mean(),
-                            'dalu_prev/passed_80th_len_std': batch_df["prev_passed_80th_length"].std(),
                             'dalu_prev/passed_80th_len_min': batch_df["prev_passed_80th_length"].min(),
                             'dalu_prev/passed_80th_len_max': batch_df["prev_passed_80th_length"].max(),
                             'dalu_prev/passed_50th_len_avg': batch_df["prev_passed_50th_length"].mean(),
-                            'dalu_prev/passed_50th_len_std': batch_df["prev_passed_50th_length"].std(),
                             'dalu_prev/passed_50th_len_min': batch_df["prev_passed_50th_length"].min(),
                             'dalu_prev/passed_50th_len_max': batch_df["prev_passed_50th_length"].max()
                         })
 
-                metrics["dalu_epoch/num_gen_batches"] = num_gen_batches
-                metrics['dalu_epoch/num_prompts'] = len(train_dataset.dataframe)
-                metrics['dalu_epoch/perct_dropped_prompts'] = 100 * ( (len(self.train_dataset.dataframe) - len(train_dataset.dataframe)) / len(self.train_dataset.dataframe))
+                # metrics['dalu_epoch/num_prompts'] = len(self.train_dataloader) * self.config.data.get("gen_batch_size", self.config.data.train_batch_size) * world_size
+                metrics['dalu_epoch/perct_dropped_prompts'] = 100 * (self.n_drop_easy + self.n_drop_hard) / len(self.train_dataset.dataframe)
                 metrics['dalu_epoch/n_drop_easy'] = self.n_drop_easy if self.n_drop_easy is not None else 0
                 metrics['dalu_epoch/n_drop_hard'] = self.n_drop_hard if self.n_drop_hard is not None else 0
                 metrics['dalu_epoch/epoch'] = epoch
@@ -681,7 +690,7 @@ class RayDALUTrainer(RayPPOTrainer):
                 self.global_steps += 1
                 self.gen_steps += 1
 
-        # check if last step checkpint exists
+        # check if last step checkpoint exists
         checkpoint_dir = os.path.join(self.config.trainer.default_local_dir, f"global_step_{self.global_steps}")
         if not os.path.exists(checkpoint_dir):
             # save last step checkpoint
@@ -696,8 +705,6 @@ class RayDALUTrainer(RayPPOTrainer):
         Save the current dataset state including updated pass rates and lengths.
         This is crucial for resuming training with enable_budget feature.
         """
-        if not self.config.trainer.get('enable_budget', False):
-            return
 
         dataset_state_path = os.path.join(local_global_step_folder, 'dataset_state.pt')
 
@@ -706,6 +713,7 @@ class RayDALUTrainer(RayPPOTrainer):
             'dataframe': self.train_dataset.dataframe.copy(),
             'n_drop_easy': getattr(self, 'n_drop_easy', 0),
             'n_drop_hard': getattr(self, 'n_drop_hard', 0),
+            'epoch': getattr(self, 'epoch', -1) # -1 indicates error
         }
 
         torch.save(dataset_state, dataset_state_path)
@@ -720,31 +728,26 @@ class RayDALUTrainer(RayPPOTrainer):
         Load the dataset state including updated pass rates and lengths.
         This restores the learned statistics from previous training.
         """
-        if not self.config.trainer.get('enable_budget', False):
-            return
 
         dataset_state_path = os.path.join(global_step_folder, 'dataset_state.pt')
 
-        if os.path.exists(dataset_state_path):
-            print(f"Loading dataset state from {dataset_state_path}")
-            dataset_state = torch.load(dataset_state_path, weights_only=False)
+        print(f"Loading dataset state from {dataset_state_path}")
+        dataset_state = torch.load(dataset_state_path, weights_only=False)
 
-            # Restore dataset with updated pass rates and lengths
-            self.train_dataset.dataframe = dataset_state['dataframe']
-            self.n_drop_easy = dataset_state.get('n_drop_easy', 0)
-            self.n_drop_hard = dataset_state.get('n_drop_hard', 0)
+        # Restore dataset with updated pass rates and lengths
+        self.train_dataset.dataframe = dataset_state['dataframe']
+        self.n_drop_easy = dataset_state.get('n_drop_easy', 0)
+        self.n_drop_hard = dataset_state.get('n_drop_hard', 0)
+        self.epoch = dataset_state.get('epoch', -1) # -1 indicates error
 
-            print(f"Restored dataset state:")
-            print(f"  - Dataset size: {len(self.train_dataset.dataframe)}")
-            print(f"  - Pass rate range: {self.train_dataset.dataframe['prev_pass_rate'].min():.3f} - {self.train_dataset.dataframe['prev_pass_rate'].max():.3f}")
-            if 'prev_passed_avg_length' in self.train_dataset.dataframe.columns:
-                print(f"  - Avg length range: {self.train_dataset.dataframe['prev_passed_avg_length'].min():.1f} - {self.train_dataset.dataframe['prev_passed_avg_length'].max():.1f}")
-            if 'prev_passed_max_length' in self.train_dataset.dataframe.columns:
-                print(f"  - Max length range: {self.train_dataset.dataframe['prev_passed_max_length'].min():.1f} - {self.train_dataset.dataframe['prev_passed_max_length'].max():.1f}")
-        else:
-            print(f"No dataset state found at {dataset_state_path}, starting with original dataset")
-            self.n_drop_easy = 0
-            self.n_drop_hard = 0
+        print(f"Restored dataset state:")
+        print(f"  - Dataset size: {len(self.train_dataset.dataframe)}")
+        print(f"  - Pass rate range: {self.train_dataset.dataframe['prev_pass_rate'].min():.3f} - {self.train_dataset.dataframe['prev_pass_rate'].max():.3f}")
+        if 'prev_passed_avg_length' in self.train_dataset.dataframe.columns:
+            print(f"  - Avg length range: {self.train_dataset.dataframe['prev_passed_avg_length'].min():.1f} - {self.train_dataset.dataframe['prev_passed_avg_length'].max():.1f}")
+        if 'prev_passed_max_length' in self.train_dataset.dataframe.columns:
+            print(f"  - Max length range: {self.train_dataset.dataframe['prev_passed_max_length'].min():.1f} - {self.train_dataset.dataframe['prev_passed_max_length'].max():.1f}")
+
 
     def _save_checkpoint(self):
         """
