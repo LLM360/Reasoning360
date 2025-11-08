@@ -1218,7 +1218,7 @@ def compute_policy_loss_cispo(
 
     # CISPO specific loss
     ratio = ratio.detach() # Stop gradient on IS ratio
-    importance_sampling_weight = torch.clamp(ratio, min=1-cispo_clip_ratio_low, max=1+cispo_clip_ratio_high)
+    importance_sampling_weight = torch.clamp(ratio, max=1+cispo_clip_ratio_high)
     pg_losses = -advantages * log_prob * importance_sampling_weight
 
     if config.tis_imp_ratio_cap > 0 and rollout_log_probs is not None:
