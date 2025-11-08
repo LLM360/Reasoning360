@@ -61,6 +61,7 @@ class NumberWallVerifier(Verifier):
             
         except Exception as e:
             # 如果验证过程中发生任何错误，返回False
+            print(f"Verification error (NumberWall): {e}")
             return False
     
     def _check_original_numbers(self, original_grid, solution_grid):
@@ -217,7 +218,7 @@ class NumberWallVerifier(Verifier):
                     
                     return grid
                 except Exception as e2:
-                    pass
+                    print(f"NOTE!!! parse error!!!! (NumberWall): {e2}")
         else:
             # print("No grid pattern found in the response")
             pass

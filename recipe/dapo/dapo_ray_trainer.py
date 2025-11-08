@@ -107,6 +107,8 @@ class RayDAPOTrainer(RayPPOTrainer):
         timing_raw = defaultdict(float)
         batch = None
         num_prompt_in_batch = 0
+        num_total_prompts = 0
+        # Added by Reasoning360
         num_gen_batches = 0
         for epoch in range(self.config.trainer.total_epochs):
             for batch_dict in self.train_dataloader:
@@ -230,6 +232,9 @@ class RayDAPOTrainer(RayPPOTrainer):
                         for prompt_uid, metric_vals in prompt_uid2metric_vals.items():
                             prompt_uid2metric_std[prompt_uid] = np.std(metric_vals)
 
+                        # Added by Reasoning360
+                        num_total_prompts += len(prompt_uid2metric_vals)
+
                         kept_prompt_uids = [
                             uid
                             for uid, std in prompt_uid2metric_std.items()
@@ -344,10 +349,22 @@ class RayDAPOTrainer(RayPPOTrainer):
                                 for item in batch
                             ]
 
+                            def _to_sequence(value):
+                                if isinstance(value, torch.Tensor):
+                                    return value.detach().cpu().tolist()
+                                if hasattr(value, "tolist"):
+                                    return value.tolist()
+                                return list(value)
+
+                            reward_dump_infos = {}
+                            if reward_extra_infos_dict:
+                                for key in reward_extra_infos_dict:
+                                    if key in batch.non_tensor_batch:
+                                        reward_dump_infos[key] = _to_sequence(batch.non_tensor_batch[key])
+
                             if "request_id" in batch.non_tensor_batch:
-                                reward_extra_infos_dict.setdefault(
-                                    "request_id",
-                                    batch.non_tensor_batch["request_id"].tolist(),
+                                reward_dump_infos.setdefault(
+                                    "request_id", _to_sequence(batch.non_tensor_batch["request_id"])
                                 )
 
                             self._dump_generations(
@@ -355,7 +372,7 @@ class RayDAPOTrainer(RayPPOTrainer):
                                 outputs=outputs,
                                 gts=sample_gts,
                                 scores=scores,
-                                reward_extra_infos_dict=reward_extra_infos_dict,
+                                reward_extra_infos_dict=reward_dump_infos,
                                 dump_path=rollout_data_dir,
                             )
 
@@ -400,8 +417,11 @@ class RayDAPOTrainer(RayPPOTrainer):
                 timing_raw = defaultdict(float)  # clear timing
 
                 metrics["train/num_gen_batches"] = num_gen_batches
+                # Added by Reasoning360 Track the proportion of prompts that are discarded by the filtering mechanism
+                metrics["train/filtered_ratio"] = 1 - (num_prompt_in_batch / num_total_prompts) if num_total_prompts > 0 else 0.0
                 batch = None
                 num_prompt_in_batch = 0
+                num_total_prompts = 0
                 num_gen_batches = 0
 
                 # TODO: make a canonical logger that supports various backend

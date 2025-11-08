@@ -73,6 +73,7 @@ class NorinoriVerifier(Verifier):
             
             return True
         except Exception as e:
+            print(f"Verification error (Norinori): {e}")
             return False
         
     def _parse_answer(self, test_solution: str):
@@ -102,6 +103,7 @@ class NorinoriVerifier(Verifier):
             
             return dominoes
         except Exception as e:
+            print(f"NOTE!!! parse error!!!! (Norinori): {e}")
             return None
     
     def _check_domino_shapes(self, dominoes):

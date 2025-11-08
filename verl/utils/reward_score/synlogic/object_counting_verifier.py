@@ -22,6 +22,7 @@ class ObjectCountingVerifier(Verifier):
             return int(parsed_answer) == ground_truth
 
         except Exception as e:
+            print(f"NOTE!!! parse error!!!! (ObjectCounting): {e}")
             return False
     
     def extract_answer(self, answer_str):

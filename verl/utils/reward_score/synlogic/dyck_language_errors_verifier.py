@@ -51,6 +51,7 @@ class DyckLanguageErrorsVerifier(Verifier):
             return is_correct
             
         except Exception as e:
+            print(f"Verification error (DyckLanguageErrors): {e}")
             return False
 
     def extract_answer(self, test_solution: str):

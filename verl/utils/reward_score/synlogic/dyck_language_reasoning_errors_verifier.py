@@ -51,6 +51,7 @@ class DyckLanguageReasoningErrorsVerifier(Verifier):
             return is_correct
             
         except Exception as e:
+            print(f"Verification error (DyckLanguageReasoningErrors): {e}")
             return False
     
     def _standardize_answer(self, answer: str) -> str:

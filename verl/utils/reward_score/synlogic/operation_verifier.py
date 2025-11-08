@@ -17,6 +17,7 @@ class OperationVerifier(Verifier):
                 return False
             return math_verify.verify(parsed_answer, ground_truth)
         except Exception as e:
+            print(f"NOTE!!! parse error!!!! (OperationVerifier): {e}")
             return False
     
     def extract_answer(self, answer_str):

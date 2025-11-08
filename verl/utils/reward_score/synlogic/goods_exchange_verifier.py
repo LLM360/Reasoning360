@@ -39,6 +39,7 @@ class GoodsExchangeVerifier(Verifier):
             return is_correct
             
         except Exception as e:
+            print(f"Verification error (GoodsExchange): {e}")
             return False
     
     def _parse_answer(self, answer_str):
@@ -67,6 +68,7 @@ class GoodsExchangeVerifier(Verifier):
                 return result
         except Exception as e:
             # 如果 eval 失败，记录错误并尝试解析旧格式
+            print(f"NOTE!!! parse error!!!! (GoodsExchange 1): {e}")
             
             # 移除最外层的括号（如果有）
             if answer_str.startswith('('):

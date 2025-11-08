@@ -22,6 +22,7 @@ class BooleanExpressionsVerifier(Verifier):
             
             return test_set == ground_truth_set
         except Exception as e:
+            print("NOTE!!! parse error!!!! (BooleanExpressions)", e)
             return False
 
     def lower(self, answer_list):

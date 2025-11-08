@@ -201,6 +201,24 @@ def default_compute_score(
         else:
             res = 0.0
 
+    elif data_source.startswith("synlogic"):
+        from .synlogic.synlogic import verifier_classes
+        from .synlogic.data import Data
+        
+        form_solution = solution_str.strip().split('</think>')[-1].strip()
+        # with open("solution_str_Qwen3-4B.txt_maze", "a") as f:
+        #     f.write("data_source: " + data_source + '\n')
+        #     f.write("solution_str: " + solution_str + '\n')
+        #     f.write("form_solution: " + form_solution + '\n')
+        #     f.write('-'*32 + '\n')
+        data = Data.from_json_str(extra_info["game_data_str"])
+        verifier = verifier_classes[data_source.replace("synlogic_", "")]()
+        res = verifier.verify(data, form_solution)
+        if res:
+            res = 1.0
+        else:
+            res = 0.0
+    
     else:
         raise NotImplementedError(f"Reward function is not implemented for {data_source=}")
 

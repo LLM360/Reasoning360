@@ -1,5 +1,6 @@
 import os
 import sys
+print(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # from .game_of_24.scripts.game_of_24_verifier import GameOf24Verifier
 # from .cryptarithm.scripts.cryptarithm_verifier import CryptarithmVerifier

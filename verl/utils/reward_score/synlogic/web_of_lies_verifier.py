@@ -45,6 +45,7 @@ class WebOfLiesVerifier(Verifier):
             return True
             
         except Exception as e:
+            print(f"Verification error (WebOfLies): {e}")
             return False
     
     def _parse_answer(self, answer_str):

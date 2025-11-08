@@ -96,6 +96,7 @@ class StarPlacementPuzzleVerifier(Verifier):
             return True
             
         except Exception as e:
+            print(f"Verification error (StarPlacementPuzzle): {e}")
             return False 
         
     def extract_answer(self, test_solution: str):
@@ -131,7 +132,7 @@ class StarPlacementPuzzleVerifier(Verifier):
                                 result[region] = [(row-1, col-1) for row, col in coords]
                             return result
                     except (ValueError, SyntaxError) as e:
-                        pass
+                        print(f"NOTE!!! parse error!!!! (StarPlacementPuzzle): {e}")
                 
                 # 如果上面的方法失败，尝试解析变量赋值
                 assign_match = re.search(r'(\w+)\s*=\s*(\{[^{}]*\})', code_content, re.DOTALL)
@@ -148,11 +149,12 @@ class StarPlacementPuzzleVerifier(Verifier):
                                 result[region] = [(row-1, col-1) for row, col in coords]
                             return result
                     except (ValueError, SyntaxError) as e:
-                        pass
+                        print(f"NOTE!!! parse error!!!! (StarPlacementPuzzle): {e}")
             except Exception as e:
-                pass
+                print(f"NOTE!!! parse error!!!! (StarPlacementPuzzle): {e}")
             
             return None
             
         except Exception as e:
+            print(f"NOTE!!! parse error!!!! (StarPlacementPuzzle): {e}")
             return None

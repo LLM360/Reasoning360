@@ -42,6 +42,7 @@ class CampsiteVerifier(Verifier):
             return True
             
         except Exception as e:
+            print(f"Verification error (Campsite): {e}")
             return False
     
     def _extract_grid(self, test_answer: str) -> List[List[str]]:

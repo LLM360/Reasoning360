@@ -26,6 +26,7 @@ class TimeSequenceVerifier(Verifier):
             try:
                 test_list = json.loads(test_answer.replace("，", ","))
             except:
+                print(f"NOTE!!! parse error!!!! (TimeSequence 1): {e}")
                 return False
             
             try:
@@ -36,12 +37,14 @@ class TimeSequenceVerifier(Verifier):
                     # print(f"可选会议数量不正确。model:{test_answer} *** true:[{true_answers['answer_maxLen']}, {true_answers['answer_nums']}]")
                     return False
             except:
+                print(f"NOTE!!! parse error!!!! (TimeSequence 2): {e}")
                 return False
             
             # 所有检查都通过
             # print("验证结果: 正确")
             return True
         except Exception as e:
+            print(f"Verification error (TimeSequence): {e}")
             return False 
         
     def extract_answer(self, test_solution: str):

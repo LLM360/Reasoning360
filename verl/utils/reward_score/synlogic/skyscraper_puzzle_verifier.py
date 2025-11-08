@@ -105,6 +105,7 @@ class SkyscraperPuzzleVerifier(Verifier):
             return True
         
         except Exception as e:
+            print(f"Verification error (SkyscraperPuzzle): {e}")
             return False
     
     def _count_visible_skyscrapers(self, heights):
@@ -164,4 +165,5 @@ class SkyscraperPuzzleVerifier(Verifier):
             # 如果提取失败，返回原始答案
             return test_solution
         except Exception as e:
+            print(f"NOTE!!! parse error!!!! (SkyscraperPuzzle): {e}")
             return test_solution

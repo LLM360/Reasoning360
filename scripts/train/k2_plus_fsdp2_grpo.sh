@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=polarisv1-48k-focused
+#SBATCH --job-name=grpo-base-focused-32k-noOverlong
 #SBATCH --nodes=32
 #SBATCH --ntasks=32
 #SBATCH --ntasks-per-node=1
@@ -11,10 +11,10 @@
 #SBATCH --exclusive
 #SBATCH --time=720:00:00
 #SBATCH --partition=main
-
+#SBATCH --exclude=azure-uk-hpc-H200-instance-114
 
 # =================== Frequently Used Variables ===================
-RESUME_CKPT_DIR_NAME="370914-polarisv1-focused-48k-checkpoint_0002250"  # Fill in the checkpoint directory name to resume from, otherwise from scratch
+RESUME_CKPT_DIR_NAME="371261-grpo-base-focused-32k-noOverlong_topp1-checkpoint_0002250"  # Fill in the checkpoint directory name to resume from, otherwise from scratch
 export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-062:8000"
 # export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-135:8000"
 # export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-100:8000"
@@ -190,11 +190,11 @@ use_kl_loss=False
 kl_loss_coef=0.0
 
 clip_ratio_low=0.2
-clip_ratio_high=0.28
+clip_ratio_high=0.2
 
 max_prompt_length=$((1024 * 4))
-max_response_length=$((1024 * 48))
-enable_overlong_buffer=True
+max_response_length=$((1024 * 32))
+enable_overlong_buffer=False
 overlong_buffer_len=$((1024 * 12))
 overlong_penalty_factor=1.0
 
@@ -209,7 +209,7 @@ n_resp_per_prompt=16
 train_prompt_mini_bsz=32  # model grad update batchsize
 
 # Algorithm
-temperature=1.6
+temperature=1.0
 val_temperature=1.0
 top_p=1.0
 top_k=-1 # 0 for HF rollout, -1 for vLLM rollout

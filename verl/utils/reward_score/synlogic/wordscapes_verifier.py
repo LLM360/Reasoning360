@@ -26,6 +26,7 @@ class WordscapesVerifier(Verifier):
         try:
             extracted_answer = self.extract_answer(test_solution)
             if not extracted_answer:
+                print("NOTE!!! parse error!!!! (Wordscapes): {e}")
                 return False
             
             if debug_mode:
@@ -88,6 +89,7 @@ class WordscapesVerifier(Verifier):
             # All checks passed
             return True
         except Exception as e:
+            print(f"Verification error (Wordscapes): {e}")
             return False
     
     def extract_answer(self, test_solution: str):
