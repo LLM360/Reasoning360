@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=cispo-focused
+#SBATCH --job-name=cispo-focused-onpolicy-bsz256
 #SBATCH --nodes=4
 #SBATCH --ntasks=4
 #SBATCH --ntasks-per-node=1
@@ -166,7 +166,7 @@ use_kl_loss=False
 kl_loss_coef=0.0
 
 clip_ratio_low=0.2
-clip_ratio_high=0.2
+clip_ratio_high=0.28
 
 max_prompt_length=$((1024 * 4))
 max_response_length=$((1024 * 32))
@@ -184,7 +184,7 @@ max_num_gen_batches=10
 train_prompt_bsz=256  # on-policy model update batchsize: train_prompt_bsz * rollout.n
 gen_prompt_bsz=$((train_prompt_bsz * 1))
 n_resp_per_prompt=16
-train_prompt_mini_bsz=32  # model grad update batchsize
+train_prompt_mini_bsz=256  # model grad update batchsize
 
 # Algorithm
 temperature=1.0
