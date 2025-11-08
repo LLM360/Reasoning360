@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=test-dalu-k2p-sft-dapo
-#SBATCH --nodes=32
-#SBATCH --ntasks=32
+#SBATCH --nodes=64
+#SBATCH --ntasks=64
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=96
 #SBATCH --gres=gpu:8
@@ -218,7 +218,7 @@ max_num_gen_batches=10
 train_prompt_bsz=512  # on-policy model update batchsize: train_prompt_bsz * rollout.n
 gen_prompt_bsz=$((train_prompt_bsz * 1))
 n_resp_per_prompt=16
-train_prompt_mini_bsz=32  # model grad update batchsize
+train_prompt_mini_bsz=128  # model grad update batchsize
 
 # Algorithm
 temperature=1.4
@@ -323,7 +323,7 @@ offload=True
     trainer.logger=['console','wandb'] \
     trainer.project_name=${WANDB_PROJECT} \
     trainer.experiment_name=${WANDB_EXPERIMENT_NAME} \
-    trainer.val_before_train=True \
+    trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=$worker_num \
     trainer.save_freq=10 \
