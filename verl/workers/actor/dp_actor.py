@@ -516,9 +516,9 @@ class DataParallelPPOActor(BasePPOActor):
                         # Add entropy loss for RL samples
                         if entropy_coeff != 0:
                             entropy_loss_per_sample = -agg_loss(loss_mat=entropy, loss_mask=response_mask, loss_agg_mode="sample")
-                            rl_policy_loss_per_sample = pg_loss_per_sample + entropy_loss_per_sample * entropy_coeff
+                            rl_policy_loss_per_sample = pg_loss_per_sample + entropy_loss_per_sample * entropy_coeff # (bs,)
                         else:
-                            rl_policy_loss_per_sample = pg_loss_per_sample
+                            rl_policy_loss_per_sample = pg_loss_per_sample # (bs,)
 
                         # Add KL loss for RL samples if enabled
                         if self.config.use_kl_loss:
@@ -529,17 +529,24 @@ class DataParallelPPOActor(BasePPOActor):
                             rl_policy_loss_per_sample = rl_policy_loss_per_sample + kl_loss_per_sample * self.config.kl_loss_coef
 
                         # Compute SFT loss per sample
-                        sft_loss_per_sample = agg_loss(loss_mat=sft_loss_per_token, loss_mask=response_mask, loss_agg_mode="sample")
+                        sft_loss_per_sample = agg_loss(loss_mat=sft_loss_per_token, loss_mask=response_mask, loss_agg_mode="sample") # (bs,)
 
 
                         # Combine losses using mask
                         # Where use_sft_mask=True, use SFT loss; otherwise use RL loss
                         combined_loss_per_sample = torch.where(
-                            use_sft_mask.unsqueeze(-1) if use_sft_mask.dim() == 1 else use_sft_mask,
+                            use_sft_mask,
                             sft_loss_per_sample,
                             rl_policy_loss_per_sample
                         )
-
+                        
+                        # log all variables
+                        # print(
+                        #     f"use_sft_mask: {use_sft_mask}",
+                        #     f"sft_loss_per_sample: {sft_loss_per_sample}",
+                        #     f"rl_policy_loss_per_sample: {rl_policy_loss_per_sample}",
+                        #     f"combined_loss_per_sample: {combined_loss_per_sample}",
+                        # )
 
                         # Aggregate to final loss
                         total_loss = combined_loss_per_sample.mean()
@@ -547,6 +554,17 @@ class DataParallelPPOActor(BasePPOActor):
                         # For logging
                         sft_loss_value = sft_loss_per_sample[use_sft_mask].mean().item() if use_sft_mask.any() else 0.0
                         rl_loss_value = pg_loss_per_sample[~use_sft_mask].mean().item() if (~use_sft_mask).any() else 0.0
+
+                        # log all variables
+                        # print(
+                        #     f"use_sft_mask: {use_sft_mask}",
+                        #     f"advantages: {advantages}",
+                        #     f"pg_loss_per_sample: {pg_loss_per_sample}",
+                        #     f"sft_loss_per_sample: {sft_loss_per_sample}",
+                        #     f"rl_policy_loss_per_sample: {rl_policy_loss_per_sample}",
+                        #     f"combined_loss_per_sample: {combined_loss_per_sample}",
+                        #     f"total_loss: {total_loss}",
+                        # )
 
                     else:
                         # Standard RL training (no dynamic SFT/RL)
@@ -586,7 +604,7 @@ class DataParallelPPOActor(BasePPOActor):
                             )
                             kl_loss = agg_loss(loss_mat=kld, loss_mask=response_mask, loss_agg_mode=loss_agg_mode)
                             policy_loss = policy_loss + kl_loss * self.config.kl_loss_coef
-                            micro_batch_metrics["actor/kl_loss"] = kl_loss.detach().item() * loss_scale_factor
+                            micro_batch_metrics["actor/kl_loss"] = kl_loss.detach().item()
                             micro_batch_metrics["actor/kl_coef"] = self.config.kl_loss_coef
 
                         total_loss = policy_loss
@@ -600,8 +618,8 @@ class DataParallelPPOActor(BasePPOActor):
                     # Log metrics
                     micro_batch_metrics.update(
                         {
-                            "actor/pg_loss": rl_loss_value * loss_scale_factor if rl_loss_value is not None else 0.0,
-                            "actor/sft_loss": sft_loss_value * loss_scale_factor if sft_loss_value is not None else 0.0,
+                            "actor/pg_loss": rl_loss_value if rl_loss_value is not None else 0.0,
+                            "actor/sft_loss": sft_loss_value if sft_loss_value is not None else 0.0,
                             "actor/pg_clipfrac": pg_clipfrac.detach().item(),
                             "actor/ppo_kl": ppo_kl.detach().item(),
                             "actor/pg_clipfrac_lower": pg_clipfrac_lower.detach().item(),
