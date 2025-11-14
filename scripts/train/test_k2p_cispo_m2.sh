@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=cispo-focused-onpolicy-bsz256
+#SBATCH --job-name=cispo-focused-fixed
 #SBATCH --nodes=4
 #SBATCH --ntasks=4
 #SBATCH --ntasks-per-node=1
@@ -15,7 +15,7 @@
 
 
 # =================== Frequently Used Variables ===================
-RESUME_CKPT_DIR_NAME="cispo-focused-onpolicy-bsz256-Qwen2.5-7B-998181"  # Fill in the checkpoint directory name to resume from, otherwise from scratch
+RESUME_CKPT_DIR_NAME=""  # Fill in the checkpoint directory name to resume from, otherwise from scratch
 export STEM_LLM_JUDGE_URL="http://10.24.2.1:8000"  # Fill in the llm-as-judge hosted URL, currently used only in 'STEM' domain
 
 # =================== Cluster Environment ===================
@@ -184,7 +184,7 @@ max_num_gen_batches=10
 train_prompt_bsz=256  # on-policy model update batchsize: train_prompt_bsz * rollout.n
 gen_prompt_bsz=$((train_prompt_bsz * 1))
 n_resp_per_prompt=16
-train_prompt_mini_bsz=256  # model grad update batchsize
+train_prompt_mini_bsz=32  # model grad update batchsize
 
 # Algorithm
 temperature=1.0
