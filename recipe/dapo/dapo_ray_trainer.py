@@ -251,9 +251,10 @@ class RayDAPOTrainer(RayPPOTrainer):
                         batch = new_batch if batch is None else DataProto.concat([batch, new_batch])
 
                         prompt_bsz = self.config.data.train_batch_size
-                        if num_prompt_in_batch < prompt_bsz:
+                        max_num_gen_batches = self.config.algorithm.filter_groups.max_num_gen_batches
+                        if num_prompt_in_batch < prompt_bsz and max_num_gen_batches > 1: # Added by Reasoning360 TWK NOTE: second condition is to account for when we have zero-variance filtering but are not dynamically growing the batch...
                             print(f"{num_prompt_in_batch=} < {prompt_bsz=}")
-                            max_num_gen_batches = self.config.algorithm.filter_groups.max_num_gen_batches
+                            # max_num_gen_batches = self.config.algorithm.filter_groups.max_num_gen_batches
                             if max_num_gen_batches <= 0 or num_gen_batches < max_num_gen_batches:
                                 print(f"{num_gen_batches=}. Keep generating...")
                                 progress_bar.update(1)
@@ -267,9 +268,14 @@ class RayDAPOTrainer(RayPPOTrainer):
                                     + " You could also try set max_num_gen_batches=0 to enable endless trials."
                                 )
                         else:
-                            # Align the batch
-                            traj_bsz = self.config.data.train_batch_size * self.config.actor_rollout_ref.rollout.n
-                            batch = batch[:traj_bsz]
+                            # Added by Reasoning360, need to account for when our batch is smaller due to zero-variance filtering
+                            if num_prompt_in_batch >= prompt_bsz:
+                                # Align the batch
+                                traj_bsz = self.config.data.train_batch_size * self.config.actor_rollout_ref.rollout.n
+                                batch = batch[:traj_bsz]
+                            else:
+                                # TWK TODO!!!: RESCALE THIS SO THAT THE BATCH*N IS DIVISIBLE BY k_partitions (n_gpus...)
+                                print(f"Final {num_prompt_in_batch=} < {prompt_bsz=} after {num_gen_batches=} generation batches. Proceeding with smaller batch...")
 
                     # === Updating ===
 
