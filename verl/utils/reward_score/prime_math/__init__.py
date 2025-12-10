@@ -55,7 +55,7 @@ def _parse_latex(expr: str) -> str:
     expr = expr.replace("\\tfrac", "\\frac")
     expr = expr.replace("\\dfrac", "\\frac")
     expr = expr.replace("\\frac", " \\frac")  # Play nice with mixed numbers.
-    expr = latex2text.LatexNodes2Text().latex_to_text(expr)
+    # expr = latex2text.LatexNodes2Text().latex_to_text(expr)
 
     # Replace the specific characters that this parser uses.
     expr = expr.replace("√", "sqrt")
