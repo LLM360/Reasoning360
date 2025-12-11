@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=grpo-k2p-32k264k-stage2-fromStep200-focused
-#SBATCH --nodes=64
-#SBATCH --ntasks=64
+#SBATCH --job-name=grpo-focused-k2p-finalInstruct-temp1.2-wOmni-fix2
+#SBATCH --nodes=32
+#SBATCH --ntasks=32
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=96
@@ -16,7 +16,7 @@
 # SBATCH --job-name=grpo-hero-k2p-finalInstruct-temp1.2-wOmni-fix2
 
 # =================== Frequently Used Variables ===================
-RESUME_CKPT_DIR_NAME="grpo-k2p-32k264k-stage2-focused-404083"  # Fill in the checkpoint directory name to resume from, otherwise from scratch
+RESUME_CKPT_DIR_NAME="grpo-focused-k2p-finalInstruct-temp1.2-wOmni-fix2-403906"  # Fill in the checkpoint directory name to resume from, otherwise from scratch
 export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-009:8000" # Fill in the llm-as-judge hosted URL, currently used only in 'STEM' domain
 
 # =================== Cluster Environment ===================
@@ -130,11 +130,11 @@ if_test_path=${TEST_DATA_DIR}/ood__ifeval_100.parquet
 if_bench_test_path=${TEST_DATA_DIR}/ifbench_800.parquet
 
 # Focused data mixture (math, code, stem)
-# train_files="['${math_train_path1}','${math_train_path2}','${leetcode_train_path}','${livecodebench_train_path}','${primeintellect_train_path}','${taco_train_path}','${webinstruct_train_path}','${nemotron_train_path}']"
+train_files="['${math_train_path1}','${math_train_path2}','${leetcode_train_path}','${livecodebench_train_path}','${primeintellect_train_path}','${taco_train_path}','${webinstruct_train_path}','${nemotron_train_path}']"
 test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${humaneval_test_path}','${mbpp_test_path}','${livecodebench_test_path}','${nemotron_test_path}','${gpqa_diamond_test_path}','${supergpqa_test_path}']"
 
 # Full data mixture (uncomment to use)
-train_files="['${math_train_path1}','${math_train_path2}','${leetcode_train_path}','${livecodebench_train_path}','${primeintellect_train_path}','${taco_train_path}','${arcagi1_train_path}','${arcagi2_train_path}','${barc_train_path}','${graph_train_path}','${ordering_train_path}','${zebra_train_path}','${synlogic_train_path}','${reasoninggym_train_path}','${codeio_train_path}','${hitab_train_path}','${multihier_train_path}','${webinstruct_train_path}','${nemotron_train_path}','${if_train_path}']"
+# train_files="['${math_train_path1}','${math_train_path2}','${leetcode_train_path}','${livecodebench_train_path}','${primeintellect_train_path}','${taco_train_path}','${arcagi1_train_path}','${arcagi2_train_path}','${barc_train_path}','${graph_train_path}','${ordering_train_path}','${zebra_train_path}','${reasoninggym_train_path}','${codeio_train_path}','${hitab_train_path}','${multihier_train_path}','${webinstruct_train_path}','${nemotron_train_path}','${if_train_path}']" # '${synlogic_train_path}',
 # test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${humaneval_test_path}','${mbpp_test_path}','${livecodebench_test_path}','${zebralogic_test_path}','${reasoninggym_test_path}','${arcagi1_test_path}','${multihier_test_path}','${hitab_test_path}','${nemotron_test_path}','${gpqa_diamond_test_path}','${supergpqa_test_path}','${if_test_path}','${if_bench_test_path}']" # '${synlogic_test_path}',
 
 
@@ -196,7 +196,7 @@ clip_ratio_low=0.2
 clip_ratio_high=0.28
 
 max_prompt_length=$((1024 * 4))
-max_response_length=$((1024 * 64))
+max_response_length=$((1024 * 32))
 enable_overlong_buffer=False
 overlong_buffer_len=$((1024 * 12))
 overlong_penalty_factor=1.0
