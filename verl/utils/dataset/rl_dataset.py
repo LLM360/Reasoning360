@@ -375,7 +375,11 @@ class RLHFDataset(Dataset):
             logger.warning("tools_kwargs is empty for index {}, data source: {}", index, row_dict["data_source"])
         row_dict["index"] = index
         row_dict["tools_kwargs"] = tools_kwargs
-        row_dict["interaction_kwargs"] = interaction_kwargs
+        row_dict["interaction_kwargs"] = interaction_kwargs        
+        # add unique dataset index for pass rate tracking
+        # Note: item is the row number in the dataframe that dataloader is using --- we store is as dataset index for tracking
+        row_dict["dataset_index"] = item
+
         return row_dict
 
     def __getstate__(self):
