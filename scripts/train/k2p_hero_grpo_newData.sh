@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=grpo-k2p-finalInstruct-64k-temp1.2-focused
+#SBATCH --job-name=grpo-k2p-newFiltered-64k-fullData-finalInstruct
 #SBATCH --nodes=64
 #SBATCH --ntasks=64
 #SBATCH --ntasks-per-node=1
@@ -16,8 +16,9 @@
 # SBATCH --job-name=grpo-hero-k2p-finalInstruct-temp1.2-wOmni-fix2
 
 # =================== Frequently Used Variables ===================
-RESUME_CKPT_DIR_NAME="grpo-k2p-finalInstruct-64k-temp1.2-focused-404084"  # Fill in the checkpoint directory name to resume from, otherwise from scratch
+RESUME_CKPT_DIR_NAME=""  # Fill in the checkpoint directory name to resume from, otherwise from scratch
 export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-009:8000" # Fill in the llm-as-judge hosted URL, currently used only in 'STEM' domain
+export MATH_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-033:8000" # Fill in the OmniMATH llm-as-judge hosted URL, only used to score OmniMATH dataset if not empty
 
 # =================== Cluster Environment ===================
 export CONDA_BIN_PATH=/lustrefs/users/taylor.killian/miniconda3/envs/sync-rl/bin/
@@ -59,41 +60,70 @@ export HYDRA_FULL_ERROR=1
 export VLLM_USE_V1=1
 
 # =================== Data Mixture ===================
-SHARED_DATA_PATH=/lustrefs/users/haonan.li/data/k2
-MATH_DATA_PATH=/lustrefs/users/zhuojun.cheng/vpim/guru_data/train/postprocessed_dedup_am_semantic_filtered_0.05_0.94_thresh_ratio0.5_sample1.0_balanced_step2
-TRAIN_DATA_DIR=${SHARED_DATA_PATH}/train_scored_dedup_am_12k_len_rm_flipscore_score_method_5_1_datamix_6
-TEST_DATA_DIR=${SHARED_DATA_PATH}/test_12k_len
 
-# Math (train)
-math_train_path1=${MATH_DATA_PATH}/math__combined_118.2k.part1_scored.parquet
-math_train_path2=${MATH_DATA_PATH}/math__combined_118.2k.part2_scored.parquet
-# math_train_path1=${TRAIN_DATA_DIR}/math__combined_118.2k.part1.parquet
-# math_train_path2=${TRAIN_DATA_DIR}/math__combined_118.2k.part2.parquet
+# Training Data Configuration
+DATA_MIX_DIR="/lustrefs/users/varad.pimpalkhute/data/k2/final/data_mix_1"
+train_file_list=()
+
+# List of datasets to include (filename only)
+# Comment out lines to exclude specific datasets
+dataset_names=(
+    "codegen__deduped_leetcode2k_2.4k.parquet"
+    "codegen__deduped_livecodebench_599.parquet"
+    "codegen__deduped_primeintellect_9.6k.parquet"
+    "codegen__deduped_taco_11.1k.parquet"
+    "ifbench__fixed_85.6k.parquet"
+    "logic__arcagi1_297.parquet"
+    "logic__arcagi2_653.parquet"
+    "logic__barc_3.4k.parquet"
+    "logic__graph_logical_dataset_1.4k.parquet"
+    "logic__ordering_puzzle_dataset_2.9k.parquet"
+    "logic__reasoning_gym_40.6k.parquet"
+    "logic__synlogic_12.1k.parquet"
+    "logic__zebra_puzzle_dataset_5.0k.parquet"
+    "math__combined_118.2k.part1.parquet"
+    "math__combined_118.2k.part2.parquet"
+    "omni_math_4.43k_dedup.parquet"
+    "simulation__codeio_fixed_12.1k.parquet"
+    "stem__nemotron_13.3k.parquet"
+    "stem__web_31.7k.parquet"
+    "table__hitab_7.4k.parquet"
+    "table__multihier_2.9k.parquet"
+)
+
+echo "Collecting training files from ${DATA_MIX_DIR}..."
+
+# Search for each dataset in all subdirectories
+for dataset in "${dataset_names[@]}"; do
+    for subdir in "impossible_questions" "131k_context_questions" "main_questions"; do
+        file_path="${DATA_MIX_DIR}/${subdir}/${dataset}"
+        if [ -f "$file_path" ]; then
+            echo "Adding: $file_path"
+            train_file_list+=("'$file_path'")
+        fi
+    done
+done
+
+# Join with comma to form Python list string
+IFS=,
+train_files="[${train_file_list[*]}]"
+unset IFS
+
+echo "Total training files found: ${#train_file_list[@]}"
+
+# Test Data Configuration
+TEST_DATA_DIR=/lustrefs/users/haonan.li/data/k2/test_12k_len
 # Math (test)
 math_test_path=${TEST_DATA_DIR}/math__math_500.parquet
 aime_test_path=${TEST_DATA_DIR}/math__aime_repeated_8x_240.parquet
 aime25_test_path2=${TEST_DATA_DIR}/math__aime2025_repeated_8x_240.parquet
 amc_test_path=${TEST_DATA_DIR}/math__amc_repeated_4x_332.parquet
 
-# Code (train)
-leetcode_train_path=${TRAIN_DATA_DIR}/codegen__deduped_leetcode2k_2.4k.parquet
-livecodebench_train_path=${TRAIN_DATA_DIR}/codegen__deduped_livecodebench_599.parquet
-primeintellect_train_path=${TRAIN_DATA_DIR}/codegen__deduped_primeintellect_9.6k.parquet
-taco_train_path=${TRAIN_DATA_DIR}/codegen__deduped_taco_11.1k.parquet
 # Code (test)
 humaneval_test_path=${TEST_DATA_DIR}/codegen__humaneval_164.parquet
 mbpp_test_path=${TEST_DATA_DIR}/codegen__mbpp_500.parquet
 livecodebench_test_path=${TEST_DATA_DIR}/codegen__livecodebench_279.parquet
 
-# Logic (train)
-arcagi1_train_path=${TRAIN_DATA_DIR}/logic__arcagi1_297.parquet
-arcagi2_train_path=${TRAIN_DATA_DIR}/logic__arcagi2_653.parquet
-barc_train_path=${TRAIN_DATA_DIR}/logic__barc_3.4k.parquet
-graph_train_path=${TRAIN_DATA_DIR}/logic__graph_logical_dataset_1.4k.parquet
-ordering_train_path=${TRAIN_DATA_DIR}/logic__ordering_puzzle_dataset_2.9k.parquet
-zebra_train_path=${TRAIN_DATA_DIR}/logic__zebra_puzzle_dataset_5.0k.parquet
-reasoninggym_train_path=${TRAIN_DATA_DIR}/logic__reasoning_gym_40.6k.parquet
-synlogic_train_path=${TRAIN_DATA_DIR}/logic__synlogic_12.1k.parquet
 # Logic (test)
 zebralogic_test_path=${TEST_DATA_DIR}/logic__zebra_puzzle_dataset_200.parquet
 reasoninggym_test_path=${TEST_DATA_DIR}/logic__reasoning_gym_425.parquet
@@ -102,40 +132,25 @@ arcagi1_test_path=${TEST_DATA_DIR}/logic__arcagi1_400.parquet
 # graph_test_path=${TEST_DATA_DIR}/logic__graph_logical_dataset_150_sampled_77.parquet
 # ordering_puzzle_test_path=${TEST_DATA_DIR}/logic__ordering_puzzle_dataset_150_sampled_100.parquet
 
-
-# Simulation (train)
-codeio_train_path=${TRAIN_DATA_DIR}/simulation__codeio_fixed_12.1k.parquet
-# Simulation (test)
-# codeio_test_path=${TEST_DATA_DIR}/simulation__codeio_500_sampled_200.parquet
-
-# Table (train)
-hitab_train_path=${TRAIN_DATA_DIR}/table__hitab_7.4k.parquet
-multihier_train_path=${TRAIN_DATA_DIR}/table__multihier_2.9k.parquet
 # Table (test)
 multihier_test_path=${TEST_DATA_DIR}/table__multihier_336.parquet
 hitab_test_path=${TEST_DATA_DIR}/table__hitab_1k.parquet
 
-# Stem (train)
-webinstruct_train_path=${TRAIN_DATA_DIR}/stem__web_31.7k.parquet
-nemotron_train_path=${TRAIN_DATA_DIR}/stem__nemotron_13.3k.parquet
 # Stem (test)
 nemotron_test_path=${TEST_DATA_DIR}/stem__nemotron_100.parquet
 gpqa_diamond_test_path=${TEST_DATA_DIR}/stem__gpqa_diamond_198.parquet
 supergpqa_test_path=${TEST_DATA_DIR}/stem__supergpqa_1k.parquet
 
-# Instruction follow (train)
-if_train_path=${TRAIN_DATA_DIR}/ifbench__fixed_85.6k.parquet
-
+# Instruction follow (test)
 if_test_path=${TEST_DATA_DIR}/ood__ifeval_100.parquet
 if_bench_test_path=${TEST_DATA_DIR}/ifbench_800.parquet
 
 # Focused data mixture (math, code, stem)
-train_files="['${math_train_path1}','${math_train_path2}','${leetcode_train_path}','${livecodebench_train_path}','${primeintellect_train_path}','${taco_train_path}','${webinstruct_train_path}','${nemotron_train_path}']"
-test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${humaneval_test_path}','${mbpp_test_path}','${livecodebench_test_path}','${nemotron_test_path}','${gpqa_diamond_test_path}','${supergpqa_test_path}']"
+# train_files="['${math_train_path1}','${math_train_path2}','${leetcode_train_path}','${livecodebench_train_path}','${primeintellect_train_path}','${taco_train_path}','${webinstruct_train_path}','${nemotron_train_path}']"
+# test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${humaneval_test_path}','${mbpp_test_path}','${livecodebench_test_path}','${nemotron_test_path}','${gpqa_diamond_test_path}','${supergpqa_test_path}']"
 
 # Full data mixture (uncomment to use)
-# train_files="['${math_train_path1}','${math_train_path2}','${leetcode_train_path}','${livecodebench_train_path}','${primeintellect_train_path}','${taco_train_path}','${arcagi1_train_path}','${arcagi2_train_path}','${barc_train_path}','${graph_train_path}','${ordering_train_path}','${zebra_train_path}','${reasoninggym_train_path}','${codeio_train_path}','${hitab_train_path}','${multihier_train_path}','${webinstruct_train_path}','${nemotron_train_path}','${if_train_path}']" # '${synlogic_train_path}',
-# test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${humaneval_test_path}','${mbpp_test_path}','${livecodebench_test_path}','${zebralogic_test_path}','${reasoninggym_test_path}','${arcagi1_test_path}','${multihier_test_path}','${hitab_test_path}','${nemotron_test_path}','${gpqa_diamond_test_path}','${supergpqa_test_path}','${if_test_path}','${if_bench_test_path}']" # '${synlogic_test_path}',
+test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${humaneval_test_path}','${mbpp_test_path}','${livecodebench_test_path}','${zebralogic_test_path}','${synlogic_test_path}','${reasoninggym_test_path}','${arcagi1_test_path}','${multihier_test_path}','${hitab_test_path}','${nemotron_test_path}','${gpqa_diamond_test_path}','${supergpqa_test_path}','${if_test_path}','${if_bench_test_path}']" # 
 
 
 # =================== Model ===================
@@ -317,7 +332,7 @@ offload=True
     trainer.logger=['console','wandb'] \
     trainer.project_name=${WANDB_PROJECT} \
     trainer.experiment_name=${WANDB_EXPERIMENT_NAME} \
-    trainer.val_before_train=False \
+    trainer.val_before_train=True \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=$worker_num \
     trainer.save_freq=10 \

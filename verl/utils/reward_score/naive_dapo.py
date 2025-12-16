@@ -425,8 +425,9 @@ def grade_answer(given_answer: str, ground_truth: str) -> tuple[bool, str]:
             elif _str_is_int(ground_truth_elem) != _str_is_int(given_elem):
                 # if the ground truth answer is an integer, we require the given answer to be a strict match (no sympy.simplify)
                 is_correct = False
-            # else:
-            #     is_correct = are_equal_under_sympy(ground_truth_elem, given_elem)
+            else:
+                # is_correct = are_equal_under_sympy(ground_truth_elem, given_elem)
+                is_correct = False
             if not is_correct:
                 break
 
