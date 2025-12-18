@@ -1,0 +1,3 @@
+[submodule "verl"]
+	path = verl
+	url = https://github.com/volcengine/verl/tree/f332fc814718b9ea7968f6d264211460d4e90fff

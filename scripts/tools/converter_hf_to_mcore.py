@@ -17,11 +17,21 @@ import argparse
 import os
 import warnings
 from contextlib import contextmanager
+from importlib.metadata import version
 from typing import Any, Callable, ContextManager, Optional
 
 import numpy as np
 import torch
 import torch.distributed as dist
+
+try:
+    # NPU patch
+    import mindspeed.megatron_adaptor  # noqa: F401
+    from mindspeed.megatron_adaptor import repatch
+except ImportError:
+    repatch = None
+    pass
+
 from accelerate import init_empty_weights
 from megatron.core import dist_checkpointing
 from megatron.core import parallel_state as mpu
@@ -29,6 +39,7 @@ from megatron.core.dist_checkpointing.mapping import ShardedTensor
 from megatron.core.dist_checkpointing.serialization import StrictHandling
 from megatron.core.models.gpt.gpt_model import ModelType
 from megatron.core.tensor_parallel.random import model_parallel_cuda_manual_seed
+from packaging.version import Version
 from transformers import AutoConfig
 
 from verl.model_merger.megatron_model_merger import get_dynamic_pipeline_shards
@@ -50,6 +61,8 @@ def _init_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--hf_model_path", type=str, required=True, help="The path for the huggingface model")
     parser.add_argument("--output_path", type=str, required=True, help="The path for the output mcore model")
+    parser.add_argument("--pp_size", type=int, default=1, help="pipeline model parallel size")
+    parser.add_argument("--ep_size", type=int, default=1, help="expert model parallel size")
     parser.add_argument("--use_cpu_initialization", action="store_true", help="Whether to use cpu initialization")
     parser.add_argument("--test", action="store_true", help="Whether to test the conversion")
     parser.add_argument("--trust_remote_code", action="store_true", help="Whether to trust remote code")
@@ -114,6 +127,8 @@ def convert_checkpoint_from_transformers_to_megatron(
     layer_start, layer_end = layer_start_end
     pp_rank = mpu.get_pipeline_model_parallel_rank()
     pp_size = mpu.get_pipeline_model_parallel_world_size()
+    ep_rank = mpu.get_expert_model_parallel_rank()
+    ep_size = mpu.get_expert_model_parallel_world_size()
     numel = 0
 
     num_attention_heads = hf_config.num_attention_heads
@@ -162,9 +177,19 @@ def convert_checkpoint_from_transformers_to_megatron(
         numel += safe_copy(hf_layer.mlp.gate.weight, layer.mlp.router.weight)
 
         for idx, hf_expert in enumerate(hf_layer.mlp.experts):
+            num_experts = len(hf_layer.mlp.experts)
+            num_local_experts = num_experts // ep_size
+            expert_idx_start = ep_rank * num_local_experts
+            expert_idx_end = (ep_rank + 1) * num_local_experts
+            if idx < expert_idx_start or idx >= expert_idx_end:
+                continue
+            local_expert_idx = idx - expert_idx_start
+
             fc1_weight = torch.cat([hf_expert.gate_proj.weight, hf_expert.up_proj.weight])
-            numel += safe_copy(fc1_weight, layer.mlp.experts.linear_fc1._parameters[f"weight{idx}"])
-            numel += safe_copy(hf_expert.down_proj.weight, layer.mlp.experts.linear_fc2._parameters[f"weight{idx}"])
+            numel += safe_copy(fc1_weight, layer.mlp.experts.linear_fc1._parameters[f"weight{local_expert_idx}"])
+            numel += safe_copy(
+                hf_expert.down_proj.weight, layer.mlp.experts.linear_fc2._parameters[f"weight{local_expert_idx}"]
+            )
 
         if has_share_expert:
             numel += safe_copy(hf_layer.mlp.shared_expert_gate.weight, layer.mlp.shared_experts.gate_weight)
@@ -204,7 +229,11 @@ def convert_checkpoint_from_transformers_to_megatron_qwen2_5_vl(hfmodel, mgmodel
     head_dim = hidden_size // num_attention_heads
 
     # 1. vision model
-    hfvision = hfmodel.visual
+    if Version(version("transformers")) < Version("4.52.0"):
+        print("Using transformers < 4.52 API to load vision model")
+        hfvision = hfmodel.visual
+    else:
+        hfvision = hfmodel.model.visual
     mgvision = mgmodel.vision_model
     vision_hidden_size = mgvision.config.hidden_size
     vision_num_query_groups = mgvision.config.num_query_groups
@@ -255,13 +284,18 @@ def convert_checkpoint_from_transformers_to_megatron_qwen2_5_vl(hfmodel, mgmodel
     copied_numel += safe_copy(hfprojector.mlp[2].weight, mgprojector.encoder.linear_fc2.weight)
     copied_numel += safe_copy(hfprojector.mlp[2].bias, mgprojector.encoder.linear_fc2.bias)
     n_params = sum([t.numel() for t in hfvision.state_dict().values()])
-    assert n_params == copied_numel
+    assert n_params == copied_numel, f"n_params={n_params} != copied_numel={copied_numel}"
     # 3. llm [just Qwen2]
-    hfllm = hfmodel.model
+    if Version(version("transformers")) < Version("4.52.0"):
+        print("Using transformers < 4.52 API to load llm")
+        hfllm = hfmodel.model
+    else:
+        hfllm = hfmodel.model.language_model
     mgllm = mgmodel.language_model
     copied_numel = 0
     copied_numel += safe_copy(hfllm.embed_tokens.weight, mgllm.embedding.word_embeddings.weight)
-    for mglayer, hflayer in zip(mgllm.decoder.layers, hfllm.layers, strict=True):
+    layermaps = zip(mgllm.decoder.layers, hfllm.layers, strict=True)
+    for mglayer, hflayer in layermaps:
         copied_numel += safe_copy(hflayer.input_layernorm.weight, mglayer.self_attention.linear_qkv.layer_norm_weight)
 
         q_proj_weight = hflayer.self_attn.q_proj.weight.view(num_query_groups, -1, head_dim, hidden_size)
@@ -289,7 +323,7 @@ def convert_checkpoint_from_transformers_to_megatron_qwen2_5_vl(hfmodel, mgmodel
 
     n_params = sum([t.numel() for t in hfllm.state_dict().values()])
 
-    assert n_params == copied_numel
+    assert n_params == copied_numel, f"n_params={n_params} != copied_numel={copied_numel}"
 
 
 @torch.inference_mode()
@@ -307,6 +341,9 @@ def convert_checkpoint_from_transformers_to_megatron_dpskv3(
     numel: int = 0
     pp_rank = mpu.get_pipeline_model_parallel_rank()
     pp_size = mpu.get_pipeline_model_parallel_world_size()
+    ep_rank = mpu.get_expert_model_parallel_rank()
+    ep_size = mpu.get_expert_model_parallel_world_size()
+
     if pp_rank == 0:
         numel += safe_copy(hf_model.model.embed_tokens.weight, model.embedding.word_embeddings.weight)
 
@@ -353,11 +390,20 @@ def convert_checkpoint_from_transformers_to_megatron_dpskv3(
             )
             if tfconfig.moe_grouped_gemm:
                 for i, hf_expert in enumerate(hf_layer.mlp.experts):
+                    num_experts = len(hf_layer.mlp.experts)
+                    num_local_experts = num_experts // ep_size
+                    expert_idx_start = ep_rank * num_local_experts
+                    expert_idx_end = (ep_rank + 1) * num_local_experts
+                    if i < expert_idx_start or i >= expert_idx_end:
+                        continue
+                    local_expert_idx = i - expert_idx_start
+
                     fc1_weight = torch.cat([hf_expert.gate_proj.weight, hf_expert.up_proj.weight])
-                    linear_fc1_weighti = getattr(layer.mlp.experts.linear_fc1, "weight" + str(i))
+                    linear_fc1_weighti = getattr(layer.mlp.experts.linear_fc1, "weight" + str(local_expert_idx))
                     numel += safe_copy(fc1_weight, linear_fc1_weighti)
-                    linear_fc2_weighti = getattr(layer.mlp.experts.linear_fc2, "weight" + str(i))
-                    numel += safe_copy(hf_expert.down_proj.weight, linear_fc2_weighti)
+                    linear_fc2_weighti = getattr(layer.mlp.experts.linear_fc2, "weight" + str(local_expert_idx))
+                    numel_w2 = safe_copy(hf_expert.down_proj.weight, linear_fc2_weighti)
+                    numel += numel_w2
             else:
                 for i, hf_expert in enumerate(hf_layer.mlp.experts):
                     expert = layer.mlp.experts.local_experts[i]
@@ -371,7 +417,10 @@ def convert_checkpoint_from_transformers_to_megatron_dpskv3(
             numel += safe_copy(shared_fc1_weight, layer.mlp.shared_experts.linear_fc1.weight)
             numel += safe_copy(hf_layer.mlp.shared_experts.down_proj.weight, layer.mlp.shared_experts.linear_fc2.weight)
         print(f"{pp_rank=} {global_layer_idx=} {layer_idx=} {numel=} numel this layer={numel - numel_cur}")
-        assert numel - numel_cur == sum([i.numel() for i in hf_layer.state_dict().values()]), "numel mismatch"
+        numel_hf_one_layer = sum([i.numel() for i in hf_layer.state_dict().values()])
+        if hasattr(layer.mlp, "router"):
+            numel_hf_one_layer -= numel_w2 * 3 * len(hf_layer.mlp.experts) // ep_size * (ep_size - 1)
+        assert numel - numel_cur == numel_hf_one_layer, "numel mismatch"
 
     if pp_rank == pp_size - 1:
         numel += safe_copy(hf_model.model.norm.weight, model.decoder.final_layernorm.weight)
@@ -393,7 +442,9 @@ def support_distributed_convert(hf_config: AutoConfig) -> bool:
     return False
 
 
-def convert_hf_to_mcore(hf_model_path, output_path, use_cpu_initialization=False, test=False, trust_remote_code=False):
+def convert_hf_to_mcore(
+    hf_model_path, output_path, pp_size=1, ep_size=1, use_cpu_initialization=False, test=False, trust_remote_code=False
+):
     os.makedirs(output_path, exist_ok=True)
     if len(os.listdir(output_path)) > 0 and not test:
         print(f"Output path {output_path} is not empty, skipping conversion")
@@ -408,28 +459,35 @@ def convert_hf_to_mcore(hf_model_path, output_path, use_cpu_initialization=False
 
     torch.distributed.init_process_group("nccl")
 
-    rank = dist.get_rank()
     local_rank = os.getenv("LOCAL_RANK", 0)
     world_size = dist.get_world_size()
     get_torch_device().set_device(f"{get_device_name()}:{local_rank}")
+    if ep_size * pp_size != world_size:
+        pp_size = world_size
+        print(f"pp_size is set to {pp_size}")
 
     mpu.initialize_model_parallel(
         tensor_model_parallel_size=1,
-        pipeline_model_parallel_size=world_size,
+        pipeline_model_parallel_size=pp_size,
         virtual_pipeline_model_parallel_size=None,
         context_parallel_size=1,
-        expert_model_parallel_size=1,
+        expert_model_parallel_size=ep_size,
     )
     model_parallel_cuda_manual_seed(0)
 
     # init hf config
-    hf_config = AutoConfig.from_pretrained(hf_model_path)
+    hf_config = AutoConfig.from_pretrained(hf_model_path, trust_remote_code=trust_remote_code)
     print(hf_config, flush=True)
+
+    if repatch:
+        if hf_config.architectures[0] == "DeepseekV3ForCausalLM":
+            config_repatch = dict(multi_head_latent_attention=True)
+            repatch(config_repatch)
 
     if world_size > 1 and not support_distributed_convert(hf_config):
         raise NotImplementedError(f"distributed conversion is not supported for {hf_config.architectures} yet.")
 
-    pipeline_shards = get_dynamic_pipeline_shards(hf_config.num_hidden_layers, world_size)
+    pipeline_shards = get_dynamic_pipeline_shards(hf_config.num_hidden_layers, pp_size)
     print(f"Pipeline shards: {pipeline_shards}", flush=True)
 
     tfconfig = hf_to_mcore_config(
@@ -483,11 +541,13 @@ def convert_hf_to_mcore(hf_model_path, output_path, use_cpu_initialization=False
         )
     hf_state_dict = hf_model.state_dict()
 
+    pp_rank = mpu.get_pipeline_model_parallel_rank()
+
     # distributed convert
     if world_size > 1 and support_distributed_convert(hf_config):
         pipeline_cumsum = np.cumsum(pipeline_shards)
-        layer_start = 0 if rank == 0 else pipeline_cumsum[rank - 1]
-        layer_end = pipeline_cumsum[rank]
+        layer_start = 0 if pp_rank == 0 else pipeline_cumsum[pp_rank - 1]
+        layer_end = pipeline_cumsum[pp_rank]
         if "DeepseekV3ForCausalLM" in hf_config.architectures:
             numel_partial: int = convert_checkpoint_from_transformers_to_megatron_dpskv3(
                 hf_model, model[0].module, hf_config, tfconfig=tfconfig, layer_start_end=(layer_start, layer_end)
@@ -540,5 +600,11 @@ def convert_hf_to_mcore(hf_model_path, output_path, use_cpu_initialization=False
 if __name__ == "__main__":
     args = _init_args()
     convert_hf_to_mcore(
-        args.hf_model_path, args.output_path, args.use_cpu_initialization, args.test, args.trust_remote_code
+        args.hf_model_path,
+        args.output_path,
+        args.pp_size,
+        args.ep_size,
+        args.use_cpu_initialization,
+        args.test,
+        args.trust_remote_code,
     )
