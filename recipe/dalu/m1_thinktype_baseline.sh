@@ -137,14 +137,14 @@ livebench_data_analysis_test_path=${TEST_DATA_DIR}/ood__livebench_data_analysis_
 livebench_language_test_path=${TEST_DATA_DIR}/ood__livebench_language_140.parquet
 livebench_reasoning_test_path=${TEST_DATA_DIR}/ood__livebench_reasoning_150.parquet
 
-train_files="['${math_train1_path}', '${math_train2_path}', '${arcagi1_train_path}', '${arcagi2_train_path}', '${reasoning_gym_train_path}']"  # Use math as example, add to more tasks as needed
+train_files="['${math_train1_path}', '${math_train2_path}', '${arcagi1_train_path}', '${arcagi2_train_path}', '${reasoning_gym_train_path}', '${ifbench_train_path}', '${webinstruct_train_path}', '${nemotron_train_path}']"  # Use math as example, add to more tasks as needed
 # test_files="['${math_train1_path}']"
-test_files="['${aime25_test_path}', '${amc_test_path}', '${aime_test_path}', '${math_test_path}', '${reasoning_gym_test_path}','${gpqa_diamond_test_path}']"  # Use math as example, add to more tasks as needed
+test_files="['${aime25_test_path}', '${amc_test_path}', '${aime_test_path}', '${math_test_path}', '${reasoning_gym_test_path}','${gpqa_diamond_test_path}','${ifbench_test_path}','${webinstruct_test_path}','${nemotron_test_path}']"  # Use math as example, add to more tasks as needed
 # test_files="['${supergpqa_test_path}','${ifeval_test_path}']"  # Use math as example, add to more tasks as needed
 
 # =================== Model ===================
 BASE_MODEL=MBZUAI-IFM/TP-base-7B
-CONDA_BIN_PATH=/lustrefs/users/haonan.li/miniconda3/envs/verl-0.5/bin/
+CONDA_BIN_PATH=/lustrefs/users/haonan.li/miniconda3/envs/sync-rl-v2/bin/
 
 # =================== Logging ===================
 WANDB_PROJECT=ThinkType
@@ -203,6 +203,7 @@ clip_ratio_high=0.28
 
 max_prompt_length=$((1024 * 4))
 max_response_length=$((1024 * 28))
+max_validation_length=$((1024 * 28))
 enable_overlong_buffer=False
 overlong_buffer_len=$((1024 * 4))
 overlong_penalty_factor=1.0
@@ -275,6 +276,7 @@ offload=True
     actor_rollout_ref.actor.fsdp_config.fsdp_size=-1 \
     actor_rollout_ref.actor.fsdp_config.forward_prefetch=True \
     actor_rollout_ref.actor.entropy_checkpointing=True \
+    +actor_rollout_ref.rollout.validation_length=${max_validation_length} \
     actor_rollout_ref.ref.log_prob_use_dynamic_bsz=${use_dynamic_bsz} \
     actor_rollout_ref.ref.log_prob_max_token_len_per_gpu=${infer_ppo_max_token_len} \
     actor_rollout_ref.ref.log_prob_micro_batch_size=${infer_micro_batch_size} \

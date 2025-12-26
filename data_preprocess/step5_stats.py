@@ -5,7 +5,7 @@ from typing import List, Dict
 import pandas as pd
 from pyarrow import parquet as pq
 
-folder = "/mnt/sharefs/users/haonan.li/data/k2"
+folder = "/lustrefs/users/haonan.li/Reasoning360/final"
 
 
 def check_write_permission(folder_path: Path) -> bool:
