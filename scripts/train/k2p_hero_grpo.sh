@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=grpo-k2p-finalInstruct-64k-temp1.2-focused
+#SBATCH --job-name=grpo-k2p-32k264k-stage2-focused
 #SBATCH --nodes=64
 #SBATCH --ntasks=64
 #SBATCH --ntasks-per-node=1
@@ -13,10 +13,8 @@
 #SBATCH --partition=main
 #SBATCH --exclude=azure-uk-hpc-H200-instance-114,azure-uk-hpc-H200-instance-394
 
-# SBATCH --job-name=grpo-hero-k2p-finalInstruct-temp1.2-wOmni-fix2
-
 # =================== Frequently Used Variables ===================
-RESUME_CKPT_DIR_NAME="grpo-k2p-finalInstruct-64k-temp1.2-focused-404084"  # Fill in the checkpoint directory name to resume from, otherwise from scratch
+RESUME_CKPT_DIR_NAME="grpo-k2p-32k264k-stage2-focused-404083"  # Fill in the checkpoint directory name to resume from, otherwise from scratch
 export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-009:8000" # Fill in the llm-as-judge hosted URL, currently used only in 'STEM' domain
 
 # =================== Cluster Environment ===================

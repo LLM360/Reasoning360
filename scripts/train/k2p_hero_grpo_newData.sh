@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=grpo-k2p-newFiltered-64k-fullData-finalInstruct
+#SBATCH --job-name=grpo-stage2-k2pRL-7domains-VaradMix
 #SBATCH --nodes=64
 #SBATCH --ntasks=64
 #SBATCH --ntasks-per-node=1
@@ -10,15 +10,13 @@
 #SBATCH --error=slurm/%x-%j.log
 #SBATCH --exclusive
 #SBATCH --time=720:00:00
-#SBATCH --partition=main
-#SBATCH --exclude=azure-uk-hpc-H200-instance-114,azure-uk-hpc-H200-instance-394
-
-# SBATCH --job-name=grpo-hero-k2p-finalInstruct-temp1.2-wOmni-fix2
+#SBATCH --partition=higherprio
+#SBATCH --exclude=azure-uk-hpc-H200-instance-[043-060,249,347-410]
 
 # =================== Frequently Used Variables ===================
-RESUME_CKPT_DIR_NAME=""  # Fill in the checkpoint directory name to resume from, otherwise from scratch
-export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-009:8000" # Fill in the llm-as-judge hosted URL, currently used only in 'STEM' domain
-export MATH_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-033:8000" # Fill in the OmniMATH llm-as-judge hosted URL, only used to score OmniMATH dataset if not empty
+RESUME_CKPT_DIR_NAME="grpo-stage2-k2pRL-7domains-VaradMix-415521"  # Fill in the checkpoint directory name to resume from, otherwise from scratch
+export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-004:8000" # Fill in the llm-as-judge hosted URL, currently used only in 'STEM' domain
+export MATH_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-286:8000" # Fill in the OmniMATH llm-as-judge hosted URL, only used to score OmniMATH dataset if not empty
 
 # =================== Cluster Environment ===================
 export CONDA_BIN_PATH=/lustrefs/users/taylor.killian/miniconda3/envs/sync-rl/bin/
@@ -42,7 +40,9 @@ SHARP_SMX_UCX_INTERFACE=mlx5_ib0:1 \
 SHARP_COLL_ENABLE_SAT=1 \
 SHARP_COLL_LOG_LEVEL=3 \
 SHARP_COLL_ENABLE_PCI_RELAXED_ORDERING=1 \
-NCCL_COLLNET_ENABLE=1
+NCCL_COLLNET_ENABLE=1 \
+NCCL_NVLS_ENABLE=0 
+
 
 # Get the list of allocated nodes
 nodes=( $(scontrol show hostnames "$SLURM_JOB_NODELIST") )
@@ -64,6 +64,9 @@ export VLLM_USE_V1=1
 # Training Data Configuration
 DATA_MIX_DIR="/lustrefs/users/varad.pimpalkhute/data/k2/final/data_mix_1"
 train_file_list=()
+id_val_file_list=()
+
+iq400_path="/lustrefs/users/taylor.killian/Reasoning360/data/guru_data/iq400_proxy.parquet"
 
 # List of datasets to include (filename only)
 # Comment out lines to exclude specific datasets
@@ -93,9 +96,9 @@ dataset_names=(
 
 echo "Collecting training files from ${DATA_MIX_DIR}..."
 
-# Search for each dataset in all subdirectories
+# Search for each dataset in all subdirectories "impossible_questions" "131k_context_questions" "main_questions" "easy_questions"
 for dataset in "${dataset_names[@]}"; do
-    for subdir in "impossible_questions" "131k_context_questions" "main_questions"; do
+    for subdir in "main_questions"; do
         file_path="${DATA_MIX_DIR}/${subdir}/${dataset}"
         if [ -f "$file_path" ]; then
             echo "Adding: $file_path"
@@ -104,12 +107,25 @@ for dataset in "${dataset_names[@]}"; do
     done
 done
 
+# for dataset in "${dataset_names[@]}"; do
+#     for subdir in "131k_context_questions"; do
+#         file_path="${DATA_MIX_DIR}/${subdir}/${dataset}"
+#         if [ -f "$file_path" ]; then
+#             echo "Adding: $file_path"
+#             id_val_file_list+=("'$file_path'")
+#         fi
+#     done
+# done
+# id_val_file_list+=("'$iq400_path'")
+
 # Join with comma to form Python list string
 IFS=,
 train_files="[${train_file_list[*]}]"
+# id_val_files="[${id_val_file_list[*]}]"
 unset IFS
 
 echo "Total training files found: ${#train_file_list[@]}"
+# echo "Total ID validation files found: ${#id_val_file_list[@]}"
 
 # Test Data Configuration
 TEST_DATA_DIR=/lustrefs/users/haonan.li/data/k2/test_12k_len
@@ -150,18 +166,19 @@ if_bench_test_path=${TEST_DATA_DIR}/ifbench_800.parquet
 # test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${humaneval_test_path}','${mbpp_test_path}','${livecodebench_test_path}','${nemotron_test_path}','${gpqa_diamond_test_path}','${supergpqa_test_path}']"
 
 # Full data mixture (uncomment to use)
-test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${humaneval_test_path}','${mbpp_test_path}','${livecodebench_test_path}','${zebralogic_test_path}','${synlogic_test_path}','${reasoninggym_test_path}','${arcagi1_test_path}','${multihier_test_path}','${hitab_test_path}','${nemotron_test_path}','${gpqa_diamond_test_path}','${supergpqa_test_path}','${if_test_path}','${if_bench_test_path}']" # 
+test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${humaneval_test_path}','${mbpp_test_path}','${livecodebench_test_path}','${zebralogic_test_path}','${synlogic_test_path}','${reasoninggym_test_path}','${arcagi1_test_path}','${multihier_test_path}','${hitab_test_path}','${nemotron_test_path}','${gpqa_diamond_test_path}','${supergpqa_test_path}','${if_test_path}','${if_bench_test_path}']" # ,'${iq400_path}'
 
 
 # =================== Model ===================
 # BASE_MODEL=/lustrefs/users/runner/workspace/checkpoints/huggingface/sft/mid4_rope_sft_reasoning_am_251117/checkpoints/checkpoint_0002250  # AM-Think SFT
-BASE_MODEL=/lustrefs/users/varad.pimpalkhute/data_process/K2-Plus-Oss-Instruct-mid4 # Final Instruct SFT (after stg4_iter 10k)
+# BASE_MODEL=/lustrefs/users/varad.pimpalkhute/data_process/K2-Plus-Oss-Instruct-mid4 # Final Instruct SFT (after stg4_iter 10k)
 # BASE_MODEL=/lustrefs/users/varad.pimpalkhute/data_process/K2-Plus-Instruct-mid4 # Instruct SFT, after stg4_iter 7k
-# BASE_MODEL=/lustrefs/users/taylor.killian/Reasoning360/checkpoints/k2plus_rl/grpo-focused-k2p-finalInstruct-temp1.2-wOmni-fix2-403906/global_step_300/actor/huggingface
+BASE_MODEL=/lustrefs/users/taylor.killian/Reasoning360/checkpoints/k2plus_rl/grpo-k2p-newFiltered-32k-mainQs-finalInstruct-406955/global_step_330/actor/huggingface
 
 # =================== Logging ===================
 WANDB_PROJECT=k2plus_rl
 WANDB_EXPERIMENT_NAME=${SLURM_JOB_NAME}-${SLURM_JOB_ID} #-${BASE_MODEL##*/}
+# WANDB_EXPERIMENT_NAME="grpo-k2p-newFiltered-32k-mainQs-finalInstruct-406491"
 
 # If RESUME_CKPT_DIR is not empty, resume from the checkpoint
 if [[ -n "$RESUME_CKPT_DIR_NAME" ]]; then
@@ -222,10 +239,10 @@ rollout_dtype="float16"
 enable_filter_groups=False
 filter_groups_metric=acc
 max_num_gen_batches=10
-train_prompt_bsz=256  # on-policy model update batchsize: train_prompt_bsz * rollout.n
+train_prompt_bsz=128  # on-policy model update batchsize: train_prompt_bsz * rollout.n
 gen_prompt_bsz=$((train_prompt_bsz * 1))
 n_resp_per_prompt=16
-train_prompt_mini_bsz=256  # model grad update batchsize
+train_prompt_mini_bsz=128  # model grad update batchsize
 
 # Algorithm
 temperature=1.2
@@ -298,7 +315,7 @@ offload=True
     actor_rollout_ref.rollout.n=${n_resp_per_prompt} \
     actor_rollout_ref.rollout.log_prob_use_dynamic_bsz=${use_dynamic_bsz} \
     actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=${infer_ppo_max_token_len} \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.7 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.5 \
     actor_rollout_ref.rollout.log_prob_micro_batch_size=${infer_micro_batch_size} \
     actor_rollout_ref.rollout.tensor_model_parallel_size=${gen_tp} \
     actor_rollout_ref.rollout.enable_chunked_prefill=True \
@@ -323,7 +340,7 @@ offload=True
     +actor_rollout_ref.model.override_config.embd_pdrop=0. \
     +actor_rollout_ref.model.override_config.resid_pdrop=0. \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
-    actor_rollout_ref.model.enable_activation_offload=True \
+    actor_rollout_ref.model.enable_activation_offload=${offload} \
     actor_rollout_ref.model.use_liger=True \
     reward_model.reward_manager=async_multi_process \
     reward_model.overlong_buffer.enable=${enable_overlong_buffer} \
@@ -332,7 +349,7 @@ offload=True
     trainer.logger=['console','wandb'] \
     trainer.project_name=${WANDB_PROJECT} \
     trainer.experiment_name=${WANDB_EXPERIMENT_NAME} \
-    trainer.val_before_train=True \
+    trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=$worker_num \
     trainer.save_freq=10 \
@@ -341,3 +358,4 @@ offload=True
     trainer.log_val_generations=50 \
     trainer.resume_mode=auto \
     trainer.max_actor_ckpt_to_keep=3
+    # data.id_val_files="$id_val_files" \
