@@ -36,14 +36,16 @@ Final Grade: CORRECT or INCORRECT
 """
 
 import re
+import math
+
 import sympy
 from pylatexenc import latex2text
 from sympy.parsing import sympy_parser
-import os
+import requests
+from verl.utils.py_functional import timeout_limit
+
 from . import math_normalize
 from .grader import math_equal
-
-import requests
 
 # import math_normalize
 # from grader import math_equal
@@ -54,31 +56,6 @@ BAD_REGEXES = ["\^[0-9]+\^", "\^[0-9][0-9]+"]
 TUPLE_CHARS = "()[]"
 
 
-def timeout(timeout_seconds: int = 8):
-    if os.name == "posix":
-        import signal
-
-        def decorator(func):
-
-            def handler(signum, frame):
-                raise TimeoutError("Operation timed out!")
-
-            def wrapper(*args, **kwargs):
-                old_handler = signal.getsignal(signal.SIGALRM)
-                signal.signal(signal.SIGALRM, handler)
-                signal.alarm(timeout_seconds)
-
-                try:
-                    return func(*args, **kwargs)
-                finally:
-                    signal.alarm(0)
-                    signal.signal(signal.SIGALRM, old_handler)
-
-            return wrapper
-
-        return decorator
-    else:
-        raise NotImplementedError(f"Unsupported OS: {os.name}")
 
 
 def _sympy_parse(expr: str):
@@ -255,7 +232,7 @@ def should_allow_eval(expr: str):
     return True
 
 
-@timeout(timeout_seconds=10)
+@timeout_limit(seconds=10)
 def are_equal_under_sympy(ground_truth_normalized: str, given_normalized: str):
     are_equal = False
     try:
@@ -332,7 +309,10 @@ def grade_answer(given_answer: str, ground_truth: str) -> bool:
                 # if the ground truth answer is an integer, we require the given answer to be a strict match (no sympy.simplify)
                 is_correct = False
             else:
-                is_correct = are_equal_under_sympy(ground_truth_elem, given_elem)
+                try:
+                    is_correct = are_equal_under_sympy(ground_truth_elem, given_elem)
+                except TimeoutError:
+                    is_correct = False
             if not is_correct:
                 break
 
@@ -391,8 +371,6 @@ def match_answer(response):
     
     return is_matched, response
 
-
-import math
 
 def llm_check_answer(model_output: str, ground_truth: str, question: str) -> bool:
     # use llm to check if the answer is correct
