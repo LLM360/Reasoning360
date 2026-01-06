@@ -15,28 +15,17 @@
 # NOTE: added by Reasoning360.
 export MATH_LLM_JUDGE_URL=http://azure-uk-hpc-H200-instance-033:8000
 
-export CONDA_BIN_PATH=/lustrefs/users/varad.pimpalkhute/anaconda3/envs/sync-rl-v5/bin/
+export CONDA_BIN_PATH=/mnt/weka/home/varad.pimpalkhute/anaconda3/envs/sync-rl-v1/bin/
 export ROCR_VISIBLE_DEVICES=None 
 export NCCL_TIMEOUT_SECONDS=4800
-export OMPI_MCA_coll_hcoll_enable=0 \
-CUDA_DEVICE_ORDER=PCI_BUS_ID \
-TORCH_NCCL_ENABLE_MONITORING=0 \
-NCCL_SOCKET_IFNAME=eth0 \
-UCX_TLS=rc \
-UCX_NET_DEVICES=mlx5_ib0:1 \
-NCCL_DEBUG=WARN \
-NCCL_TOPO_FILE=/opt/microsoft/ndv5-topo.xml \
-NCCL_IB_PCI_RELAXED_ORDERING=1 \
-NCCL_IB_QPS_PER_CONNECTION=4 \
-NCCL_IGNORE_CPU_AFFINITY=1 \
-NCCL_P2P_NET_CHUNKSIZE=$((512 * 1024)) \
-NCCL_PXN_DISABLE=1 \
-NCCL_MIN_NCHANNELS=32 \
-SHARP_SMX_UCX_INTERFACE=mlx5_ib0:1 \
-SHARP_COLL_ENABLE_SAT=1 \
-SHARP_COLL_LOG_LEVEL=3 \
-SHARP_COLL_ENABLE_PCI_RELAXED_ORDERING=1 \
-NCCL_COLLNET_ENABLE=1
+export NCCL_DEBUG=warn
+export NCCL_NET=IB
+export NCCL_IB_HCA="mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7"
+export NCCL_CROSS_NIC=1
+export NCCL_IB_TC=136
+export NCCL_SOCKET_IFNAME="^lo,docker,virbr"
+export CUDA_DEVICE_MAX_CONNECTIONS=8
+export NCCL_NVLS_ENABLE=1
 
 project_name='DAPO'
 exp_name='DAPO-Qwen2.5-7b-MATH-0527a1-fsdp2-fully-async-4-4'
@@ -48,16 +37,16 @@ export VERL_USE_THREAD_TIMEOUT=false
 # WORKING_DIR=${WORKING_DIR:-"${PWD}"}
 # RUNTIME_ENV=${RUNTIME_ENV:-"${WORKING_DIR}/verl/trainer/runtime_env.yaml"}
 # Paths
-RAY_DATA_HOME=${RAY_DATA_HOME:-"${HOME}/verl_old"}
+# RAY_DATA_HOME=${RAY_DATA_HOME:-"${HOME}/verl_old"}
 # very important! please modify the max_position_embeddings in config.json to 32768 after downloading from huggingface
-MODEL_PATH=${MODEL_PATH:-"${RAY_DATA_HOME}/models/Qwen2.5-Math-7B"}
-CKPTS_DIR=${CKPTS_DIR:-"${RAY_DATA_HOME}/ckpts/${project_name}/${exp_name}"}
+# MODEL_PATH=${MODEL_PATH:-"${RAY_DATA_HOME}/models/Qwen2.5-Math-7B"}
+# CKPTS_DIR=${CKPTS_DIR:-"${RAY_DATA_HOME}/ckpts/${project_name}/${exp_name}"}
 
 
 # TRAIN_FILE=${TRAIN_FILE:-"${RAY_DATA_HOME}/data/dapo-math-17k.parquet"}
 
 # Training Data Configuration
-DATA_MIX_DIR="/lustrefs/users/varad.pimpalkhute/data/k2/final/data_mix_1"
+DATA_MIX_DIR="/mnt/weka/home/varad.pimpalkhute/data/k2/final/data_mix_1"
 train_file_list=()
 test_file_list_impossible_questions=()
 
@@ -78,7 +67,7 @@ dataset_names=(
     # "logic__synlogic_12.1k.parquet"
     # "logic__zebra_puzzle_dataset_5.0k.parquet"
     "math__combined_118.2k.part1.parquet"
-    # "math__combined_118.2k.part2.parquet"
+    "math__combined_118.2k.part2.parquet"
     # "omni_math_4.43k.parquet"
     # "simulation__codeio_fixed_12.1k.parquet"
     # "stem__nemotron_13.3k.parquet"
@@ -101,11 +90,6 @@ for dataset in "${dataset_names[@]}"; do
     done
 done
 
-# Join with comma to form Python list string
-IFS=,
-train_files="[${train_file_list[*]}]"
-unset IFS
-
 for dataset in "${dataset_names[@]}"; do
     for subdir in "impossible_questions"; do
         file_path="${DATA_MIX_DIR}/${subdir}/${dataset}"
@@ -116,14 +100,20 @@ for dataset in "${dataset_names[@]}"; do
     done
 done
 
-test_file_list_impossible_questions+=("${RAY_DATA_HOME}/data/aime-2024.parquet")
-
-IFS=,
-test_files_impossible_questions="[${test_file_list_impossible_questions[*]}]"
-unset IFS
+test_file_list_impossible_questions+=("'/mnt/weka/home/varad.pimpalkhute/async/Reasoning360/data/aime-2024.parquet'")
 
 echo "Test files for impossible questions: ${#test_file_list_impossible_questions[@]}"
-echo "Total training files found: ${#train_files[@]}"
+echo "Total training files found: ${#train_file_list[@]}"
+
+# Join with comma to form Python list string
+IFS=,
+train_files="[${train_file_list[*]}]"
+test_files="[${test_file_list_impossible_questions[*]}]"
+unset IFS
+
+echo "Test files for impossible questions: ${test_files}"
+echo "Training files: ${train_files}"
+
 
 
 # =================== Ray node setup ===================
@@ -190,7 +180,7 @@ clip_ratio_low=0.2
 clip_ratio_high=0.28
 
 # Response length parameters
-max_prompt_length=$((1024 * 2))
+max_prompt_length=$((1024 * 4))
 max_response_length=$((1024 * 8))
 enable_overlong_buffer=True
 overlong_buffer_len=$((1024 * 4))
@@ -233,9 +223,12 @@ trigger_parameter_sync_step=4
 require_batches=4
 partial_rollout=True
 
+MODEL_PATH="models/Qwen2.5-Math-7B"
+CKPTS_DIR="ckpts/${project_name}/${exp_name}"
+
 "${CONDA_BIN_PATH}python3" -m reasoning360.recipe.fully_async_policy.fully_async_main \
     data.train_files="${train_files}" \
-    data.val_files="${test_files_impossible_questions}" \
+    data.val_files="${test_files}" \
     data.prompt_key=prompt \
     data.truncation='left' \
     data.max_prompt_length=${max_prompt_length} \

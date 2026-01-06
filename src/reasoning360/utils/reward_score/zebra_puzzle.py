@@ -3,23 +3,8 @@ import random
 import ast
 import operator
 import json
-import signal
-import contextlib
 
-class TimeoutException(Exception):
-    pass
-
-@contextlib.contextmanager
-def time_limit(seconds: float):
-    def signal_handler(signum, frame):
-        raise TimeoutException("Timed out!")
-
-    signal.setitimer(signal.ITIMER_REAL, seconds)
-    signal.signal(signal.SIGALRM, signal_handler)
-    try:
-        yield
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
+from verl.utils.py_functional import timeout_limit
 
 def extract_solution(solution_str):
     
@@ -68,20 +53,22 @@ def compute_accuracy(answer, ground_truth):
     return accuracy
 
 def compute_score(solution_str, ground_truth, extra_info: any = None, method='strict', timeout: float = 10.0):
+    @timeout_limit(seconds=timeout)
+    def _compute_with_timeout():
+        predicted_arrangement = extract_solution(solution_str)
+
+        if predicted_arrangement is None:
+            return 0.0
+        else:
+            try:
+                accuracy = compute_accuracy(predicted_arrangement, ground_truth)
+                return accuracy
+            except Exception as e:
+                return 0.0
+    
     try:
-        with time_limit(timeout):
-            predicted_arrangement = extract_solution(solution_str)
-
-            if predicted_arrangement is None:
-                score = 0.0
-            else:
-                try:
-                    accuracy = compute_accuracy(predicted_arrangement, ground_truth)
-                    score = accuracy
-                except Exception as e:
-                    score = 0.0
-
-    except TimeoutException:
+        score = _compute_with_timeout()
+    except TimeoutError:
         print("Computation timed out in zebra_puzzle")
         score = 0.0
     except Exception as e:

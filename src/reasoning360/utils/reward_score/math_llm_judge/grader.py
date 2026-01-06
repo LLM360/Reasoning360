@@ -94,7 +94,6 @@ This logic is largely copied from the Hendrycks' MATH release (math_equivalence)
 
 import contextlib
 import re
-import signal
 import math
 from math import isclose
 from typing import Union
@@ -102,6 +101,7 @@ from typing import Union
 from sympy import N, simplify
 from sympy.parsing.latex import parse_latex
 from sympy.parsing.sympy_parser import parse_expr
+from verl.utils.py_functional import timeout_limit
 
 
 def is_digit(s):
@@ -312,8 +312,10 @@ def symbolic_equal(a, b, tolerance, timeout=10.0):
     def _parse(s):
         for f in [parse_expr, parse_latex]:
             try:
-                with time_limit(timeout):
+                @timeout_limit(seconds=timeout)
+                def _parse_with_timeout():
                     return f(s)
+                return _parse_with_timeout()
             except Exception:
                 pass
         return s
@@ -322,37 +324,23 @@ def symbolic_equal(a, b, tolerance, timeout=10.0):
     b = _parse(b)
 
     try:
-        with time_limit(timeout):
-            if simplify(a - b) == 0:
-                return True
+        @timeout_limit(seconds=timeout)
+        def _simplify_with_timeout():
+            return simplify(a - b) == 0
+        if _simplify_with_timeout():
+            return True
     except Exception:
         pass
 
     try:
-        with time_limit(timeout):
-            if isclose(N(a), N(b), rel_tol=tolerance):
-                return True
+        @timeout_limit(seconds=timeout)
+        def _numeric_equal_with_timeout():
+            return isclose(N(a), N(b), rel_tol=tolerance)
+        if _numeric_equal_with_timeout():
+            return True
     except Exception:
         pass
     return False
-
-
-class TimeoutException(Exception):
-    pass
-
-
-@contextlib.contextmanager
-def time_limit(seconds: float):
-
-    def signal_handler(signum, frame):
-        raise TimeoutException("Timed out!")
-
-    signal.setitimer(signal.ITIMER_REAL, seconds)
-    signal.signal(signal.SIGALRM, signal_handler)
-    try:
-        yield
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
 
 
 def format_intervals(prediction):

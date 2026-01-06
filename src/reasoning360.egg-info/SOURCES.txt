@@ -7,7 +7,6 @@ src/reasoning360.egg-info/SOURCES.txt
 src/reasoning360.egg-info/dependency_links.txt
 src/reasoning360.egg-info/requires.txt
 src/reasoning360.egg-info/top_level.txt
-src/reasoning360/experimental/agent_loop/agent_loop.py
 src/reasoning360/recipe/__init__.py
 src/reasoning360/recipe/fully_async_policy/detach_utils.py
 src/reasoning360/recipe/fully_async_policy/fsdp2_utils.py
@@ -21,7 +20,6 @@ src/reasoning360/recipe/fully_async_policy/message_queue.py
 src/reasoning360/recipe/fully_async_policy/param_sync.py
 src/reasoning360/recipe/fully_async_policy/ray_trainer.py
 src/reasoning360/recipe/fully_async_policy/agent_loop/__init__.py
-src/reasoning360/recipe/fully_async_policy/agent_loop/agent_loop copy.py
 src/reasoning360/recipe/fully_async_policy/agent_loop/agent_loop.py
 src/reasoning360/recipe/fully_async_policy/agent_loop/partial_single_turn_agent_loop.py
 src/reasoning360/recipe/fully_async_policy/agent_loop/partial_tool_agent_loop.py

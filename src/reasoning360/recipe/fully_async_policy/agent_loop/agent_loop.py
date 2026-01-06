@@ -147,7 +147,7 @@ class FullyAsyncAgentLoopWorker(AgentLoopWorkerBase):
         return outputs, is_cancel
 
     def _addition_process(self, output: DataProto):
-        """collect metirics"""
+        """collect metrics"""
         metrics = output.meta_info.pop("metrics")  # List[Dict[str, str]]
         processing_times_list = [item["generate_sequences"] for item in metrics]
         tool_calls_times_list = [item["tool_calls"] for item in metrics]
@@ -230,6 +230,28 @@ class FullyAsyncAgentLoopManager(AgentLoopManager):
         self.server_addresses = None
         self.agent_loop_workers = None
 
+    def _performance_metrics(self, metrics: list[list[dict[str, str]]], output: DataProto) -> dict[str, float]:
+        timing = {}
+        t_generate_sequences = np.array([metric["generate_sequences"] for chunk in metrics for metric in chunk])
+        t_tool_calls = np.array([metric["tool_calls"] for chunk in metrics for metric in chunk])
+        timing["agent_loop/generate_sequences/min"] = t_generate_sequences.min()
+        timing["agent_loop/generate_sequences/max"] = t_generate_sequences.max()
+        timing["agent_loop/generate_sequences/mean"] = t_generate_sequences.mean()
+        timing["agent_loop/tool_calls/min"] = t_tool_calls.min()
+        timing["agent_loop/tool_calls/max"] = t_tool_calls.max()
+        timing["agent_loop/tool_calls/mean"] = t_tool_calls.mean()
+
+        # batch sequence generation is bounded by the slowest sample
+        slowest = np.argmax(t_generate_sequences + t_tool_calls)
+        attention_mask = output.batch["attention_mask"][slowest]
+        prompt_length = output.batch["prompts"].shape[1]
+        timing["agent_loop/slowest/generate_sequences"] = t_generate_sequences[slowest]
+        timing["agent_loop/slowest/tool_calls"] = t_tool_calls[slowest]
+        timing["agent_loop/slowest/prompt_length"] = attention_mask[:prompt_length].sum().item()
+        timing["agent_loop/slowest/response_length"] = attention_mask[prompt_length:].sum().item()
+
+        return timing
+
     def generate_sequences(self, prompts: DataProto) -> DataProto:
         """Override to use cancellation-aware worker method."""
         self.wake_up()
@@ -250,8 +272,27 @@ class FullyAsyncAgentLoopManager(AgentLoopManager):
         if self.reward_model_manager:
             self.reward_model_manager.sleep()
 
-        # Metrics already in non_tensor_batch from _addition_process, add timing placeholder
-        output.meta_info = {"timing": {}, **outputs[0].meta_info}
+        # Reconstruct metrics from non_tensor_batch (moved there by _addition_process)
+        metrics = []
+        for out in outputs:
+            if "processing_times" in out.non_tensor_batch and "tool_calls_times" in out.non_tensor_batch:
+                chunk_metrics = [
+                    {
+                        "generate_sequences": gen_time,
+                        "tool_calls": tool_time
+                    }
+                    for gen_time, tool_time in zip(
+                        out.non_tensor_batch["processing_times"],
+                        out.non_tensor_batch["tool_calls_times"]
+                    )
+                ]
+                metrics.append(chunk_metrics)
+            else:
+                # Fallback: check if metrics still in meta_info (shouldn't happen normally)
+                metrics.append(out.meta_info.pop("metrics", []))
+        
+        timing = self._performance_metrics(metrics, output)
+        output.meta_info = {"timing": timing, **outputs[0].meta_info}
         return output
 
     @classmethod
