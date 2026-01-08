@@ -49,5 +49,3 @@ def compute_score(solution_str, ground_truth, extra_info):
             "score": all(is_following_list),
             "acc": all(is_following_list),
         }
-
-    try:
