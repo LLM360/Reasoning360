@@ -76,23 +76,23 @@ dataset_names=(
     "codegen__deduped_primeintellect_9.6k.parquet"
     "codegen__deduped_taco_11.1k.parquet"
     "ifbench__fixed_85.6k.parquet"
-    "logic__arcagi1_297.parquet"
-    "logic__arcagi2_653.parquet"
-    "logic__barc_3.4k.parquet"
-    "logic__graph_logical_dataset_1.4k.parquet"
-    "logic__ordering_puzzle_dataset_2.9k.parquet"
-    "logic__reasoning_gym_40.6k.parquet"
-    "logic__synlogic_12.1k.parquet"
-    "logic__zebra_puzzle_dataset_5.0k.parquet"
     "math__combined_118.2k.part1.parquet"
     "math__combined_118.2k.part2.parquet"
     "omni_math_4.43k_dedup.parquet"
-    "simulation__codeio_fixed_12.1k.parquet"
     "stem__nemotron_13.3k.parquet"
     "stem__web_31.7k.parquet"
     "table__hitab_7.4k.parquet"
     "table__multihier_2.9k.parquet"
 )
+#    # "simulation__codeio_fixed_12.1k.parquet"
+# "logic__arcagi1_297.parquet"
+#     "logic__arcagi2_653.parquet"
+#     "logic__barc_3.4k.parquet"
+#     "logic__graph_logical_dataset_1.4k.parquet"
+#     "logic__ordering_puzzle_dataset_2.9k.parquet"
+#     "logic__reasoning_gym_40.6k.parquet"
+#     "logic__synlogic_12.1k.parquet"
+#     "logic__zebra_puzzle_dataset_5.0k.parquet"
 
 echo "Collecting training files from ${DATA_MIX_DIR}..."
 
@@ -239,10 +239,10 @@ rollout_dtype="float16"
 enable_filter_groups=False
 filter_groups_metric=acc
 max_num_gen_batches=10
-train_prompt_bsz=128  # on-policy model update batchsize: train_prompt_bsz * rollout.n
+train_prompt_bsz=256  # on-policy model update batchsize: train_prompt_bsz * rollout.n
 gen_prompt_bsz=$((train_prompt_bsz * 1))
 n_resp_per_prompt=16
-train_prompt_mini_bsz=128  # model grad update batchsize
+train_prompt_mini_bsz=256  # model grad update batchsize
 
 # Algorithm
 temperature=1.2
@@ -315,7 +315,7 @@ offload=True
     actor_rollout_ref.rollout.n=${n_resp_per_prompt} \
     actor_rollout_ref.rollout.log_prob_use_dynamic_bsz=${use_dynamic_bsz} \
     actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=${infer_ppo_max_token_len} \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.5 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.7 \
     actor_rollout_ref.rollout.log_prob_micro_batch_size=${infer_micro_batch_size} \
     actor_rollout_ref.rollout.tensor_model_parallel_size=${gen_tp} \
     actor_rollout_ref.rollout.enable_chunked_prefill=True \
@@ -342,7 +342,7 @@ offload=True
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.model.enable_activation_offload=${offload} \
     actor_rollout_ref.model.use_liger=True \
-    reward_model.reward_manager=async_multi_process \
+    reward_model.reward_manager=dapo \
     reward_model.overlong_buffer.enable=${enable_overlong_buffer} \
     reward_model.overlong_buffer.len=${overlong_buffer_len} \
     reward_model.overlong_buffer.penalty_factor=${overlong_penalty_factor} \
@@ -352,10 +352,11 @@ offload=True
     trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=$worker_num \
-    trainer.save_freq=10 \
+    trainer.save_freq=1 \
     trainer.test_freq=5 \
     trainer.total_epochs=5 \
-    trainer.log_val_generations=50 \
+    trainer.log_val_generations=0 \
     trainer.resume_mode=auto \
     trainer.max_actor_ckpt_to_keep=3
     # data.id_val_files="$id_val_files" \
+    # trainer.log_val_generations=50 \
