@@ -49,3 +49,12 @@ def compute_score(solution_str, ground_truth, extra_info):
             "score": all(is_following_list),
             "acc": all(is_following_list),
         }
+
+    try:
+        return _compute_score_with_timeout()
+    except TimeoutError:
+        print("Computation timed out in ifeval")
+        return {"score": 0.0, "acc": False}
+    except Exception as e:
+        print(f"Error in compute_score in ifeval: {e}")
+        return {"score": 0.0, "acc": False}
