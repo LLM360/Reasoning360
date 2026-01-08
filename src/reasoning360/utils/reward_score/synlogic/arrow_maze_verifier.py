@@ -3,6 +3,7 @@ from typing import List, Dict, Tuple
 from .verifier import Verifier
 from .data import Data
 import re
+from verl.utils.py_functional import timeout_limit
 
 class ArrowMazeVerifier(Verifier):
     """
@@ -43,101 +44,112 @@ class ArrowMazeVerifier(Verifier):
         @param test_solution_str: 测试答案字符串 (JSON格式的二维数组)
         @return: 答案是否正确
         """
-        test_answer_str = self.extract_answer(test_solution_str) 
-        if not test_answer_str:
-            # print("答案为空，验证失败")
-            return False
-        
+        @timeout_limit(seconds=10)
+        def _verify_with_timeout():
+            test_answer_str = self.extract_answer(test_solution_str) 
+            if not test_answer_str:
+                # print("答案为空，验证失败")
+                return False
+            
+            try:
+                # 解析测试答案
+                test_answer = json.loads(test_answer_str)
+                
+                # 获取原始迷宫
+                question_grid = data.metadata["maze"]
+                
+                # 检查答案是否符合要求
+                if not self._verify_grid_size(test_answer, question_grid):
+                    # print("答案网格大小与题目不匹配")
+                    with open("solution_str_Qwen3-4B.txt_maze_verify", "a") as f:
+                        f.write("test_solution_str: " + test_solution_str + '\n')
+                        f.write("test_answer_str: " + test_answer_str + '\n')
+                        f.write("question_grid: " + str(data.metadata["maze"]) + '\n')
+                        f.write("答案网格大小与题目不匹配" + '\n')
+                        f.write('-'*32 + '\n')
+                    return False
+                    
+                if not self._verify_number_positions(test_answer, question_grid):
+                    # print("答案中数字位置或值与题目不匹配")
+                    with open("solution_str_Qwen3-4B.txt_maze_verify", "a") as f:
+                        f.write("test_solution_str: " + test_solution_str + '\n')
+                        f.write("test_answer_str: " + test_answer_str + '\n')
+                        f.write("question_grid: " + str(data.metadata["maze"]) + '\n')
+                        f.write("答案中数字位置或值与题目不匹配" + '\n')
+                        f.write('-'*32 + '\n')
+                    return False
+                    
+                if not self._verify_all_blanks_filled(test_answer, question_grid):
+                    # print("答案中有空格未被填满")
+                    with open("solution_str_Qwen3-4B.txt_maze_verify", "a") as f:
+                        f.write("test_solution_str: " + test_solution_str + '\n')
+                        f.write("test_answer_str: " + test_answer_str + '\n')
+                        f.write("question_grid: " + str(data.metadata["maze"]) + '\n')
+                        f.write("答案中有空格未被填满" + '\n')
+                        f.write('-'*32 + '\n')
+                    return False
+                    
+                if not self._verify_arrow_symbols(test_answer):
+                    # print("答案中包含非法箭头符号")
+                    with open("solution_str_Qwen3-4B.txt_maze_verify", "a") as f:
+                        f.write("test_solution_str: " + test_solution_str + '\n')
+                        f.write("test_answer_str: " + test_answer_str + '\n')
+                        f.write("question_grid: " + str(data.metadata["maze"]) + '\n')
+                        f.write("答案中包含非法箭头符号" + '\n')
+                        f.write('-'*32 + '\n')
+                    return False
+                    
+                if not self._verify_prefilled_arrows(test_answer, question_grid):
+                    # print("答案中预填箭头与题目不一致")
+                    with open("solution_str_Qwen3-4B.txt_maze_verify", "a") as f:
+                        f.write("test_solution_str: " + test_solution_str + '\n')
+                        f.write("test_answer_str: " + test_answer_str + '\n')
+                        f.write("question_grid: " + str(data.metadata["maze"]) + '\n')
+                        f.write("答案中预填箭头与题目不一致" + '\n')
+                        f.write('-'*32 + '\n')
+                    return False
+                    
+                if not self._verify_arrow_rays(test_answer):
+                    # print("答案中存在未被射线覆盖的箭头")
+                    with open("solution_str_Qwen3-4B.txt_maze_verify", "a") as f:
+                        f.write("test_solution_str: " + test_solution_str + '\n')
+                        f.write("test_answer_str: " + test_answer_str + '\n')
+                        f.write("question_grid: " + str(data.metadata["maze"]) + '\n')
+                        f.write("答案中存在未被射线覆盖的箭头" + '\n')
+                        f.write('-'*32 + '\n')
+                    return False
+                    
+                if not self._verify_number_rays(test_answer):
+                    # print("答案中数字的射线箭头串总数不符合要求")
+                    with open("solution_str_Qwen3-4B.txt_maze_verify", "a") as f:
+                        f.write("test_solution_str: " + test_solution_str + '\n')
+                        f.write("test_answer_str: " + test_answer_str + '\n')
+                        f.write("question_grid: " + str(data.metadata["maze"]) + '\n')
+                        f.write("答案中数字的射线箭头串总数不符合要求" + '\n')
+                        f.write('-'*32 + '\n')
+                    return False
+                
+                # 所有验证都通过
+                # print("验证通过！")
+                return True
+                
+            except Exception as e:
+                # print(f"验证过程中出错: {e}")
+                with open("solution_str_Qwen3-4B.txt_maze_verify", "a") as f:
+                    f.write("test_solution_str: " + test_solution_str + '\n')
+                    f.write("test_answer_str: " + test_answer_str + '\n')
+                    f.write("question_grid: " + str(data.metadata["maze"]) + '\n')
+                    f.write("验证过程中出错" + str(e) + '\n')
+                    f.write('-'*32 + '\n')  
+                return False
+
         try:
-            # 解析测试答案
-            test_answer = json.loads(test_answer_str)
-            
-            # 获取原始迷宫
-            question_grid = data.metadata["maze"]
-            
-            # 检查答案是否符合要求
-            if not self._verify_grid_size(test_answer, question_grid):
-                # print("答案网格大小与题目不匹配")
-                with open("solution_str_Qwen3-4B.txt_maze_verify", "a") as f:
-                    f.write("test_solution_str: " + test_solution_str + '\n')
-                    f.write("test_answer_str: " + test_answer_str + '\n')
-                    f.write("question_grid: " + str(data.metadata["maze"]) + '\n')
-                    f.write("答案网格大小与题目不匹配" + '\n')
-                    f.write('-'*32 + '\n')
-                return False
-                
-            if not self._verify_number_positions(test_answer, question_grid):
-                # print("答案中数字位置或值与题目不匹配")
-                with open("solution_str_Qwen3-4B.txt_maze_verify", "a") as f:
-                    f.write("test_solution_str: " + test_solution_str + '\n')
-                    f.write("test_answer_str: " + test_answer_str + '\n')
-                    f.write("question_grid: " + str(data.metadata["maze"]) + '\n')
-                    f.write("答案中数字位置或值与题目不匹配" + '\n')
-                    f.write('-'*32 + '\n')
-                return False
-                
-            if not self._verify_all_blanks_filled(test_answer, question_grid):
-                # print("答案中有空格未被填满")
-                with open("solution_str_Qwen3-4B.txt_maze_verify", "a") as f:
-                    f.write("test_solution_str: " + test_solution_str + '\n')
-                    f.write("test_answer_str: " + test_answer_str + '\n')
-                    f.write("question_grid: " + str(data.metadata["maze"]) + '\n')
-                    f.write("答案中有空格未被填满" + '\n')
-                    f.write('-'*32 + '\n')
-                return False
-                
-            if not self._verify_arrow_symbols(test_answer):
-                # print("答案中包含非法箭头符号")
-                with open("solution_str_Qwen3-4B.txt_maze_verify", "a") as f:
-                    f.write("test_solution_str: " + test_solution_str + '\n')
-                    f.write("test_answer_str: " + test_answer_str + '\n')
-                    f.write("question_grid: " + str(data.metadata["maze"]) + '\n')
-                    f.write("答案中包含非法箭头符号" + '\n')
-                    f.write('-'*32 + '\n')
-                return False
-                
-            if not self._verify_prefilled_arrows(test_answer, question_grid):
-                # print("答案中预填箭头与题目不一致")
-                with open("solution_str_Qwen3-4B.txt_maze_verify", "a") as f:
-                    f.write("test_solution_str: " + test_solution_str + '\n')
-                    f.write("test_answer_str: " + test_answer_str + '\n')
-                    f.write("question_grid: " + str(data.metadata["maze"]) + '\n')
-                    f.write("答案中预填箭头与题目不一致" + '\n')
-                    f.write('-'*32 + '\n')
-                return False
-                
-            if not self._verify_arrow_rays(test_answer):
-                # print("答案中存在未被射线覆盖的箭头")
-                with open("solution_str_Qwen3-4B.txt_maze_verify", "a") as f:
-                    f.write("test_solution_str: " + test_solution_str + '\n')
-                    f.write("test_answer_str: " + test_answer_str + '\n')
-                    f.write("question_grid: " + str(data.metadata["maze"]) + '\n')
-                    f.write("答案中存在未被射线覆盖的箭头" + '\n')
-                    f.write('-'*32 + '\n')
-                return False
-                
-            if not self._verify_number_rays(test_answer):
-                # print("答案中数字的射线箭头串总数不符合要求")
-                with open("solution_str_Qwen3-4B.txt_maze_verify", "a") as f:
-                    f.write("test_solution_str: " + test_solution_str + '\n')
-                    f.write("test_answer_str: " + test_answer_str + '\n')
-                    f.write("question_grid: " + str(data.metadata["maze"]) + '\n')
-                    f.write("答案中数字的射线箭头串总数不符合要求" + '\n')
-                    f.write('-'*32 + '\n')
-                return False
-            
-            # 所有验证都通过
-            # print("验证通过！")
-            return True
-            
+            return _verify_with_timeout()
+        except TimeoutError:
+            print("Verification timed out (ArrowMazeVerifier)")
+            return False
         except Exception as e:
-            # print(f"验证过程中出错: {e}")
-            with open("solution_str_Qwen3-4B.txt_maze_verify", "a") as f:
-                f.write("test_solution_str: " + test_solution_str + '\n')
-                f.write("test_answer_str: " + test_answer_str + '\n')
-                f.write("question_grid: " + str(data.metadata["maze"]) + '\n')
-                f.write("验证过程中出错" + str(e) + '\n')
-                f.write('-'*32 + '\n')  
+            print(f"Verification error (ArrowMazeVerifier): {e}")
             return False
     
     def _verify_grid_size(self, test_answer: List[List[str]], question_grid: List[List[str]]) -> bool:

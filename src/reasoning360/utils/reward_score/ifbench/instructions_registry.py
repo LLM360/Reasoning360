@@ -15,7 +15,7 @@
 
 """Registry of all instructions."""
 
-from verl.utils.reward_score.ifbench import instructions
+from reasoning360.utils.reward_score.ifbench import instructions
 
 _PARAGRAPH = "paragraphs:"
 

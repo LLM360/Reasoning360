@@ -1,9 +1,11 @@
 import re
 import ast
 import numpy as np
+from verl.utils.py_functional import timeout_limit
+
 
 def extract_solution(solution_str):
-    answer_pattern = r'<answer>(.*?)</answer>'
+    answer_pattern = r"<answer>(.*?)</answer>"
     matches = list(re.finditer(answer_pattern, solution_str, flags=re.DOTALL))
     if matches:
         final_answer = matches[-1].group(1).strip()
@@ -11,8 +13,8 @@ def extract_solution(solution_str):
         final_answer = final_answer.replace("...", "-1")
         try:
             # Find the part of the text that looks like a nested list
-            start = final_answer.index('[[')
-            end = final_answer.index(']]', start) + 2
+            start = final_answer.index("[[")
+            end = final_answer.index("]]", start) + 2
             array_str = final_answer[start:end]
             # Use ast.literal_eval to safely evaluate the string as a Python expression
             array = ast.literal_eval(array_str)
@@ -24,6 +26,7 @@ def extract_solution(solution_str):
             return [[0]]
     else:
         return [[0]]
+
 
 def pad_array_with_value(array, target_shape, pad_value):
     """
@@ -53,7 +56,7 @@ def pad_array_with_value(array, target_shape, pad_value):
     except Exception as e:
         array = np.array([[0]])
     original_shape = array.shape
-    padded_array[:original_shape[0], :original_shape[1]] = array
+    padded_array[: original_shape[0], : original_shape[1]] = array
     return padded_array
 
 
@@ -74,19 +77,37 @@ def compare_solutions_with_padding(generated_output, correct_output, pad_value=-
     max_rows = max(len(generated_output), len(correct_output))
     max_cols = max(len(generated_output[0]), len(correct_output[0]))
     target_shape = (max_rows, max_cols)
-    
+
     padded_generated = pad_array_with_value(generated_output, target_shape, pad_value)
     padded_correct = pad_array_with_value(correct_output, target_shape, pad_value)
     total_pixels = max_rows * max_cols
-    correct_pixels = np.sum((padded_generated == padded_correct) & (padded_generated != pad_value) & (padded_correct != pad_value))
-    correct_percentage = (correct_pixels / total_pixels)
+    correct_pixels = np.sum(
+        (padded_generated == padded_correct)
+        & (padded_generated != pad_value)
+        & (padded_correct != pad_value)
+    )
+    correct_percentage = correct_pixels / total_pixels
     is_correct = float(correct_pixels == total_pixels)
     return is_correct, correct_percentage
 
 
+def compute_score(
+    model_output: str, ground_truth: np.ndarray, extra_info: any = None
+) -> float:
+    @timeout_limit(seconds=10)
+    def _compute_score_with_timeout():
+        model_output_str = str(model_output)
+        final_answer = extract_solution(model_output_str)
+        is_correct, correct_percentage = compare_solutions_with_padding(
+            final_answer, ground_truth
+        )
+        return {"score": is_correct, "acc": is_correct}
 
-def compute_score(model_output: str, ground_truth: np.ndarray, extra_info: any = None) -> float:
-    model_output = str(model_output)
-    final_answer = extract_solution(model_output)
-    is_correct, correct_percentage = compare_solutions_with_padding(final_answer, ground_truth)
-    return {"score": is_correct, "acc": is_correct}
+    try:
+        return _compute_score_with_timeout()
+    except TimeoutError:
+        print("Computation timed out in arcagi")
+        return {"score": 0.0, "acc": 0.0}
+    except Exception as e:
+        print(f"Error in compute_score in arcagi: {e}")
+        return {"score": 0.0, "acc": 0.0}

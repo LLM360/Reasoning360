@@ -1,6 +1,7 @@
 import re
 from .data import Data
 from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
+from verl.utils.py_functional import timeout_limit
 
 class WebOfLiesVerifier(Verifier):
     """
@@ -15,35 +16,37 @@ class WebOfLiesVerifier(Verifier):
         @return: 回答是否正确的布尔值
         """
         try:
-            test_answer = self.extract_answer(test_solution)
-            # 获取预期答案和测试答案
-            expected_answer = data.answer.lower()
-            
-            # 清理测试答案
-            test_answer = test_answer.lower()
-            
-            # 提取预期答案中的真假值
-            expected_truths = self._parse_answer(expected_answer)
-            
-            # 提取测试答案中的真假值
-            test_truths = self._parse_answer(test_answer)
-            
-            # print(f"验证: 预期答案={expected_truths}, 模型答案={test_truths}")
-            
-            # 检查答案列表长度是否匹配
-            if len(expected_truths) != len(test_truths):
-                # print(f"验证失败: 答案长度不匹配，预期 {len(expected_truths)}，实际 {len(test_truths)}")
-                return False
-            
-            # 检查每个位置的答案是否匹配
-            for i, (expected, actual) in enumerate(zip(expected_truths, test_truths)):
-                if expected != actual:
-                    # print(f"验证失败: 第 {i+1} 个答案不匹配，预期 {expected}，实际 {actual}")
+            @timeout_limit(seconds=10)
+            def _verify_with_timeout():
+                test_answer = self.extract_answer(test_solution)
+                # 获取预期答案和测试答案
+                expected_answer = data.answer.lower()
+                
+                # 清理测试答案
+                test_answer = test_answer.lower()
+                
+                # 提取预期答案中的真假值
+                expected_truths = self._parse_answer(expected_answer)
+                
+                # 提取测试答案中的真假值
+                test_truths = self._parse_answer(test_answer)
+                
+                # print(f"验证: 预期答案={expected_truths}, 模型答案={test_truths}")
+                
+                # 检查答案列表长度是否匹配
+                if len(expected_truths) != len(test_truths):
+                    # print(f"验证失败: 答案长度不匹配，预期 {len(expected_truths)}，实际 {len(test_truths)}")
                     return False
-            
-            # print("验证成功: 所有答案匹配")
-            return True
-            
+                
+                # 检查每个位置的答案是否匹配
+                for i, (expected, actual) in enumerate(zip(expected_truths, test_truths)):
+                    if expected != actual:
+                        # print(f"验证失败: 第 {i+1} 个答案不匹配，预期 {expected}，实际 {actual}")
+                        return False
+                
+                # print("验证成功: 所有答案匹配")
+                return True
+            return _verify_with_timeout()
         except Exception as e:
             print(f"Verification error (WebOfLies): {e}")
             return False

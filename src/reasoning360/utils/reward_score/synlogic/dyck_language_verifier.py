@@ -1,6 +1,7 @@
 from .data import Data
 from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
 import re
+from verl.utils.py_functional import timeout_limit
 
 
 class DyckLanguageVerifier(Verifier):
@@ -16,23 +17,26 @@ class DyckLanguageVerifier(Verifier):
         @return: 回答是否正确的布尔值
         """
         try:
-            # 获取元数据中的完整序列
-            full_sequence = data.metadata["full_sequence"]
-            
-            # print(f"验证: 模型答案='{test_answer}', 完整序列='{full_sequence}'")
-            
-            # 从模型回答中提取答案
-            extracted_answer = self.extract_answer(test_answer)
-            
-            # 检查答案是否完全匹配
-            is_correct = (extracted_answer == full_sequence)
-            
-            # if is_correct:
-            #     print("验证结果: 正确")
-            # else:
-            #     print("验证结果: 错误")
+            @timeout_limit(seconds=10)
+            def _verify_with_timeout():
+                # 获取元数据中的完整序列
+                full_sequence = data.metadata["full_sequence"]
                 
-            return is_correct
+                # print(f"验证: 模型答案='{test_answer}', 完整序列='{full_sequence}'")
+                
+                # 从模型回答中提取答案
+                extracted_answer = self.extract_answer(test_answer)
+                
+                # 检查答案是否完全匹配
+                is_correct = (extracted_answer == full_sequence)
+                
+                # if is_correct:
+                #     print("验证结果: 正确")
+                # else:
+                #     print("验证结果: 错误")
+                    
+                return is_correct
+            return _verify_with_timeout()
             
         except Exception as e:
             print(f"Verification error (DyckLanguage): {e}")

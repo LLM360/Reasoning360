@@ -57,7 +57,7 @@ dataset_names=(
     # "codegen__deduped_livecodebench_599.parquet"
     # "codegen__deduped_primeintellect_9.6k.parquet"
     # "codegen__deduped_taco_11.1k.parquet"
-    # "ifbench__fixed_85.6k.parquet"
+    "ifbench__fixed_85.6k.parquet"
     # "logic__arcagi1_297.parquet"
     # "logic__arcagi2_653.parquet"
     # "logic__barc_3.4k.parquet"
@@ -66,8 +66,8 @@ dataset_names=(
     # "logic__reasoning_gym_40.6k.parquet"
     # "logic__synlogic_12.1k.parquet"
     # "logic__zebra_puzzle_dataset_5.0k.parquet"
-    "math__combined_118.2k.part1.parquet"
-    "math__combined_118.2k.part2.parquet"
+    # "math__combined_118.2k.part1.parquet"
+    # "math__combined_118.2k.part2.parquet"
     # "omni_math_4.43k.parquet"
     # "simulation__codeio_fixed_12.1k.parquet"
     # "stem__nemotron_13.3k.parquet"
@@ -181,7 +181,7 @@ clip_ratio_high=0.28
 
 # Response length parameters
 max_prompt_length=$((1024 * 4))
-max_response_length=$((1024 * 8))
+max_response_length=$((1024 * 32))
 enable_overlong_buffer=True
 overlong_buffer_len=$((1024 * 4))
 overlong_penalty_factor=1.0
@@ -197,13 +197,13 @@ val_top_p=0.7
 
 # Performance Related Parameter
 use_dynamic_bsz=True
-actor_ppo_max_token_len=$(((max_prompt_length + max_response_length) * 2))
-infer_ppo_max_token_len=$(((max_prompt_length + max_response_length) * 3))
+actor_ppo_max_token_len=$(((max_prompt_length + max_response_length) * 1))
+infer_ppo_max_token_len=$(((max_prompt_length + max_response_length) * 1))
 ref_offload=True
 actor_offload=False
 gen_tp=1
-sp_size=1
-fsdp_size=2
+sp_size=4
+fsdp_size=4
 
 # Fully async specific parameters
 NNODES=${NNODES:-1}
@@ -285,6 +285,13 @@ CKPTS_DIR="ckpts/${project_name}/${exp_name}"
     actor_rollout_ref.actor.fsdp_config.fsdp_size=${fsdp_size} \
     actor_rollout_ref.rollout.name=${rollout_name} \
     actor_rollout_ref.rollout.mode=${rollout_mode} \
+    actor_rollout_ref.model.enable_gradient_checkpointing=True \
+    actor_rollout_ref.model.enable_activation_offload=True \
+    actor_rollout_ref.model.use_liger=True \
+    actor_rollout_ref.rollout.enable_prefix_caching=True \
+    actor_rollout_ref.rollout.enforce_eager=False \
+    actor_rollout_ref.ref.entropy_from_logits_with_chunking=True \
+    actor_rollout_ref.actor.entropy_checkpointing=True \
     reward_model.reward_manager=dapo \
     reward_model.launch_reward_fn_async=True \
     +reward_model.reward_kwargs.overlong_buffer_cfg.enable=${enable_overlong_buffer} \

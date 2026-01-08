@@ -2,20 +2,28 @@ import re
 from .data import Data
 from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
 import math_verify 
+from verl.utils.py_functional import timeout_limit
 
 class SpaceReasoningTreeVerifier(Verifier):
     """
     验证器用于空间推理树游戏的答案是否正确
     """
     def verify(self, data: Data, test_answer: str):
-        test_answer = self.extract_answer(test_answer)
-        if test_answer is None:
+        try:
+            @timeout_limit(seconds=10)
+            def _verify_with_timeout():
+                test_answer_extracted = self.extract_answer(test_answer)
+                if test_answer_extracted is None:
+                    return False
+                test_answer_normalized = test_answer_extracted.replace("，", ",").replace(" ", "")
+                ground_truth = data.answer.replace("，", ",").replace(" ", "")
+                test_set = set(test_answer_normalized.split(","))
+                ground_truth_set = set(ground_truth.split(","))
+                return test_set == ground_truth_set
+            return _verify_with_timeout()
+        except Exception as e:
+            print(f"Verification error (SpaceReasoningTree): {e}")
             return False
-        test_answer = test_answer.replace("，", ",").replace(" ", "")
-        ground_truth = data.answer.replace("，", ",").replace(" ", "")
-        test_set = set(test_answer.split(","))
-        ground_truth_set = set(ground_truth.split(","))
-        return test_set == ground_truth_set
     
     def extract_answer(self, answer_str):
         # 先找到最后一个\boxed{的位置

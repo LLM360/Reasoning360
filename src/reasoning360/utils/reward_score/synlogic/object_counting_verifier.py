@@ -1,6 +1,7 @@
 import re
 from .data import Data
 from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
+from verl.utils.py_functional import timeout_limit
 
 
 class ObjectCountingVerifier(Verifier):
@@ -9,17 +10,20 @@ class ObjectCountingVerifier(Verifier):
     """
     def verify(self, data: Data, test_answer: str):
         try:
-            ground_truth = int(data.answer)
-            parsed_answer = self.extract_answer(test_answer)
-            with open("solution_str_OC.txt", "a") as f:
-                    f.write("data.answer: " + data.answer + '\n')
-                    f.write("test_answer: " + test_answer + '\n')
-                    f.write("parsed_answer" + parsed_answer + '\n')
-                    f.write('-'*32 + '\n')
-            
-            if parsed_answer is None:
-                return False
-            return int(parsed_answer) == ground_truth
+            @timeout_limit(seconds=10)
+            def _verify_with_timeout():
+                ground_truth = int(data.answer)
+                parsed_answer = self.extract_answer(test_answer)
+                # with open("solution_str_OC.txt", "a") as f:
+                #         f.write("data.answer: " + data.answer + '\n')
+                #         f.write("test_answer: " + test_answer + '\n')
+                #         f.write("parsed_answer" + parsed_answer + '\n')
+                #         f.write('-'*32 + '\n')
+                
+                if parsed_answer is None:
+                    return False
+                return int(parsed_answer) == ground_truth
+            return _verify_with_timeout()
 
         except Exception as e:
             print(f"NOTE!!! parse error!!!! (ObjectCounting): {e}")

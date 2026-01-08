@@ -3,6 +3,7 @@ from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
 import re
 import json
 from collections import deque
+from verl.utils.py_functional import timeout_limit
 
 class NumberWallVerifier(Verifier):
     """
@@ -11,53 +12,56 @@ class NumberWallVerifier(Verifier):
     """
     def verify(self, data: Data, test_solution: str, **kwargs):
         try:
-            # 提取答案网格
-            solution_grid = self.extract_answer(test_solution)
-            if not solution_grid:
-                # print("Failed to extract solution grid")
-                return False
-                
-            # 提取元数据
-            original_grid = data.metadata["grid"]
-            n = data.metadata["n"]
-            
-            # 检查网格尺寸
-            if len(solution_grid) != n:
-                # print(f"Solution grid has incorrect number of rows: {len(solution_grid)} != {n}")
-                return False
-                
-            for row in solution_grid:
-                if len(row) != n:
-                    # print(f"Solution grid has incorrect number of columns: {len(row)} != {n}")
+            @timeout_limit(seconds=10)
+            def _verify_with_timeout():
+                # 提取答案网格
+                solution_grid = self.extract_answer(test_solution)
+                if not solution_grid:
+                    # print("Failed to extract solution grid")
                     return False
                     
-                # 检查每个单元格只包含数字、"X"或"A"
-                for cell in row:
-                    if not (isinstance(cell, int) or cell in ["X", "A"]):
-                        # print(f"Invalid cell content: {cell}")
+                # 提取元数据
+                original_grid = data.metadata["grid"]
+                n = data.metadata["n"]
+                
+                # 检查网格尺寸
+                if len(solution_grid) != n:
+                    # print(f"Solution grid has incorrect number of rows: {len(solution_grid)} != {n}")
+                    return False
+                    
+                for row in solution_grid:
+                    if len(row) != n:
+                        # print(f"Solution grid has incorrect number of columns: {len(row)} != {n}")
                         return False
-            
-            # 检查原始数字是否保留
-            if not self._check_original_numbers(original_grid, solution_grid):
-                # print("Original numbers not preserved")
-                return False
+                        
+                    # 检查每个单元格只包含数字、"X"或"A"
+                    for cell in row:
+                        if not (isinstance(cell, int) or cell in ["X", "A"]):
+                            # print(f"Invalid cell content: {cell}")
+                            return False
                 
-            # 检查墙壁布局是否有效（没有2×2或更大的连续墙块）
-            if not self._check_wall_layout(solution_grid):
-                # print("Invalid wall layout (2x2 or larger continuous wall blocks found)")
-                return False
-                
-            # 检查岛屿划分是否有效
-            if not self._check_islands(solution_grid):
-                # print("Invalid island division")
-                return False
-                
-            # 检查是否有斜线边
-            if not self._check_diagonal_borders(solution_grid):
-                # print("Invalid solution: islands have diagonal borders")
-                return False
-                
-            return True
+                # 检查原始数字是否保留
+                if not self._check_original_numbers(original_grid, solution_grid):
+                    # print("Original numbers not preserved")
+                    return False
+                    
+                # 检查墙壁布局是否有效（没有2×2或更大的连续墙块）
+                if not self._check_wall_layout(solution_grid):
+                    # print("Invalid wall layout (2x2 or larger continuous wall blocks found)")
+                    return False
+                    
+                # 检查岛屿划分是否有效
+                if not self._check_islands(solution_grid):
+                    # print("Invalid island division")
+                    return False
+                    
+                # 检查是否有斜线边
+                if not self._check_diagonal_borders(solution_grid):
+                    # print("Invalid solution: islands have diagonal borders")
+                    return False
+                    
+                return True
+            return _verify_with_timeout()
             
         except Exception as e:
             # 如果验证过程中发生任何错误，返回False

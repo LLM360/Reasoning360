@@ -1,6 +1,7 @@
 import reasoning_gym
 import json
 import re
+from verl.utils.py_functional import timeout_limit
 
 def compute_score(solution_str, ground_truth, extra_info=None, item=None):
     """
@@ -15,96 +16,107 @@ def compute_score(solution_str, ground_truth, extra_info=None, item=None):
     Returns:
         dict: {"score": float, "acc": float}
     """
-    task = None
-    entry = None
+    @timeout_limit(seconds=10)
+    def _compute_score_with_timeout():
+        task = None
+        entry = None
 
-    # 1. Parse extra_info
-    extra_info_dict = {}
-    metadata = None
-    
-    if extra_info:
-        if isinstance(extra_info, str):
-            try:
-                extra_info_dict = json.loads(extra_info)
-            except Exception:
-                extra_info_dict = {}
-        else:
-            extra_info_dict = extra_info
-
-        # Get task first
-        task = extra_info_dict.get("task")
-        entry = extra_info_dict.get("entry")
-
-        # Handle metadata field if present
-        if "metadata" in extra_info_dict:
-            if isinstance(extra_info_dict["metadata"], str):
+        # 1. Parse extra_info
+        extra_info_dict = {}
+        metadata = None
+        
+        if extra_info:
+            if isinstance(extra_info, str):
                 try:
-                    metadata = json.loads(extra_info_dict["metadata"])
+                    extra_info_dict = json.loads(extra_info)
                 except Exception:
-                    metadata = {}
-            elif isinstance(extra_info_dict["metadata"], dict):
-                metadata = extra_info_dict["metadata"]
+                    extra_info_dict = {}
+            else:
+                extra_info_dict = extra_info
 
-    # 2. Try to get from item (fallback - this is rarely used in actual training)
-    if not task and item and isinstance(item, dict):
-        task = item.get("ability")
+            # Get task first
+            task = extra_info_dict.get("task")
+            entry = extra_info_dict.get("entry")
 
-    # 3. Try to get from ground_truth
-    if not task and isinstance(ground_truth, dict):
-        task = ground_truth.get("task")
-        entry = ground_truth
+            # Handle metadata field if present
+            if "metadata" in extra_info_dict:
+                if isinstance(extra_info_dict["metadata"], str):
+                    try:
+                        metadata = json.loads(extra_info_dict["metadata"])
+                    except Exception:
+                        metadata = {}
+                elif isinstance(extra_info_dict["metadata"], dict):
+                    metadata = extra_info_dict["metadata"]
+                    
+        # 2. Try to get from item (fallback - this is rarely used in actual training)
+        if not task and item and isinstance(item, dict):
+            task = item.get("ability")
 
-    if not task:
-        raise ValueError("task must be provided in extra_info, item, or ground_truth dict.")
+        # 3. Try to get from ground_truth
+        if not task and isinstance(ground_truth, dict):
+            task = ground_truth.get("task")
+            entry = ground_truth
 
-    # 4. Get scoring function
-    scorer = reasoning_gym.get_score_answer_fn(task)
+        if not task:
+            raise ValueError("task must be provided in extra_info, item, or ground_truth dict.")
 
-    # 5. Get entry
-    if entry is None:
-        entry = {"answer": ground_truth}
+        # 4. Get scoring function
+        scorer = reasoning_gym.get_score_answer_fn(task)
 
-    # Build metadata field, prioritizing extra_info metadata
-    if isinstance(entry, dict):
-        if "metadata" not in entry or not isinstance(entry["metadata"], dict):
-            entry["metadata"] = {}
-        if metadata is not None:
-            entry["metadata"].update(metadata)
-        if task is not None:
-            entry["metadata"]["task"] = task
-        entry["metadata"]["solution_str"] = solution_str
-        entry["metadata"]["ground_truth"] = ground_truth
-        if extra_info is not None:
-            entry["metadata"]["extra_info"] = extra_info
-        if item is not None:
-            entry["metadata"]["item"] = item
+        # 5. Get entry
+        if entry is None:
+            entry = {"answer": ground_truth}
 
-    # 6. Extract clean answer from solution_str
-    clean_answer = extract_answer_from_solution(solution_str)
-    
-    # 7. Scoring with task-specific fixes
-    debug_log_path = "reasoning_gym_debug.log"
+        # Build metadata field, prioritizing extra_info metadata
+        if isinstance(entry, dict):
+            if "metadata" not in entry or not isinstance(entry["metadata"], dict):
+                entry["metadata"] = {}
+            if metadata is not None:
+                entry["metadata"].update(metadata)
+            if task is not None:
+                entry["metadata"]["task"] = task
+            entry["metadata"]["solution_str"] = solution_str
+            entry["metadata"]["ground_truth"] = ground_truth
+            if extra_info is not None:
+                entry["metadata"]["extra_info"] = extra_info
+            if item is not None:
+                entry["metadata"]["item"] = item
+
+        # 6. Extract clean answer from solution_str
+        clean_answer = extract_answer_from_solution(solution_str)
+        
+        # 7. Scoring with task-specific fixes
+        debug_log_path = "reasoning_gym_debug.log"
+        try:
+            with open(debug_log_path, "a", encoding="utf-8") as f:
+                f.write("[DEBUG] solution_str: {}\n".format(solution_str))
+                f.write("[DEBUG] clean_answer: {}\n".format(clean_answer))
+                f.write("[DEBUG] ground_truth: {}\n".format(ground_truth))
+                f.write("[DEBUG] task: {}\n".format(task))
+                f.write("[DEBUG] metadata: {}\n".format(json.dumps(entry.get("metadata", {}), ensure_ascii=False, indent=2)))
+                
+                # Get raw score from reasoning_gym using clean answer
+                raw_score = scorer(answer=clean_answer, entry=entry)
+                
+                # Apply task-specific corrections for known issues
+                corrected_score = apply_task_specific_corrections(task, solution_str, ground_truth, raw_score)
+                
+                f.write("[DEBUG] raw_score: {}\n".format(raw_score))
+                f.write("[DEBUG] corrected_score: {}\n".format(corrected_score))
+                
+            return {"score": float(corrected_score), "acc": float(corrected_score)}
+        except Exception as e:
+            with open(debug_log_path, "a", encoding="utf-8") as f:
+                f.write(f"Error in reasoning gym scoring: {e}\n")
+            return {"score": 0.0, "acc": 0.0}
+
     try:
-        with open(debug_log_path, "a", encoding="utf-8") as f:
-            f.write("[DEBUG] solution_str: {}\n".format(solution_str))
-            f.write("[DEBUG] clean_answer: {}\n".format(clean_answer))
-            f.write("[DEBUG] ground_truth: {}\n".format(ground_truth))
-            f.write("[DEBUG] task: {}\n".format(task))
-            f.write("[DEBUG] metadata: {}\n".format(json.dumps(entry.get("metadata", {}), ensure_ascii=False, indent=2)))
-            
-            # Get raw score from reasoning_gym using clean answer
-            raw_score = scorer(answer=clean_answer, entry=entry)
-            
-            # Apply task-specific corrections for known issues
-            corrected_score = apply_task_specific_corrections(task, solution_str, ground_truth, raw_score)
-            
-            f.write("[DEBUG] raw_score: {}\n".format(raw_score))
-            f.write("[DEBUG] corrected_score: {}\n".format(corrected_score))
-            
-        return {"score": float(corrected_score), "acc": float(corrected_score)}
+        return _compute_score_with_timeout()
+    except TimeoutError:
+        print("Computation timed out in reasoning_gym")
+        return {"score": 0.0, "acc": 0.0}
     except Exception as e:
-        with open(debug_log_path, "a", encoding="utf-8") as f:
-            f.write(f"Error in reasoning gym scoring: {e}\n")
+        print(f"Error in compute_score in reasoning_gym: {e}")
         return {"score": 0.0, "acc": 0.0}
 
 
