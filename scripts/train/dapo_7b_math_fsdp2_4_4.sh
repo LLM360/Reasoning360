@@ -57,14 +57,14 @@ dataset_names=(
     # "codegen__deduped_livecodebench_599.parquet"
     # "codegen__deduped_primeintellect_9.6k.parquet"
     # "codegen__deduped_taco_11.1k.parquet"
-    "ifbench__fixed_85.6k.parquet"
+    # "ifbench__fixed_85.6k.parquet"
     # "logic__arcagi1_297.parquet"
     # "logic__arcagi2_653.parquet"
     # "logic__barc_3.4k.parquet"
     # "logic__graph_logical_dataset_1.4k.parquet"
     # "logic__ordering_puzzle_dataset_2.9k.parquet"
     # "logic__reasoning_gym_40.6k.parquet"
-    # "logic__synlogic_12.1k.parquet"
+    "logic__synlogic_12.1k.parquet"
     # "logic__zebra_puzzle_dataset_5.0k.parquet"
     # "math__combined_118.2k.part1.parquet"
     # "math__combined_118.2k.part2.parquet"
@@ -233,6 +233,7 @@ CKPTS_DIR="ckpts/${project_name}/${exp_name}"
     data.truncation='left' \
     data.max_prompt_length=${max_prompt_length} \
     data.max_response_length=${max_response_length} \
+    data.filter_overlong_prompts=True \
     data.train_batch_size=${train_prompt_bsz} \
     data.gen_batch_size=${gen_prompt_bsz} \
     data.return_raw_chat=${return_raw_chat} \

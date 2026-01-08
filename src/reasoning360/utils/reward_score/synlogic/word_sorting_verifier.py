@@ -8,6 +8,9 @@ class WordSortingVerifier(Verifier):
     验证器用于单词排序游戏的答案是否正确
     """
     def str2list(self, answer_str):
+        # Handle None case
+        if answer_str is None:
+            return None
         # 替换中文逗号为英文逗号，并删除所有空格
         answer_str = answer_str.replace("，", ",").replace(" ", "")
         return [w.strip() for w in answer_str.split(",")]
@@ -17,7 +20,10 @@ class WordSortingVerifier(Verifier):
             @timeout_limit(seconds=10)
             def _verify_with_timeout():
                 ground_truth = self.str2list(data.answer)
-                parsed_answer = self.str2list(self.extract_answer(test_answer))
+                extracted = self.extract_answer(test_answer)
+                if extracted is None:
+                    return False
+                parsed_answer = self.str2list(extracted)
                 
                 if parsed_answer is None:
                     return False
