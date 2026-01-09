@@ -1,6 +1,7 @@
 from .data import Data
 from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
 import re
+from verl.utils.py_functional import timeout_limit
 
 class BuggyTableVerifier(Verifier):
     """
@@ -26,19 +27,26 @@ class BuggyTableVerifier(Verifier):
         @param test_answer: The answer provided by the LLM to verify
         @return: bool indicating whether the answer is correct
         """
-        # Extract the expected answer from the Data object
-        expected_answer = data.answer if data and hasattr(data, 'answer') else ""
-        
-        # For empty strings, compare directly
-        if not expected_answer and not test_answer:
-            return True
-            
-        # Extract and normalize both answers
-        normalized_expected = self._extract_answer(expected_answer)
-        normalized_test = self._extract_answer(test_answer)
-        
-        # Direct comparison of normalized answers
-        return normalized_expected == normalized_test
+        try:
+            @timeout_limit(seconds=10)
+            def _verify_with_timeout():
+                # Extract the expected answer from the Data object
+                expected_answer = data.answer if data and hasattr(data, 'answer') else ""
+                
+                # For empty strings, compare directly
+                if not expected_answer and not test_answer:
+                    return True
+                    
+                # Extract and normalize both answers
+                normalized_expected = self._extract_answer(expected_answer)
+                normalized_test = self._extract_answer(test_answer)
+                
+                # Direct comparison of normalized answers
+                return normalized_expected == normalized_test
+            return _verify_with_timeout()
+        except Exception as e:
+            # print(f"Verification error (BuggyTable): {e}")
+            return False
         
     def _is_raw_numeric_answer(self, value: str) -> bool:
         """

@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=grpo-stage2-k2pRL-7domains-VaradMix
+#SBATCH --job-name=grpo-stage2-k2pRL-easy50k-7domains
 #SBATCH --nodes=64
 #SBATCH --ntasks=64
 #SBATCH --ntasks-per-node=1
@@ -11,12 +11,12 @@
 #SBATCH --exclusive
 #SBATCH --time=720:00:00
 #SBATCH --partition=higherprio
-#SBATCH --exclude=azure-uk-hpc-H200-instance-[043-060,249,347-410]
+# commenting out... SBATCH --exclude=azure-uk-hpc-H200-instance-[043-060,249,347-410]
 
 # =================== Frequently Used Variables ===================
-RESUME_CKPT_DIR_NAME="grpo-stage2-k2pRL-7domains-VaradMix-415521"  # Fill in the checkpoint directory name to resume from, otherwise from scratch
+RESUME_CKPT_DIR_NAME="grpo-stage2-k2pRL-easy50k-7domains-415354"  # Fill in the checkpoint directory name to resume from, otherwise from scratch
 export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-004:8000" # Fill in the llm-as-judge hosted URL, currently used only in 'STEM' domain
-export MATH_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-286:8000" # Fill in the OmniMATH llm-as-judge hosted URL, only used to score OmniMATH dataset if not empty
+export MATH_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-284:8000" # Fill in the OmniMATH llm-as-judge hosted URL, only used to score OmniMATH dataset if not empty
 
 # =================== Cluster Environment ===================
 export CONDA_BIN_PATH=/lustrefs/users/taylor.killian/miniconda3/envs/sync-rl/bin/
@@ -84,8 +84,8 @@ dataset_names=(
     "table__hitab_7.4k.parquet"
     "table__multihier_2.9k.parquet"
 )
-#    # "simulation__codeio_fixed_12.1k.parquet"
-# "logic__arcagi1_297.parquet"
+#     "simulation__codeio_fixed_12.1k.parquet"
+#     "logic__arcagi1_297.parquet"
 #     "logic__arcagi2_653.parquet"
 #     "logic__barc_3.4k.parquet"
 #     "logic__graph_logical_dataset_1.4k.parquet"
@@ -166,7 +166,7 @@ if_bench_test_path=${TEST_DATA_DIR}/ifbench_800.parquet
 # test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${humaneval_test_path}','${mbpp_test_path}','${livecodebench_test_path}','${nemotron_test_path}','${gpqa_diamond_test_path}','${supergpqa_test_path}']"
 
 # Full data mixture (uncomment to use)
-test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${humaneval_test_path}','${mbpp_test_path}','${livecodebench_test_path}','${zebralogic_test_path}','${synlogic_test_path}','${reasoninggym_test_path}','${arcagi1_test_path}','${multihier_test_path}','${hitab_test_path}','${nemotron_test_path}','${gpqa_diamond_test_path}','${supergpqa_test_path}','${if_test_path}','${if_bench_test_path}']" # ,'${iq400_path}'
+test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${humaneval_test_path}','${mbpp_test_path}','${livecodebench_test_path}','${zebralogic_test_path}','${reasoninggym_test_path}','${arcagi1_test_path}','${multihier_test_path}','${hitab_test_path}','${nemotron_test_path}','${gpqa_diamond_test_path}','${supergpqa_test_path}','${if_test_path}','${if_bench_test_path}']" # ,'${iq400_path}', '${synlogic_test_path}',
 
 
 # =================== Model ===================

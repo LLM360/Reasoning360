@@ -1,6 +1,7 @@
 from .data import Data
 from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
 import re
+from verl.utils.py_functional import timeout_limit
 
   
 class DyckLanguageErrorsVerifier(Verifier):
@@ -16,39 +17,42 @@ class DyckLanguageErrorsVerifier(Verifier):
         @return: 回答是否正确的布尔值
         """
         try:
-            test_answer = self.extract_answer(test_solution=test_answer)
-            # 获取正确答案
-            if data.metadata["is_valid"]:
-                correct_answer = "-1"  # 合法序列对应-1
-            else:
-                correct_answer = str(data.metadata["first_error_pos"])
-            
-            # print(f"验证: 模型答案='{test_answer}', 正确答案='{correct_answer}'")
-            
-            # 清理和标准化答案
-            test_answer = test_answer.strip()
-            
-            # 检查-1答案（合法序列）
-            if correct_answer == "-1":
-                # 如果正确答案是-1（合法序列），只接受-1作为回答
-                if test_answer == "-1":
-                    is_correct = True
+            @timeout_limit(seconds=10)
+            def _verify_with_timeout():
+                test_answer_extracted = self.extract_answer(test_solution=test_answer)
+                # 获取正确答案
+                if data.metadata["is_valid"]:
+                    correct_answer = "-1"  # 合法序列对应-1
                 else:
-                    is_correct = False
-            else:
-                # 正确答案是位置数字，需要验证模型回答也是相同数字
-                try:
-                    is_correct = (int(test_answer) == int(correct_answer))
-                except (ValueError, TypeError):
-                    # 如果模型回答不是有效数字，验证失败
-                    is_correct = False
-            
-            # if is_correct:
-            #     print("验证结果: 正确")
-            # else:
-            #     print("验证结果: 错误")
+                    correct_answer = str(data.metadata["first_error_pos"])
                 
-            return is_correct
+                # print(f"验证: 模型答案='{test_answer}', 正确答案='{correct_answer}'")
+                
+                # 清理和标准化答案
+                test_answer_clean = test_answer_extracted.strip()
+                
+                # 检查-1答案（合法序列）
+                if correct_answer == "-1":
+                    # 如果正确答案是-1（合法序列），只接受-1作为回答
+                    if test_answer_clean == "-1":
+                        is_correct = True
+                    else:
+                        is_correct = False
+                else:
+                    # 正确答案是位置数字，需要验证模型回答也是相同数字
+                    try:
+                        is_correct = (int(test_answer_clean) == int(correct_answer))
+                    except (ValueError, TypeError):
+                        # 如果模型回答不是有效数字，验证失败
+                        is_correct = False
+                
+                # if is_correct:
+                #     print("验证结果: 正确")
+                # else:
+                #     print("验证结果: 错误")
+                    
+                return is_correct
+            return _verify_with_timeout()
             
         except Exception as e:
             print(f"Verification error (DyckLanguageErrors): {e}")

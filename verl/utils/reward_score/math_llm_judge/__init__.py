@@ -36,6 +36,7 @@ Final Grade: CORRECT or INCORRECT
 """
 
 import re
+import os
 import math
 
 import sympy

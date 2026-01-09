@@ -2,6 +2,7 @@ import ast
 import json
 
 import numpy as np
+from verl.utils.py_functional import timeout_limit
 
 from .instructions_registry import INSTRUCTION_DICT
 
@@ -18,50 +19,61 @@ def compute_score(solution_str, ground_truth, extra_info=None):
     Returns:
         dict: {"score": float, "acc": bool}
     """
-    # Strip off any thinking section
-    if "</think>" in solution_str:
-        answer = solution_str.split("</think>", 1)[1].strip()
-    else:
-        answer = solution_str.strip()
+    @timeout_limit(seconds=30)
+    def _compute_score_with_timeout():
+        # Strip off any thinking section
+        if "</think>" in solution_str:
+            answer = solution_str.split("</think>", 1)[1].strip()
+        else:
+            answer = solution_str.strip()
 
-    # Parse ground_truth if it's a string
-    if isinstance(ground_truth, str):
-        try:
-            gt_list = ast.literal_eval(ground_truth)
-        except Exception:
-            gt_list = json.loads(ground_truth)
-    else:
-        gt_list = ground_truth
+        # Parse ground_truth if it's a string
+        if isinstance(ground_truth, str):
+            try:
+                gt_list = ast.literal_eval(ground_truth)
+            except Exception:
+                gt_list = json.loads(ground_truth)
+        else:
+            gt_list = ground_truth
 
-    # Take the first set of constraints
-    if not isinstance(gt_list, list) or not gt_list:
+        # Take the first set of constraints
+        if not isinstance(gt_list, list) or not gt_list:
+            return {"score": 0.0, "acc": False}
+        first_item = gt_list[0]
+        instruction_ids = first_item.get("instruction_id", [])
+        kwargs_list = first_item.get("kwargs", [])
+
+        # Evaluate each instruction
+        results = []
+        for instr_id, raw_args in zip(instruction_ids, kwargs_list):
+            # Prepare args dict
+            args = {} if raw_args is None else raw_args
+            # Convert numpy and floats
+            clean_args = {}
+            for key, val in args.items():
+                if isinstance(val, float):
+                    clean_args[key] = int(val)
+                elif isinstance(val, np.ndarray):
+                    clean_args[key] = val.tolist()
+                else:
+                    clean_args[key] = val
+
+            # Build and check instruction
+            instr_cls = INSTRUCTION_DICT[instr_id]
+            instr = instr_cls(instr_id)
+            instr.build_description(**clean_args)
+            passed = bool(answer and instr.check_following(answer))
+            results.append(passed)
+
+        # Return 1.0 if all constraints are satisfied, 0.0 otherwise
+        score = 1.0 if all(results) else 0.0
+        return {"score": score, "acc": score == 1.0}
+
+    try:
+        return _compute_score_with_timeout()
+    except TimeoutError:
+        print("Computation timed out in ifbench")
         return {"score": 0.0, "acc": False}
-    first_item = gt_list[0]
-    instruction_ids = first_item.get("instruction_id", [])
-    kwargs_list = first_item.get("kwargs", [])
-
-    # Evaluate each instruction
-    results = []
-    for instr_id, raw_args in zip(instruction_ids, kwargs_list):
-        # Prepare args dict
-        args = {} if raw_args is None else raw_args
-        # Convert numpy and floats
-        clean_args = {}
-        for key, val in args.items():
-            if isinstance(val, float):
-                clean_args[key] = int(val)
-            elif isinstance(val, np.ndarray):
-                clean_args[key] = val.tolist()
-            else:
-                clean_args[key] = val
-
-        # Build and check instruction
-        instr_cls = INSTRUCTION_DICT[instr_id]
-        instr = instr_cls(instr_id)
-        instr.build_description(**clean_args)
-        passed = bool(answer and instr.check_following(answer))
-        results.append(passed)
-
-    # Return 1.0 if all constraints are satisfied, 0.0 otherwise
-    score = 1.0 if all(results) else 0.0
-    return {"score": score, "acc": score == 1.0}
+    except Exception as e:
+        print(f"Error in compute_score in ifbench: {e}")
+        return {"score": 0.0, "acc": False}

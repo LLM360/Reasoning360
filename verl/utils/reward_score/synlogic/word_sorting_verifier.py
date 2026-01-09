@@ -1,6 +1,7 @@
 import re
 from .data import Data
 from .verifier import Verifier
+from verl.utils.py_functional import timeout_limit
 
 class WordSortingVerifier(Verifier):
     """
@@ -13,12 +14,15 @@ class WordSortingVerifier(Verifier):
 
     def verify(self, data: Data, test_answer: str):
         try:
-            ground_truth = self.str2list(data.answer)
-            parsed_answer = self.str2list(self.extract_answer(test_answer))
-            
-            if parsed_answer is None:
-                return False
-            return parsed_answer == ground_truth
+            @timeout_limit(seconds=10)
+            def _verify_with_timeout():
+                ground_truth = self.str2list(data.answer)
+                parsed_answer = self.str2list(self.extract_answer(test_answer))
+                
+                if parsed_answer is None:
+                    return False
+                return parsed_answer == ground_truth
+            return _verify_with_timeout()
 
         except Exception as e:
             print(f"NOTE!!! parse error!!!! (WordSorting): {e}")
