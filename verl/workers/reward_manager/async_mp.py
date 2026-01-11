@@ -149,6 +149,7 @@ class AsyncMultiProcessRewardManager:
         overlong_buffer_cfg=None,
         batch_size=2048,
         shuffle_batch=True,
+        num_processes=32,
         **kwargs,
     ) -> None:
         self.tokenizer = tokenizer
@@ -159,7 +160,7 @@ class AsyncMultiProcessRewardManager:
         self.max_resp_len = max_resp_len
         self.batch_size = batch_size
         self.shuffle_batch = shuffle_batch
-
+        self.num_processes = num_processes
         if self.overlong_buffer_cfg is not None:
             assert self.max_resp_len is not None, (
                 f"max_resp_len must be provided if {overlong_buffer_cfg=}, but got None"
@@ -264,7 +265,7 @@ class AsyncMultiProcessRewardManager:
                     solutions,
                     ground_truths,
                     extra_infos,
-                    num_processes=64,
+                    num_processes=self.num_processes,
                     batch_size=self.batch_size,
                     shuffle=self.shuffle_batch,
                 )

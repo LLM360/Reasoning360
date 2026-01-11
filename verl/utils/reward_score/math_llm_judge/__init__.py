@@ -40,13 +40,16 @@ import os
 import math
 
 import sympy
-from pylatexenc import latex2text
+# from pylatexenc import latex2text
 from sympy.parsing import sympy_parser
 import requests
 from verl.utils.py_functional import timeout_limit
 
 from . import math_normalize
 from .grader import math_equal
+
+import requests
+from verl.utils.py_functional import timeout_limit
 
 # import math_normalize
 # from grader import math_equal
@@ -55,8 +58,6 @@ from .grader import math_equal
 BAD_SUBSTRINGS = ["^{", "^("]
 BAD_REGEXES = ["\^[0-9]+\^", "\^[0-9][0-9]+"]
 TUPLE_CHARS = "()[]"
-
-
 
 
 def _sympy_parse(expr: str):
@@ -73,7 +74,7 @@ def _parse_latex(expr: str) -> str:
     expr = expr.replace("\\tfrac", "\\frac")
     expr = expr.replace("\\dfrac", "\\frac")
     expr = expr.replace("\\frac", " \\frac")  # Play nice with mixed numbers.
-    expr = latex2text.LatexNodes2Text().latex_to_text(expr)
+    # expr = latex2text.LatexNodes2Text().latex_to_text(expr)
 
     # Replace the specific characters that this parser uses.
     expr = expr.replace("√", "sqrt")
@@ -377,6 +378,7 @@ def llm_check_answer(model_output: str, ground_truth: str, question: str) -> boo
     # use llm to check if the answer is correct
 
     # url = "http://176.56.200.81:30000/v1/chat/completions"
+    import os
     url_base = os.getenv("MATH_LLM_JUDGE_URL")
     if not url_base:
         raise ValueError("MATH_LLM_JUDGE_URL is not set")
