@@ -11,10 +11,10 @@ class OperationVerifier(Verifier):
     """
     def verify(self, data: Data, test_answer: str):
         try:
-            @timeout_limit(seconds=20)
+            @timeout_limit(seconds=25)
             def _verify_with_timeout():
-                ground_truth = math_verify.parse(data.answer, parsing_timeout=None)
-                parsed_answer = math_verify.parse(test_answer, parsing_timeout=None)
+                ground_truth = math_verify.parse(data.answer, parsing_timeout=10)
+                parsed_answer = math_verify.parse(test_answer, parsing_timeout=10)
                 
                 if parsed_answer is None:
                     return False
