@@ -1,0 +1,45 @@
+# Copyright 2024 PRIME team and/or its affiliates
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from verl.workers.reward_manager.registry import get_reward_manager_cls, register  # noqa: I001
+from verl.workers.reward_manager.batch import BatchRewardManager
+from verl.workers.reward_manager.naive import NaiveRewardManager
+from verl.workers.reward_manager.prime import PrimeRewardManager
+# NOTE: added by Reasoning360.
+from .dapo import DAPORewardManager
+from .llm_judge import LLMJudgeRewardManager
+from .naive_parallel import NaiveParallelRewardManager
+from .async_mp import AsyncMultiProcessRewardManager
+
+# Note(haibin.lin): no need to include all reward managers here in case of complicated dependencies
+__all__ = [
+    "BatchRewardManager",
+    "NaiveRewardManager",
+    "PrimeRewardManager",
+    # NOTE: added by Reasoning360.
+    "DAPORewardManager",
+    "LLMJudgeRewardManager",
+    "NaiveParallelRewardManager",
+    "AsyncMultiProcessRewardManager",
+    "register",
+    "get_reward_manager_cls",
+]
+
+# Import experimental reward managers to ensure they are registered
+try:
+    from verl.experimental.reward.reward_loop.limited import RateLimitedRewardLoopManager  # noqa: F401
+
+    __all__.append("RateLimitedRewardLoopManager")
+except ImportError:
+    pass  # Optional dependency, may not be available

@@ -1,0 +1,46 @@
+import re
+from .data import Data
+from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
+from verl.utils.py_functional import timeout_limit
+
+
+class ObjectPropertiesVerifier(Verifier):
+    """
+    验证器用于物品拥有游戏的答案是否正确
+    """
+    def verify(self, data: Data, test_answer: str):
+        try:
+            @timeout_limit(seconds=10)
+            def _verify_with_timeout():
+                ground_truth = int(data.answer)
+                parsed_answer_str = self.extract_answer(test_answer)
+                
+                if parsed_answer_str is None:
+                    return False
+                
+                parsed_answer = int(parsed_answer_str)
+                return int(parsed_answer) == ground_truth
+            return _verify_with_timeout()
+
+        except Exception as e:
+            print(f"NOTE!!! parse error!!!! (ObjectProperties): {e}")
+            return False
+    
+    def extract_answer(self, answer_str):
+        # 先找到最后一个\Box{的位置
+        last_box_index = answer_str.rfind("\\boxed{")
+        
+        if last_box_index == -1:
+            return None
+            
+        # 从最后一个\Box{开始截取字符串
+        last_box_substring = answer_str[last_box_index:]
+        
+        # 在截取的子字符串中进行正则匹配
+        box_pattern = r'\\boxed\{([^}]*)\}'
+        match = re.search(box_pattern, last_box_substring)
+        
+        if match:
+            return match.group(1).strip()
+        return None
+        
