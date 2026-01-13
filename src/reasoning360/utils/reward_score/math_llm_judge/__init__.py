@@ -376,6 +376,7 @@ def llm_check_answer(model_output: str, ground_truth: str, question: str) -> boo
     # use llm to check if the answer is correct
 
     # url = "http://176.56.200.81:30000/v1/chat/completions"
+    import os
     url_base = os.getenv("MATH_LLM_JUDGE_URL")
     if not url_base:
         raise ValueError("MATH_LLM_JUDGE_URL is not set")
