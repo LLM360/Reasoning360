@@ -4,8 +4,6 @@ import ast
 import operator
 import json
 
-from verl.utils.py_functional import timeout_limit
-
 def extract_solution(solution_str):
     
     answer_pattern = r'<answer>(.*?)</answer>'
@@ -53,7 +51,6 @@ def compute_accuracy(answer, ground_truth):
     return accuracy
 
 def compute_score(solution_str, ground_truth, extra_info: any = None, method='strict', timeout: float = 10.0):
-    @timeout_limit(seconds=timeout)
     def _compute_with_timeout():
         predicted_arrangement = extract_solution(solution_str)
 
@@ -68,9 +65,6 @@ def compute_score(solution_str, ground_truth, extra_info: any = None, method='st
     
     try:
         score = _compute_with_timeout()
-    except TimeoutError:
-        print("Computation timed out in zebra_puzzle")
-        score = 0.0
     except Exception as e:
         print(f"Error in compute_score in zebra_puzzle: {e}")
         score = 0.0

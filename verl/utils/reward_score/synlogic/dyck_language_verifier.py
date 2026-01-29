@@ -1,7 +1,6 @@
 from .data import Data
 from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
 import re
-from verl.utils.py_functional import timeout_limit
 
 
 class DyckLanguageVerifier(Verifier):
@@ -17,7 +16,6 @@ class DyckLanguageVerifier(Verifier):
         @return: 回答是否正确的布尔值
         """
         try:
-            @timeout_limit(seconds=10)
             def _verify_with_timeout():
                 # 获取元数据中的完整序列
                 full_sequence = data.metadata["full_sequence"]

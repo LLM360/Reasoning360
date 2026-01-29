@@ -1,7 +1,6 @@
 import re
 from .data import Data
 from .verifier import Verifier
-from verl.utils.py_functional import timeout_limit
 
 class WordSortingMistakeVerifier(Verifier):
     """
@@ -9,7 +8,6 @@ class WordSortingMistakeVerifier(Verifier):
     """
     def verify(self, data: Data, test_answer: str):
         try:
-            @timeout_limit(seconds=10)
             def _verify_with_timeout():
                 ground_truth = data.answer if data.answer is not None else "No"
                 parsed_answer = self.extract_answer(test_answer)

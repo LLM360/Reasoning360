@@ -24,7 +24,6 @@ from verl.utils.py_functional import timeout_limit
 
 from .prime_math import math_normalize
 from .prime_math.grader import math_equal
-from verl.utils.py_functional import timeout_limit
 
 
 # Constants for normalization

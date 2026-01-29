@@ -1,7 +1,6 @@
 import re
 from .data import Data
 from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
-from verl.utils.py_functional import timeout_limit
 
 class WebOfLiesVerifier(Verifier):
     """
@@ -16,7 +15,6 @@ class WebOfLiesVerifier(Verifier):
         @return: 回答是否正确的布尔值
         """
         try:
-            @timeout_limit(seconds=10)
             def _verify_with_timeout():
                 test_answer = self.extract_answer(test_solution)
                 # 获取预期答案和测试答案

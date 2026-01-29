@@ -3,8 +3,6 @@ import random
 import ast
 import operator
 
-from verl.utils.py_functional import timeout_limit
-
 def extract_solution(solution_str):
 
     # Find the answer tag content
@@ -77,7 +75,6 @@ def compute_score(solution_str, ground_truth, extra_info: any = None, method='st
         method: the method to extract the solution
         timeout: maximum time in seconds to allow for computation
     """
-    @timeout_limit(seconds=timeout)
     def _compute_with_timeout():
         target = ground_truth.tolist() if not isinstance(ground_truth,list) else ground_truth
         predicted_arrangement = extract_solution(solution_str=solution_str)
@@ -103,9 +100,6 @@ def compute_score(solution_str, ground_truth, extra_info: any = None, method='st
     score = 0.0
     try:
         score = _compute_with_timeout()
-    except TimeoutError:
-        print("Computation timed out in puzzles_dataset")
-        score = 0.0
     except Exception as e:
         print(f"Error in compute_score in puzzles_dataset: {e}")
         score = 0.0

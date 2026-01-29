@@ -1,7 +1,6 @@
 import re
 from .data import Data
 from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
-from verl.utils.py_functional import timeout_limit
 
 
 class ObjectCountingVerifier(Verifier):
@@ -10,7 +9,6 @@ class ObjectCountingVerifier(Verifier):
     """
     def verify(self, data: Data, test_answer: str):
         try:
-            @timeout_limit(seconds=10)
             def _verify_with_timeout():
                 ground_truth = int(data.answer)
                 parsed_answer = self.extract_answer(test_answer)

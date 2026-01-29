@@ -2,7 +2,6 @@ from .data import Data
 from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
 import re
 from collections import defaultdict
-from verl.utils.py_functional import timeout_limit
 
 class NorinoriVerifier(Verifier):
     """
@@ -25,7 +24,6 @@ class NorinoriVerifier(Verifier):
         bool -- 答案是否正确
         """
         try:
-            @timeout_limit(seconds=10)
             def _verify_with_timeout():
                 # 从游戏数据中获取区域网格
                 region_grid = data.metadata["region_grid"]

@@ -2,7 +2,6 @@ import ast
 import json
 
 import numpy as np
-from verl.utils.py_functional import timeout_limit
 
 from .instructions_registry import INSTRUCTION_DICT
 
@@ -19,8 +18,8 @@ def compute_score(solution_str, ground_truth, extra_info=None):
     Returns:
         dict: {"score": float, "acc": bool}
     """
-    @timeout_limit(seconds=30)
-    def _compute_score_with_timeout():
+
+    try:
         # Strip off any thinking section
         if "</think>" in solution_str:
             answer = solution_str.split("</think>", 1)[1].strip()
@@ -68,12 +67,6 @@ def compute_score(solution_str, ground_truth, extra_info=None):
         # Return 1.0 if all constraints are satisfied, 0.0 otherwise
         score = 1.0 if all(results) else 0.0
         return {"score": score, "acc": score == 1.0}
-
-    try:
-        return _compute_score_with_timeout()
-    except TimeoutError:
-        print("Computation timed out in ifbench")
-        return {"score": 0.0, "acc": False}
     except Exception as e:
         print(f"Error in compute_score in ifbench: {e}")
         return {"score": 0.0, "acc": False}

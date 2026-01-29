@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import asyncio
+import gc
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
@@ -115,6 +116,9 @@ async def parallel_compute_score_async(
                 for i, result in enumerate(batch_results):
                     actual_idx = start_idx + i
                     results[actual_idx] = result
+
+                # Force garbage collection after each batch to prevent memory accumulation
+                gc.collect()
 
             except Exception:
                 for pid, proc in executor._processes.items():
@@ -328,6 +332,41 @@ class AsyncMultiProcessRewardManager:
         # print(f"[DEBUG] Final reward_tensor shape: {reward_tensor.shape}")
         # print(f"[DEBUG] Non-zero elements in reward_tensor: {(reward_tensor != 0).sum().item()}")
         # print(f"[DEBUG] Unique data sources processed: {list(already_print_data_sources.keys())}")
+
+        # Aggregate and print timing statistics by reward type
+        timing_by_type = defaultdict(lambda: {"count": 0, "total": 0.0, "max": 0.0})
+        for key_list in reward_extra_info.get("_reward_time", []), reward_extra_info.get("_data_source", []):
+            pass  # Just to check if keys exist
+
+        if "_reward_time" in reward_extra_info and "_data_source" in reward_extra_info:
+            for reward_time, ds in zip(
+                reward_extra_info["_reward_time"], reward_extra_info["_data_source"], strict=False
+            ):
+                # Extract prefix (e.g., "codegen" from "codegen__deduped_leetcode2k")
+                if "__" in ds:
+                    prefix = ds.split("__")[0]
+                elif "_" in ds:
+                    prefix = ds.split("_")[0]
+                else:
+                    prefix = ds
+                timing_by_type[prefix]["count"] += 1
+                timing_by_type[prefix]["total"] += reward_time
+                timing_by_type[prefix]["max"] = max(timing_by_type[prefix]["max"], reward_time)
+
+            # Print timing summary sorted by total time (descending)
+            print("\n=== REWARD TIMING BY TYPE ===")
+            for rtype, stats in sorted(timing_by_type.items(), key=lambda x: -x[1]["total"]):
+                avg = stats["total"] / max(stats["count"], 1)
+                print(
+                    f"  {rtype:20s}: {stats['count']:5d} samples, "
+                    f"avg={avg*1000:8.2f}ms, max={stats['max']*1000:8.2f}ms, total={stats['total']:8.2f}s"
+                )
+            print("=" * 50 + "\n")
+
+        # Remove timing metadata keys before returning - they have inconsistent lengths
+        # when samples timeout/fail and would cause IndexError in batch reordering
+        reward_extra_info.pop("_reward_time", None)
+        reward_extra_info.pop("_data_source", None)
 
         if return_dict:
             return {

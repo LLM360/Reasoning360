@@ -2,7 +2,6 @@ import re
 from .data import Data
 from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
 import math_verify 
-from verl.utils.py_functional import timeout_limit
 
 
 class OperationVerifier(Verifier):
@@ -11,7 +10,6 @@ class OperationVerifier(Verifier):
     """
     def verify(self, data: Data, test_answer: str):
         try:
-            @timeout_limit(seconds=25)
             def _verify_with_timeout():
                 ground_truth = math_verify.parse(data.answer, parsing_timeout=10)
                 parsed_answer = math_verify.parse(test_answer, parsing_timeout=10)

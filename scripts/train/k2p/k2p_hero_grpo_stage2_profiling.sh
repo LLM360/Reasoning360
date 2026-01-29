@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=grpo-stage2-k2pRL-easy50k-7domains
+#SBATCH --job-name=grpo-stage2-k2pRL-dataMix2-profiling
 #SBATCH --nodes=64
 #SBATCH --ntasks=64
 #SBATCH --ntasks-per-node=1
@@ -11,22 +11,24 @@
 #SBATCH --exclusive
 #SBATCH --time=720:00:00
 #SBATCH --partition=higherprio
+#SBATCH --exclude=azure-uk-hpc-H200-instance-337 
 
 # commenting out... SBATCH --exclude=azure-uk-hpc-H200-instance-[043-060,249,347-410]
 # job name: grpo-stage2-k2pRL-easy50k-7domains
 # job name: grpo-k2p-newFiltered-64k-fullData-finalInstruct
 
 # =================== Frequently Used Variables ===================
-RESUME_CKPT_DIR_NAME="grpo-stage2-k2pRL-easy50k-7domains-415354"  # Fill in the checkpoint directory name to resume from, otherwise from scratch
+RESUME_CKPT_DIR_NAME=""  # Fill in the checkpoint directory name to resume from, otherwise from scratch
 # export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-004:8000" # Fill in the llm-as-judge hosted URL, currently used only in 'STEM' domain
 # export MATH_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-284:8000" # Fill in the OmniMATH llm-as-judge hosted URL, only used to score OmniMATH dataset if not empty
-export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-227:8000" # Fill in the llm-as-judge hosted URL, currently used only in 'STEM' domain
-export MATH_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-291:8000" # Fill in the OmniMATH llm-as-judge hosted URL, only used to score OmniMATH dataset if not empty
+export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-036:8000" # Fill in the llm-as-judge hosted URL, currently used only in 'STEM' domain
+export MATH_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-058:8000" # Fill in the OmniMATH llm-as-judge hosted URL, only used to score OmniMATH dataset if not empty
 
 # =================== Cluster Environment ===================
-export CONDA_BIN_PATH=/lustrefs/users/taylor.killian/miniconda3/envs/sync-rl/bin/
+export CONDA_BIN_PATH=/lustrefs/users/varad.pimpalkhute/anaconda3/envs/sync-rl-v5/bin/
 export ROCR_VISIBLE_DEVICES=None
 export NCCL_TIMEOUT_SECONDS=4800000
+export RAY_memory_usage_threshold=0.95  # Increase Ray memory threshold before killing workers
 export OMPI_MCA_coll_hcoll_enable=0 \
 TORCH_NCCL_ENABLE_MONITORING=0 \
 CUDA_DEVICE_ORDER=PCI_BUS_ID \
@@ -67,7 +69,7 @@ export VLLM_USE_V1=1
 # =================== Data Mixture ===================
 
 # Training Data Configuration
-DATA_MIX_DIR="/lustrefs/users/varad.pimpalkhute/data/k2/final/data_mix_1"
+DATA_MIX_DIR="/lustrefs/users/varad.pimpalkhute/data/k2/final/data_mix_2"
 train_file_list=()
 id_val_file_list=()
 
@@ -103,7 +105,7 @@ echo "Collecting training files from ${DATA_MIX_DIR}..."
 
 # Search for each dataset in all subdirectories "impossible_questions" "131k_context_questions" "main_questions" "easy_questions"
 for dataset in "${dataset_names[@]}"; do
-    for subdir in "main_questions"; do
+    for subdir in "main_questions" "131k_context_questions" "impossible_questions"; do
         file_path="${DATA_MIX_DIR}/${subdir}/${dataset}"
         if [ -f "$file_path" ]; then
             echo "Adding: $file_path"
@@ -257,9 +259,9 @@ top_p=1.0
 top_k=-1 # 0 for HF rollout, -1 for vLLM rollout
 
 # Training config
-sp_size=16  # Reduced from 32 to reduce memory pressure
+sp_size=16  # Disable sequence parallelism
 gen_tp=4
-gen_max_num_seqs=1024  # Reduced from 1024 to reduce memory pressure
+gen_max_num_seqs=256  # REDUCED from 1024 to fix OOM with long sequences
 infer_micro_batch_size=null
 train_micro_batch_size=null
 use_dynamic_bsz=True
@@ -295,7 +297,7 @@ offload=True
     actor_rollout_ref.actor.use_dynamic_bsz=${use_dynamic_bsz} \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=${actor_ppo_max_token_len} \
     actor_rollout_ref.actor.strategy="fsdp2" \
-    actor_rollout_ref.actor.optim.lr= 5e-7 \
+    actor_rollout_ref.actor.optim.lr=5e-7 \
     actor_rollout_ref.actor.optim.lr_warmup_steps=10 \
     actor_rollout_ref.actor.optim.weight_decay=0.1 \
     actor_rollout_ref.actor.optim.warmup_style=constant \
@@ -328,8 +330,8 @@ offload=True
     actor_rollout_ref.rollout.max_num_batched_tokens=${infer_ppo_max_token_len} \
     actor_rollout_ref.rollout.max_num_seqs=${gen_max_num_seqs} \
     actor_rollout_ref.rollout.disable_log_stats=False \
-    actor_rollout_ref.rollout.enforce_eager=False \
-    actor_rollout_ref.rollout.enable_prefix_caching=True \
+    actor_rollout_ref.rollout.enforce_eager=True \
+    actor_rollout_ref.rollout.enable_prefix_caching=False \
     actor_rollout_ref.rollout.temperature=${temperature} \
     actor_rollout_ref.rollout.top_p=${top_p} \
     actor_rollout_ref.rollout.top_k=${top_k} \
@@ -352,7 +354,7 @@ offload=True
     reward_model.overlong_buffer.enable=${enable_overlong_buffer} \
     reward_model.overlong_buffer.len=${overlong_buffer_len} \
     reward_model.overlong_buffer.penalty_factor=${overlong_penalty_factor} \
-    +reward_model.reward_kwargs.num_processes=64 \
+    +reward_model.reward_kwargs.num_processes=48 \
     trainer.logger=['console','wandb'] \
     trainer.project_name=${WANDB_PROJECT} \
     trainer.experiment_name=${WANDB_EXPERIMENT_NAME} \
@@ -363,5 +365,13 @@ offload=True
     trainer.test_freq=5 \
     trainer.total_epochs=5 \
     trainer.resume_mode=auto \
-    trainer.max_actor_ckpt_to_keep=3
+    trainer.max_actor_ckpt_to_keep=3 \
+    global_profiler.tool=torch \
+    global_profiler.steps=[1,2,3,4,5,6,7,8,9] \
+    actor_rollout_ref.actor.profiler.enable=True \
+    actor_rollout_ref.actor.profiler.all_ranks=True \
+    actor_rollout_ref.rollout.profiler.enable=True \
+    actor_rollout_ref.rollout.profiler.all_ranks=True
+
+
     # trainer.log_val_generations=50 

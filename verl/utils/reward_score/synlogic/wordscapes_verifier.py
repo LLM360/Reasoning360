@@ -5,7 +5,6 @@ Wordscapes verifier module for the reasonreason framework.
 import json
 import re
 from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
-from verl.utils.py_functional import timeout_limit
 
 debug_mode = False
 
@@ -28,7 +27,6 @@ class WordscapesVerifier(Verifier):
         """
         try:
 
-            @timeout_limit(seconds=10)
             def _verify_with_timeout():
                 extracted_answer = self.extract_answer(test_solution)
                 if not extracted_answer:

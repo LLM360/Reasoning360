@@ -2,7 +2,6 @@ import re
 from .data import Data
 from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
 import math_verify 
-from verl.utils.py_functional import timeout_limit
 
 
 class SpaceReasoningVerifier(Verifier):
@@ -11,7 +10,6 @@ class SpaceReasoningVerifier(Verifier):
     """
     def verify(self, data: Data, test_answer: str):
         try:
-            @timeout_limit(seconds=10)
             def _verify_with_timeout():
                 test_answer_extracted = self.extract_answer(test_answer)
                 if test_answer_extracted is None:

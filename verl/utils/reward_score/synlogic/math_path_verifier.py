@@ -3,7 +3,6 @@ import json
 import numpy as np
 from .data import Data
 from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
-from verl.utils.py_functional import timeout_limit
 
 
 class MathPathVerifier(Verifier):
@@ -19,7 +18,6 @@ class MathPathVerifier(Verifier):
         @return: 回答是否正确的布尔值
         """
         try:
-            @timeout_limit(seconds=10)
             def _verify_with_timeout():
                 try:
                     test_answer_extracted = self.extract_answer(test_solution=test_answer)

@@ -3,7 +3,6 @@ from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
 import re
 import json
 import ast
-from verl.utils.py_functional import timeout_limit
 
     
 class SkyscraperPuzzleVerifier(Verifier):
@@ -19,7 +18,6 @@ class SkyscraperPuzzleVerifier(Verifier):
         @return: 回答是否正确的布尔值
         """
         try:
-            @timeout_limit(seconds=10)
             def _verify_with_timeout():
                 # 获取游戏元数据
                 metadata = data.metadata

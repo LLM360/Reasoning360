@@ -48,9 +48,6 @@ from verl.utils.py_functional import timeout_limit
 from . import math_normalize
 from .grader import math_equal
 
-import requests
-from verl.utils.py_functional import timeout_limit
-
 # import math_normalize
 # from grader import math_equal
 
@@ -376,16 +373,27 @@ def match_answer(response):
 
 def llm_check_answer(model_output: str, ground_truth: str, question: str) -> bool:
     # use llm to check if the answer is correct
+    # Supports multiple endpoints for load balancing - separate URLs with commas
+    # e.g., MATH_LLM_JUDGE_URL="http://host1:8000,http://host2:8000,http://host3:8000"
 
-    # url = "http://176.56.200.81:30000/v1/chat/completions"
     import os
-    url_base = os.getenv("MATH_LLM_JUDGE_URL")
-    if not url_base:
+    import random
+
+    url_base_str = os.getenv("MATH_LLM_JUDGE_URL")
+    if not url_base_str:
         raise ValueError("MATH_LLM_JUDGE_URL is not set")
+
+    # Support multiple endpoints separated by commas
+    endpoints = [url.strip() for url in url_base_str.split(",") if url.strip()]
+    if not endpoints:
+        raise ValueError("MATH_LLM_JUDGE_URL contains no valid endpoints")
+
+    # Randomly select an endpoint for load balancing
+    url_base = random.choice(endpoints)
     url = url_base.rstrip("/") + "/v1/chat/completions"
-    
+
     prompt = input_template.format(QUESTION=question, STUDENT_ANSWER=model_output, REFERENCE_ANSWER=ground_truth)
-    
+
     data = {
         "model": "openai/gpt-oss-120b",
         "messages": [{"role": "user", "content": prompt}],
