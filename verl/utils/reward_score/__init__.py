@@ -205,6 +205,11 @@ def default_compute_score(
             res = 1.0
         else:
             res = 0.0
+
+    ## for Tool-N1 dataset from nvidia
+    elif data_source in ['toolcall']:
+        from . import toolcall
+        res = toolcall.compute_score_v0(solution_str, ground_truth)
     
     else:
         raise NotImplementedError(f"Reward function is not implemented for {data_source=}")
