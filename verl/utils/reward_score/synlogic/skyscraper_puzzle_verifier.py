@@ -18,91 +18,93 @@ class SkyscraperPuzzleVerifier(Verifier):
         @return: 回答是否正确的布尔值
         """
         try:
-            # 获取游戏元数据
-            metadata = data.metadata
-            n = metadata['n']
-            top = metadata['top']
-            bottom = metadata['bottom']
-            left = metadata['left']
-            right = metadata['right']
+            def _verify_with_timeout():
+                # 获取游戏元数据
+                metadata = data.metadata
+                n = metadata['n']
+                top = metadata['top']
+                bottom = metadata['bottom']
+                left = metadata['left']
+                right = metadata['right']
 
-            self.n = n
-            test_answer = self.extract_answer(test_solution)
-            
-            # print(f"验证: 游戏规模 {n}×{n}")
-            # print(f"上方提示: {top}")
-            # print(f"下方提示: {bottom}")
-            # print(f"左侧提示: {left}")
-            # print(f"右侧提示: {right}")
-            
-            # 使用提取好的网格数据
-            grid = test_answer
-            
-            # 检查网格是否是字符串，如果是，说明提取失败
-            if isinstance(grid, str):
-                # print("无法提取有效网格")
-                return False
+                self.n = n
+                test_answer = self.extract_answer(test_solution)
                 
-            print("提取的网格:")
-            for row in grid:
-                print(row)
-            
-            # 检查网格规模
-            if len(grid) != n or any(len(row) != n for row in grid):
-                # print(f"网格规模不正确，应为 {n}×{n}")
-                return False
-            
-            # 检查数字范围 (1 到 n)
-            for i in range(n):
-                for j in range(n):
-                    if not isinstance(grid[i][j], int) or grid[i][j] < 1 or grid[i][j] > n:
-                        # print(f"位置 ({i+1},{j+1}) 的值 {grid[i][j]} 不在有效范围内 (1-{n})")
+                # print(f"验证: 游戏规模 {n}×{n}")
+                # print(f"上方提示: {top}")
+                # print(f"下方提示: {bottom}")
+                # print(f"左侧提示: {left}")
+                # print(f"右侧提示: {right}")
+                
+                # 使用提取好的网格数据
+                grid = test_answer
+                
+                # 检查网格是否是字符串，如果是，说明提取失败
+                if isinstance(grid, str):
+                    # print("无法提取有效网格")
+                    return False
+                    
+                # print("提取的网格:")
+                # for row in grid:
+                #     print(row)
+                
+                # 检查网格规模
+                if len(grid) != n or any(len(row) != n for row in grid):
+                    # print(f"网格规模不正确，应为 {n}×{n}")
+                    return False
+                
+                # 检查数字范围 (1 到 n)
+                for i in range(n):
+                    for j in range(n):
+                        if not isinstance(grid[i][j], int) or grid[i][j] < 1 or grid[i][j] > n:
+                            # print(f"位置 ({i+1},{j+1}) 的值 {grid[i][j]} 不在有效范围内 (1-{n})")
+                            return False
+                
+                # 检查每行唯一性
+                for i in range(n):
+                    if len(set(grid[i])) != n:
+                        # print(f"第 {i+1} 行包含重复数字")
                         return False
-            
-            # 检查每行唯一性
-            for i in range(n):
-                if len(set(grid[i])) != n:
-                    # print(f"第 {i+1} 行包含重复数字")
-                    return False
-            
-            # 检查每列唯一性
-            for j in range(n):
-                column = [grid[i][j] for i in range(n)]
-                if len(set(column)) != n:
-                    # print(f"第 {j+1} 列包含重复数字")
-                    return False
-            
-            # 检查从上方观察
-            for j in range(n):
-                visible_count = self._count_visible_skyscrapers([grid[i][j] for i in range(n)])
-                if visible_count != top[j]:
-                    # print(f"从上方看第 {j+1} 列可见楼数为 {visible_count}，应为 {top[j]}")
-                    return False
-            
-            # 检查从下方观察
-            for j in range(n):
-                visible_count = self._count_visible_skyscrapers([grid[i][j] for i in range(n-1, -1, -1)])
-                if visible_count != bottom[j]:
-                    # print(f"从下方看第 {j+1} 列可见楼数为 {visible_count}，应为 {bottom[j]}")
-                    return False
-            
-            # 检查从左侧观察
-            for i in range(n):
-                visible_count = self._count_visible_skyscrapers(grid[i])
-                if visible_count != left[i]:
-                    # print(f"从左侧看第 {i+1} 行可见楼数为 {visible_count}，应为 {left[i]}")
-                    return False
-            
-            # 检查从右侧观察
-            for i in range(n):
-                visible_count = self._count_visible_skyscrapers(grid[i][::-1])
-                if visible_count != right[i]:
-                    # print(f"从右侧看第 {i+1} 行可见楼数为 {visible_count}，应为 {right[i]}")
-                    return False
-            
-            # 所有检查通过
-            # print("所有验证规则通过!")
-            return True
+                
+                # 检查每列唯一性
+                for j in range(n):
+                    column = [grid[i][j] for i in range(n)]
+                    if len(set(column)) != n:
+                        # print(f"第 {j+1} 列包含重复数字")
+                        return False
+                
+                # 检查从上方观察
+                for j in range(n):
+                    visible_count = self._count_visible_skyscrapers([grid[i][j] for i in range(n)])
+                    if visible_count != top[j]:
+                        # print(f"从上方看第 {j+1} 列可见楼数为 {visible_count}，应为 {top[j]}")
+                        return False
+                
+                # 检查从下方观察
+                for j in range(n):
+                    visible_count = self._count_visible_skyscrapers([grid[i][j] for i in range(n-1, -1, -1)])
+                    if visible_count != bottom[j]:
+                        # print(f"从下方看第 {j+1} 列可见楼数为 {visible_count}，应为 {bottom[j]}")
+                        return False
+                
+                # 检查从左侧观察
+                for i in range(n):
+                    visible_count = self._count_visible_skyscrapers(grid[i])
+                    if visible_count != left[i]:
+                        # print(f"从左侧看第 {i+1} 行可见楼数为 {visible_count}，应为 {left[i]}")
+                        return False
+                
+                # 检查从右侧观察
+                for i in range(n):
+                    visible_count = self._count_visible_skyscrapers(grid[i][::-1])
+                    if visible_count != right[i]:
+                        # print(f"从右侧看第 {i+1} 行可见楼数为 {visible_count}，应为 {right[i]}")
+                        return False
+                
+                # 所有检查通过
+                # print("所有验证规则通过!")
+                return True
+            return _verify_with_timeout()
         
         except Exception as e:
             print(f"Verification error (SkyscraperPuzzle): {e}")

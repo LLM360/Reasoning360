@@ -16,39 +16,41 @@ class DyckLanguageReasoningErrorsVerifier(Verifier):
         @return: 回答是否正确的布尔值
         """
         try:
-            test_answer = self.extract_answer(test_solution=test_answer)
-            # 获取元数据中的正确答案
-            correct_indices = data.metadata["error_indices"]
-            # 格式化为正确的答案字符串格式
-            expected_answer = self._format_answer(correct_indices)
-            
-            # print(f"验证: 模型答案='{test_answer}', 正确答案='{expected_answer}'")
-            
-            # 检查不明确的答案
-            if "不确定" in test_answer or "不知道" in test_answer or "unclear" in test_answer.lower():
-                # print("验证结果: 错误")
-                return False
-            
-            # 清理模型答案，允许一定的格式变化
-            cleaned_test_answer = self._standardize_answer(test_answer)
-            
-            if not correct_indices and (cleaned_test_answer == "" or cleaned_test_answer.lower() in ["无问题", "no", "无错误", "no error", "no errors", "no mistakes", "all correct"]):
-                # 如果没有错误，且模型回答是空字符串或表示无问题，则正确
-                is_correct = True
-            else:
-                # 将两个答案转换为数字集合进行比较
-                test_error_indices = self._extract_error_indices(cleaned_test_answer)
-                expected_error_indices = set(correct_indices)
+            def _verify_with_timeout():
+                test_answer_extracted = self.extract_answer(test_solution=test_answer)
+                # 获取元数据中的正确答案
+                correct_indices = data.metadata["error_indices"]
+                # 格式化为正确的答案字符串格式
+                expected_answer = self._format_answer(correct_indices)
                 
-                # 检查两个集合是否相同
-                is_correct = test_error_indices == expected_error_indices
-            
-            # if is_correct:
-            #     print("验证结果: 正确")
-            # else:
-            #     print("验证结果: 错误")
+                # print(f"验证: 模型答案='{test_answer}', 正确答案='{expected_answer}'")
                 
-            return is_correct
+                # 检查不明确的答案
+                if "不确定" in test_answer_extracted or "不知道" in test_answer_extracted or "unclear" in test_answer_extracted.lower():
+                    # print("验证结果: 错误")
+                    return False
+                
+                # 清理模型答案，允许一定的格式变化
+                cleaned_test_answer = self._standardize_answer(test_answer_extracted)
+                
+                if not correct_indices and (cleaned_test_answer == "" or cleaned_test_answer.lower() in ["无问题", "no", "无错误", "no error", "no errors", "no mistakes", "all correct"]):
+                    # 如果没有错误，且模型回答是空字符串或表示无问题，则正确
+                    is_correct = True
+                else:
+                    # 将两个答案转换为数字集合进行比较
+                    test_error_indices = self._extract_error_indices(cleaned_test_answer)
+                    expected_error_indices = set(correct_indices)
+                    
+                    # 检查两个集合是否相同
+                    is_correct = test_error_indices == expected_error_indices
+                
+                # if is_correct:
+                #     print("验证结果: 正确")
+                # else:
+                #     print("验证结果: 错误")
+                    
+                return is_correct
+            return _verify_with_timeout()
             
         except Exception as e:
             print(f"Verification error (DyckLanguageReasoningErrors): {e}")

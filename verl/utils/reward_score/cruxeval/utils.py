@@ -9,8 +9,9 @@ import io
 import multiprocessing
 import os
 import platform
-import signal
 import tempfile
+
+from verl.utils.py_functional import timeout_limit
 
 
 def check_correctness(check_program, timeout=3):
@@ -53,12 +54,15 @@ def unsafe_execute(check_program, result, timeout):
 
         # Run program.
         try:
-            exec_globals = {}
-            with swallow_io():
-                with time_limit(timeout):
+            @timeout_limit(seconds=timeout)
+            def _exec_with_timeout():
+                exec_globals = {}
+                with swallow_io():
                     exec(check_program, exec_globals)
+            
+            _exec_with_timeout()
             result.append("passed")
-        except TimeoutException:
+        except TimeoutError:
             result.append("timed out")
         except BaseException as e:
             result.append(f"failed: {e}")
@@ -67,19 +71,6 @@ def unsafe_execute(check_program, result, timeout):
         shutil.rmtree = rmtree
         os.rmdir = rmdir
         os.chdir = chdir
-
-
-@contextlib.contextmanager
-def time_limit(seconds):
-    def signal_handler(signum, frame):
-        raise TimeoutException("Timed out!")
-
-    signal.setitimer(signal.ITIMER_REAL, seconds)
-    signal.signal(signal.SIGALRM, signal_handler)
-    try:
-        yield
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
 
 
 @contextlib.contextmanager
@@ -96,10 +87,6 @@ def create_tempdir():
     with tempfile.TemporaryDirectory() as dirname:
         with chdir(dirname):
             yield dirname
-
-
-class TimeoutException(Exception):
-    pass
 
 
 class WriteOnlyStringIO(io.StringIO):

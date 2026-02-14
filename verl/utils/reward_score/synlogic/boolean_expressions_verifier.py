@@ -8,19 +8,21 @@ class BooleanExpressionsVerifier(Verifier):
     """
     def verify(self, data: Data, test_answer: str):
         try:
-            test_answer = self.extract_answer(test_answer)
-            if test_answer is None:
-                return False
-            # 提取所有字母（a-z和A-Z）
-            test_answer_letters = re.findall(r'[a-zA-Z]', test_answer)
-            ground_truth_letters = re.findall(r'[a-zA-Z]', data.answer)
-            test_answer_letters = self.lower(test_answer_letters)
-            ground_truth_letters = self.lower(ground_truth_letters)
-            # 转换为集合进行比较
-            test_set = set(test_answer_letters)
-            ground_truth_set = set(ground_truth_letters)
-            
-            return test_set == ground_truth_set
+            def _verify_with_timeout():
+                test_answer_extracted = self.extract_answer(test_answer)
+                if test_answer_extracted is None:
+                    return False
+                # 提取所有字母（a-z和A-Z）
+                test_answer_letters = re.findall(r'[a-zA-Z]', test_answer_extracted)
+                ground_truth_letters = re.findall(r'[a-zA-Z]', data.answer)
+                test_answer_letters = self.lower(test_answer_letters)
+                ground_truth_letters = self.lower(ground_truth_letters)
+                # 转换为集合进行比较
+                test_set = set(test_answer_letters)
+                ground_truth_set = set(ground_truth_letters)
+                
+                return test_set == ground_truth_set
+            return _verify_with_timeout()
         except Exception as e:
             print("NOTE!!! parse error!!!! (BooleanExpressions)", e)
             return False

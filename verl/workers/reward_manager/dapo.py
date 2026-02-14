@@ -109,6 +109,7 @@ class DAPORewardManager(AbstractRewardManager):
                     reward_extra_info[key].append(value)
             else:
                 score = result
+                reward_extra_info["score"].append(score)
                 reward_extra_info["acc"].append(score)
 
             reward = score

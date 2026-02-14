@@ -8,19 +8,21 @@ class WordSortingMistakeVerifier(Verifier):
     """
     def verify(self, data: Data, test_answer: str):
         try:
-            ground_truth = data.answer if data.answer is not None else "No"
-            parsed_answer = self.extract_answer(test_answer)
-            
-            if parsed_answer is None:
-                return False
-            
-            if parsed_answer.isdigit():
-                try:
-                    return int(parsed_answer) == int(ground_truth)
-                except Exception as e:
+            def _verify_with_timeout():
+                ground_truth = data.answer if data.answer is not None else "No"
+                parsed_answer = self.extract_answer(test_answer)
+                
+                if parsed_answer is None:
                     return False
-            else:
-                return parsed_answer.lower() == ground_truth.lower()
+                
+                if parsed_answer.isdigit():
+                    try:
+                        return int(parsed_answer) == int(ground_truth)
+                    except Exception as e:
+                        return False
+                else:
+                    return parsed_answer.lower() == str(ground_truth).lower()
+            return _verify_with_timeout()
         except Exception as e:
             print(f"NOTE!!! parse error!!!! (WordSortingMistake): {e}")
             return False

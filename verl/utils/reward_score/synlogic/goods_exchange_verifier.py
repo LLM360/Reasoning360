@@ -15,28 +15,30 @@ class GoodsExchangeVerifier(Verifier):
         @return: 回答是否正确的布尔值
         """
         try:
-            test_answer = self.extract_answer(test_solution)
-            # 获取元数据中的正确答案
-            correct_answer = data.metadata["owns_after"]
-            
-            # print(f"验证: 模型答案='{test_answer}', 正确答案='{correct_answer}'")
-            
-            # 解析模型答案
-            model_ownership = self._parse_answer(test_answer)
-            # 解析正确答案
-            correct_ownership = self._parse_answer(correct_answer)
-            
-            # 比较两个答案是否完全一致
-            is_correct = self._compare_answers(model_ownership, correct_ownership)
-            
-            # if is_correct:
-            #     print("验证结果: 正确")
-            # else:
-            #     print("验证结果: 错误")
-            #     # 打印详细的不匹配信息
-            #     self._print_difference(model_ownership, correct_ownership)
+            def _verify_with_timeout():
+                test_answer = self.extract_answer(test_solution)
+                # 获取元数据中的正确答案
+                correct_answer = data.metadata["owns_after"]
                 
-            return is_correct
+                # print(f"验证: 模型答案='{test_answer}', 正确答案='{correct_answer}'")
+                
+                # 解析模型答案
+                model_ownership = self._parse_answer(test_answer)
+                # 解析正确答案
+                correct_ownership = self._parse_answer(correct_answer)
+                
+                # 比较两个答案是否完全一致
+                is_correct = self._compare_answers(model_ownership, correct_ownership)
+                
+                # if is_correct:
+                #     print("验证结果: 正确")
+                # else:
+                #     print("验证结果: 错误")
+                #     # 打印详细的不匹配信息
+                #     self._print_difference(model_ownership, correct_ownership)
+                    
+                return is_correct
+            return _verify_with_timeout()
             
         except Exception as e:
             print(f"Verification error (GoodsExchange): {e}")

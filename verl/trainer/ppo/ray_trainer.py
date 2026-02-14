@@ -280,6 +280,7 @@ class RayPPOTrainer:
         reward_fn=None,
         val_reward_fn=None,
         train_dataset: Optional[Dataset] = None,
+        # id_val_dataset: Optional[Dataset] = None,
         val_dataset: Optional[Dataset] = None,
         collate_fn=None,
         train_sampler: Optional[Sampler] = None,
@@ -299,6 +300,7 @@ class RayPPOTrainer:
             reward_fn: Function for computing rewards during training.
             val_reward_fn: Function for computing rewards during validation.
             train_dataset (Optional[Dataset], optional): Training dataset. Defaults to None.
+            # id_val_dataset (Optional[Dataset], optional): id Validation dataset. Defaults to None.
             val_dataset (Optional[Dataset], optional): Validation dataset. Defaults to None.
             collate_fn: Function to collate data samples into batches.
             train_sampler (Optional[Sampler], optional): Sampler for the training dataset. Defaults to None.
@@ -338,11 +340,12 @@ class RayPPOTrainer:
         if self.config.algorithm.use_kl_in_reward:
             self.kl_ctrl_in_reward = core_algos.get_kl_controller(self.config.algorithm.kl_ctrl)
 
-        self._create_dataloader(train_dataset, val_dataset, collate_fn, train_sampler)
+        self._create_dataloader(train_dataset, val_dataset, collate_fn, train_sampler) # id_val_dataset
 
-    def _create_dataloader(self, train_dataset, val_dataset, collate_fn, train_sampler: Optional[Sampler]):
+    def _create_dataloader(self, train_dataset, val_dataset, collate_fn, train_sampler: Optional[Sampler]): # id_val_dataset
         """
         Creates the train and validation dataloaders.
+        # Added by Reasoning 360: creates a third dataloader for id validation... To be kept separate from standard validation approach.
         """
         # TODO: we have to make sure the batch size is divisible by the dp size
         from verl.trainer.main_ppo import create_rl_dataset, create_rl_sampler
@@ -351,11 +354,16 @@ class RayPPOTrainer:
             train_dataset = create_rl_dataset(
                 self.config.data.train_files, self.config.data, self.tokenizer, self.processor
             )
+        # if id_val_dataset is None and self.config.data.id_val_files is not None:
+        #     id_val_dataset = create_rl_dataset(
+        #         self.config.data.id_val_files, self.config.data, self.tokenizer, self.processor
+        #     )
         if val_dataset is None:
             val_dataset = create_rl_dataset(
                 self.config.data.val_files, self.config.data, self.tokenizer, self.processor
             )
-        self.train_dataset, self.val_dataset = train_dataset, val_dataset
+        self.train_dataset, self.val_dataset = train_dataset, val_dataset 
+        # self.id_val_dataset = id_val_dataset
 
         if train_sampler is None:
             train_sampler = create_rl_sampler(self.config.data, self.train_dataset)
@@ -376,9 +384,23 @@ class RayPPOTrainer:
         )
 
         val_batch_size = self.config.data.val_batch_size  # Prefer config value if set
+        # id_val_batch_size = self.config.data.val_batch_size
         if val_batch_size is None:
             val_batch_size = len(self.val_dataset)
+            # id_val_batch_size = len(self.id_val_dataset) if self.id_val_dataset is not None else 0
 
+        # if self.id_val_dataset is not None:
+        #     self.id_val_dataloader = StatefulDataLoader(
+        #         dataset=self.id_val_dataset,
+        #         batch_size=id_val_batch_size,
+        #         num_workers=num_workers,
+        #         shuffle=self.config.data.get("id_validation_shuffle", True),
+        #         drop_last=False,
+        #         collate_fn=collate_fn,
+        #     )
+        # else:
+        #     self.id_val_dataloader = None
+        
         self.val_dataloader = StatefulDataLoader(
             dataset=self.val_dataset,
             batch_size=val_batch_size,
@@ -389,12 +411,13 @@ class RayPPOTrainer:
         )
 
         assert len(self.train_dataloader) >= 1, "Train dataloader is empty!"
+        # assert self.id_val_dataloader is None or len(self.id_val_dataloader) >= 1, "id Validation dataloader is empty!"
         assert len(self.val_dataloader) >= 1, "Validation dataloader is empty!"
 
         print(
             f"Size of train dataloader: {len(self.train_dataloader)}, Size of val dataloader: "
             f"{len(self.val_dataloader)}"
-        )
+        ) # Size of id val dataloader: {len(self.id_val_dataloader)}
 
         total_training_steps = len(self.train_dataloader) * self.config.trainer.total_epochs
 
@@ -485,9 +508,12 @@ class RayPPOTrainer:
 
     def _validate(self):
         data_source_lst = []
+        # id_data_source_lst = []
         reward_extra_infos_dict: dict[str, list] = defaultdict(list)
+        # id_reward_extra_infos_dict: dict[str, list] = defaultdict(list)
         # NOTE: added by Reasoning360.
         dataset_lst = []
+        # dataset_id_lst = []
 
         # Lists to collect samples for the table
         sample_inputs = []
@@ -496,6 +522,112 @@ class RayPPOTrainer:
         sample_scores = []
         sample_turns = []
         sample_uids = []
+
+        # sample_id_inputs = []
+        # sample_id_outputs = []
+        # sample_id_gts = []
+        # sample_id_scores = []
+        # sample_id_turns = []
+        # sample_id_uids = []
+
+        # if self.id_val_dataloader is not None:
+        #     print("Starting id validation generation...")
+        #     for test_data in self.id_val_dataloader:
+        #         test_batch = DataProto.from_single_dict(test_data)
+
+        #         if "uid" not in test_batch.non_tensor_batch:
+        #             test_batch.non_tensor_batch["uid"] = np.array(
+        #                 [str(uuid.uuid4()) for _ in range(len(test_batch.batch))], dtype=object
+        #             )
+
+        #         # repeat test batch
+        #         test_batch = test_batch.repeat(
+        #             repeat_times=self.config.actor_rollout_ref.rollout.val_kwargs.n, interleave=True
+        #         )
+
+        #         # we only do validation on rule-based rm
+        #         if self.config.reward_model.enable and test_batch[0].non_tensor_batch["reward_model"]["style"] == "model":
+        #             return {}
+
+        #         # Store original inputs
+        #         input_ids = test_batch.batch["input_ids"]
+        #         # TODO: Can we keep special tokens except for padding tokens?
+        #         input_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in input_ids]
+        #         sample_id_inputs.extend(input_texts)
+        #         sample_id_uids.extend(test_batch.non_tensor_batch["uid"])
+
+        #         ground_truths = [
+        #             item.non_tensor_batch.get("reward_model", {}).get("ground_truth", None) for item in test_batch
+        #         ]
+        #         sample_id_gts.extend(ground_truths)
+
+        #         test_gen_batch = self._get_gen_batch(test_batch)
+        #         test_gen_batch.meta_info = {
+        #             "eos_token_id": self.tokenizer.eos_token_id,
+        #             "pad_token_id": self.tokenizer.pad_token_id,
+        #             "recompute_log_prob": False,
+        #             "do_sample": self.config.actor_rollout_ref.rollout.val_kwargs.do_sample,
+        #             "validate": True,
+        #             "global_steps": self.global_steps,
+        #         }
+        #         print(f"test_gen_batch meta info: {test_gen_batch.meta_info}")
+
+        #         # pad to be divisible by dp_size
+        #         size_divisor = (
+        #             self.actor_rollout_wg.world_size
+        #             if not self.async_rollout_mode
+        #             else self.config.actor_rollout_ref.rollout.agent.num_workers
+        #         )
+        #         test_gen_batch_padded, pad_size = pad_dataproto_to_divisor(test_gen_batch, size_divisor)
+        #         if not self.async_rollout_mode:
+        #             test_output_gen_batch_padded = self.actor_rollout_wg.generate_sequences(test_gen_batch_padded)
+        #         else:
+        #             test_output_gen_batch_padded = self.async_rollout_manager.generate_sequences(test_gen_batch_padded)
+
+        #         # unpad
+        #         test_output_gen_batch = unpad_dataproto(test_output_gen_batch_padded, pad_size=pad_size)
+
+        #         print("ID Validation generation end")
+
+        #         # Store generated outputs
+        #         output_ids = test_output_gen_batch.batch["responses"]
+        #         output_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in output_ids]
+        #         sample_id_outputs.extend(output_texts)
+
+        #         test_batch = test_batch.union(test_output_gen_batch)
+        #         test_batch.meta_info["validate"] = True
+
+        #         # evaluate using reward_function
+        #         if self.val_reward_fn is None:
+        #             raise ValueError("val_reward_fn must be provided for validation.")
+        #         result = self.val_reward_fn(test_batch, return_dict=True)
+        #         reward_tensor = result["reward_tensor"]
+        #         scores = reward_tensor.sum(-1).cpu().tolist()
+        #         sample_id_scores.extend(scores)
+
+        #         id_reward_extra_infos_dict["reward"].extend(scores)
+        #         print(f"len id_reward_extra_infos_dict['reward']: {len(id_reward_extra_infos_dict['reward'])}")
+        #         if "reward_extra_info" in result:
+        #             for key, lst in result["reward_extra_info"].items():
+        #                 id_reward_extra_infos_dict[key].extend(lst)
+        #                 print(f"len id_reward_extra_infos_dict['{key}']: {len(id_reward_extra_infos_dict[key])}")
+
+        #         # NOTE: added by Reasoning360. Collect dataset information. TODO: maybe replicated usage with the data_source_lst and can be removed?
+        #         datasets = []
+        #         for i in range(reward_tensor.shape[0]):
+        #             dataset = "unknown"
+        #             if "extra_info" in test_batch.non_tensor_batch:
+        #                 extra_info = test_batch.non_tensor_batch["extra_info"][i]
+        #                 if isinstance(extra_info, dict) and "dataset" in extra_info:
+        #                     dataset = extra_info["dataset"]
+        #             datasets.append(dataset)
+        #         dataset_id_lst.append(np.array(datasets))
+
+        #         # collect num_turns of each prompt
+        #         if "__num_turns__" in test_batch.non_tensor_batch:
+        #             sample_id_turns.append(test_batch.non_tensor_batch["__num_turns__"])
+
+        #         id_data_source_lst.append(test_batch.non_tensor_batch.get("data_source", ["unknown"] * reward_tensor.shape[0]))
 
         for test_data in self.val_dataloader:
             test_batch = DataProto.from_single_dict(test_data)
@@ -608,12 +740,36 @@ class RayPPOTrainer:
                 dump_path=val_data_dir,
             )
 
+        # for key_info, lst in id_reward_extra_infos_dict.items():
+        #     assert len(lst) == 0 or len(lst) == len(sample_id_scores), f"{key_info}: {len(lst)=}, {len(sample_id_scores)=}"
+        
         for key_info, lst in reward_extra_infos_dict.items():
             assert len(lst) == 0 or len(lst) == len(sample_scores), f"{key_info}: {len(lst)=}, {len(sample_scores)=}"
 
         # NOTE: Added by Reasoning360: Calculate the mean reward for each data source and dataset
+        # id_data_sources = np.concatenate(id_data_source_lst, axis=0)
+        # id_datasets = np.concatenate(dataset_id_lst, axis=0)  # Concatenate datasets
         data_sources = np.concatenate(data_source_lst, axis=0)
         datasets = np.concatenate(dataset_lst, axis=0)  # Concatenate datasets
+
+        # id_data_src2var2metric2val = process_validation_metrics(id_data_sources, sample_id_uids, id_reward_extra_infos_dict)
+        # id_metric_dict = {}
+        # for data_source, var2metric2val in id_data_src2var2metric2val.items():
+        #     core_var = "acc" if "acc" in var2metric2val else "reward"
+        #     for var_name, metric2val in var2metric2val.items():
+        #         n_max = max([int(name.split("@")[-1].split("/")[0]) for name in metric2val.keys()])
+        #         for metric_name, metric_val in metric2val.items():
+        #             # NOTE: added by Reasoning360. Add std metrics
+        #             if (
+        #                 (var_name == core_var)
+        #                 and any(metric_name.startswith(pfx) for pfx in ["mean", "maj", "best", "std"])
+        #                 and (f"@{n_max}" in metric_name)
+        #             ):
+        #                 metric_sec = "InDomain-Eval-core"
+        #             else:
+        #                 metric_sec = "InDomain-Eval-aux"
+        #             pfx = f"{metric_sec}/{data_source}/{var_name}/{metric_name}"
+        #             id_metric_dict[pfx] = metric_val
 
         data_src2var2metric2val = process_validation_metrics(data_sources, sample_uids, reward_extra_infos_dict)
         metric_dict = {}
@@ -654,7 +810,7 @@ class RayPPOTrainer:
         for (data_source, dataset), rewards in data_source_dataset_reward.items():
             metric_dict[f"val/test_score/{data_source}/{dataset}"] = np.mean(rewards)
 
-        return metric_dict
+        return metric_dict # id_metric_dict | metric_dict # Union of two dicts
 
     def init_workers(self):
         """Initialize distributed training workers using Ray backend.

@@ -24,54 +24,56 @@ class NorinoriVerifier(Verifier):
         bool -- 答案是否正确
         """
         try:
-            # 从游戏数据中获取区域网格
-            region_grid = data.metadata["region_grid"]
-            n = len(region_grid)
-            
-            # 解析答案
-            dominoes = self._parse_answer(test_solution)
-            if dominoes is None:
-                return False
-            
-            # 检查多米诺形状
-            if not self._check_domino_shapes(dominoes):
-                return False
-            
-            # 创建覆盖网格
-            covered = [[False for _ in range(n)] for _ in range(n)]
-            for domino in dominoes:
-                for i, j in domino:
-                    # 转换为0-indexed
-                    i -= 1
-                    j -= 1
-                    if i < 0 or i >= n or j < 0 or j >= n:
-                        return False  # 坐标超出范围
-                    if covered[i][j]:
-                        return False  # 格子被多次覆盖
-                    covered[i][j] = True
-            
-            # 检查多米诺之间是否相邻
-            if not self._check_domino_adjacency(dominoes, n):
-                return False
-            
-            # 检查每个区域是否恰好有两个格子被覆盖
-            region_coverage = defaultdict(int)
-            for i in range(n):
-                for j in range(n):
-                    if covered[i][j] and region_grid[i][j] != "X":
-                        region_coverage[region_grid[i][j]] += 1
-            
-            for region, count in region_coverage.items():
-                if count != 2:
+            def _verify_with_timeout():
+                # 从游戏数据中获取区域网格
+                region_grid = data.metadata["region_grid"]
+                n = len(region_grid)
+                
+                # 解析答案
+                dominoes = self._parse_answer(test_solution)
+                if dominoes is None:
                     return False
-        
-            # 检查所有阴影格子是否被覆盖
-            for i in range(n):
-                for j in range(n):
-                    if region_grid[i][j] == "X" and not covered[i][j]:
+                
+                # 检查多米诺形状
+                if not self._check_domino_shapes(dominoes):
+                    return False
+                
+                # 创建覆盖网格
+                covered = [[False for _ in range(n)] for _ in range(n)]
+                for domino in dominoes:
+                    for i, j in domino:
+                        # 转换为0-indexed
+                        i -= 1
+                        j -= 1
+                        if i < 0 or i >= n or j < 0 or j >= n:
+                            return False  # 坐标超出范围
+                        if covered[i][j]:
+                            return False  # 格子被多次覆盖
+                        covered[i][j] = True
+                
+                # 检查多米诺之间是否相邻
+                if not self._check_domino_adjacency(dominoes, n):
+                    return False
+                
+                # 检查每个区域是否恰好有两个格子被覆盖
+                region_coverage = defaultdict(int)
+                for i in range(n):
+                    for j in range(n):
+                        if covered[i][j] and region_grid[i][j] != "X":
+                            region_coverage[region_grid[i][j]] += 1
+                
+                for region, count in region_coverage.items():
+                    if count != 2:
                         return False
             
-            return True
+                # 检查所有阴影格子是否被覆盖
+                for i in range(n):
+                    for j in range(n):
+                        if region_grid[i][j] == "X" and not covered[i][j]:
+                            return False
+                
+                return True
+            return _verify_with_timeout()
         except Exception as e:
             print(f"Verification error (Norinori): {e}")
             return False

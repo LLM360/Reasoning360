@@ -9,10 +9,16 @@ class SpaceReasoningVerifier(Verifier):
     验证器用于空间推理游戏的答案是否正确
     """
     def verify(self, data: Data, test_answer: str):
-        test_answer = self.extract_answer(test_answer)
-        if test_answer is None:
+        try:
+            def _verify_with_timeout():
+                test_answer_extracted = self.extract_answer(test_answer)
+                if test_answer_extracted is None:
+                    return False
+                return test_answer_extracted.lower() == data.answer.lower()
+            return _verify_with_timeout()
+        except Exception as e:
+            print(f"Verification error (SpaceReasoning): {e}")
             return False
-        return test_answer.lower() == data.answer.lower()
     
     def extract_answer(self, answer_str):
         # 先找到最后一个\boxed{的位置

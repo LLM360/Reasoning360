@@ -112,7 +112,18 @@ def timeout_limit(seconds: float, use_signals: bool = False):
                     process.terminate()
                     process.join(timeout=0.5)  # Give it a moment to terminate
                     if process.is_alive():
+                        try:
+                            process.kill()
+                            print(f"Warning: Escalated to force kill process {process.pid}")
+                        except AttributeError:
+                            os.kill(process.pid, signal.SIGKILL)
+                            print(f"Fall back to very old way of killing process")
+                        process.join(timeout=0.5) 
+                    
+                    if process.is_alive():
                         print(f"Warning: Process {process.pid} did not terminate gracefully after timeout.")
+                        raise TimeoutError(f"Function {func.__name__} timed out after {seconds} seconds and could not be killed (pid={process.pid})!")
+
                     # Update function name in error message if needed (optional but good practice)
                     raise TimeoutError(f"Function {func.__name__} timed out after {seconds} seconds (multiprocessing)!")
 

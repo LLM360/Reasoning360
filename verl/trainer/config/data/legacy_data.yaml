@@ -10,6 +10,9 @@ use_shm: False
 # For HDFS path, we provide utils to download it to DRAM and convert it to a local path.
 train_files: ~/data/rlhf/gsm8k/train.parquet
 
+# ID Validation set parquet. Can be a list or a single file.
+# id_val_files: null
+
 # Validation parquet. Can be a list or a single file.
 val_files: ~/data/rlhf/gsm8k/test.parquet
 

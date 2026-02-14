@@ -12,17 +12,19 @@ class MinesweeperVerifier(Verifier):
     """
     def verify(self, data: Data, test_solution: str, **kwargs):
         try:
-            # 从解答中提取地雷坐标
-            predicted_mines = self.extract_answer(test_solution)
-            
-            # 从metadata中获取确定性地雷坐标
-            expected_mines = data.metadata["current_mines"]
-            
-            # 验证提取的坐标是否正确
-            if set(tuple(mine) for mine in predicted_mines) == set(tuple(mine) for mine in expected_mines):
-                return True
-            
-            return False
+            def _verify_with_timeout():
+                # 从解答中提取地雷坐标
+                predicted_mines = self.extract_answer(test_solution)
+                
+                # 从metadata中获取确定性地雷坐标
+                expected_mines = data.metadata["current_mines"]
+                
+                # 验证提取的坐标是否正确
+                if set(tuple(mine) for mine in predicted_mines) == set(tuple(mine) for mine in expected_mines):
+                    return True
+                
+                return False
+            return _verify_with_timeout()
             
         except Exception as e:
             # 如果验证过程中发生任何错误，返回False

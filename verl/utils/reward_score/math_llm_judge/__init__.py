@@ -36,14 +36,17 @@ Final Grade: CORRECT or INCORRECT
 """
 
 import re
-import sympy
-from pylatexenc import latex2text
-from sympy.parsing import sympy_parser
 import os
+import math
+
+import sympy
+# from pylatexenc import latex2text
+from sympy.parsing import sympy_parser
+import requests
+from verl.utils.py_functional import timeout_limit
+
 from . import math_normalize
 from .grader import math_equal
-
-import requests
 
 # import math_normalize
 # from grader import math_equal
@@ -52,33 +55,6 @@ import requests
 BAD_SUBSTRINGS = ["^{", "^("]
 BAD_REGEXES = ["\^[0-9]+\^", "\^[0-9][0-9]+"]
 TUPLE_CHARS = "()[]"
-
-
-def timeout(timeout_seconds: int = 8):
-    if os.name == "posix":
-        import signal
-
-        def decorator(func):
-
-            def handler(signum, frame):
-                raise TimeoutError("Operation timed out!")
-
-            def wrapper(*args, **kwargs):
-                old_handler = signal.getsignal(signal.SIGALRM)
-                signal.signal(signal.SIGALRM, handler)
-                signal.alarm(timeout_seconds)
-
-                try:
-                    return func(*args, **kwargs)
-                finally:
-                    signal.alarm(0)
-                    signal.signal(signal.SIGALRM, old_handler)
-
-            return wrapper
-
-        return decorator
-    else:
-        raise NotImplementedError(f"Unsupported OS: {os.name}")
 
 
 def _sympy_parse(expr: str):
@@ -95,7 +71,7 @@ def _parse_latex(expr: str) -> str:
     expr = expr.replace("\\tfrac", "\\frac")
     expr = expr.replace("\\dfrac", "\\frac")
     expr = expr.replace("\\frac", " \\frac")  # Play nice with mixed numbers.
-    expr = latex2text.LatexNodes2Text().latex_to_text(expr)
+    # expr = latex2text.LatexNodes2Text().latex_to_text(expr)
 
     # Replace the specific characters that this parser uses.
     expr = expr.replace("√", "sqrt")
@@ -255,7 +231,7 @@ def should_allow_eval(expr: str):
     return True
 
 
-@timeout(timeout_seconds=10)
+@timeout_limit(seconds=10)
 def are_equal_under_sympy(ground_truth_normalized: str, given_normalized: str):
     are_equal = False
     try:
@@ -332,7 +308,10 @@ def grade_answer(given_answer: str, ground_truth: str) -> bool:
                 # if the ground truth answer is an integer, we require the given answer to be a strict match (no sympy.simplify)
                 is_correct = False
             else:
-                is_correct = are_equal_under_sympy(ground_truth_elem, given_elem)
+                try:
+                    is_correct = are_equal_under_sympy(ground_truth_elem, given_elem)
+                except TimeoutError:
+                    is_correct = False
             if not is_correct:
                 break
 
@@ -392,20 +371,31 @@ def match_answer(response):
     return is_matched, response
 
 
-import math
-
 def llm_check_answer(model_output: str, ground_truth: str, question: str) -> bool:
     # use llm to check if the answer is correct
+    # Supports multiple endpoints for load balancing - separate URLs with commas
+    # e.g., MATH_LLM_JUDGE_URL="http://host1:8000,http://host2:8000,http://host3:8000"
 
-    # url = "http://176.56.200.81:30000/v1/chat/completions"
-    url = os.getenv("MATH_LLM_JUDGE_URL")
-    if not url:
+    import os
+    import random
+
+    url_base_str = os.getenv("MATH_LLM_JUDGE_URL")
+    if not url_base_str:
         raise ValueError("MATH_LLM_JUDGE_URL is not set")
-    
+
+    # Support multiple endpoints separated by commas
+    endpoints = [url.strip() for url in url_base_str.split(",") if url.strip()]
+    if not endpoints:
+        raise ValueError("MATH_LLM_JUDGE_URL contains no valid endpoints")
+
+    # Randomly select an endpoint for load balancing
+    url_base = random.choice(endpoints)
+    url = url_base.rstrip("/") + "/v1/chat/completions"
+
     prompt = input_template.format(QUESTION=question, STUDENT_ANSWER=model_output, REFERENCE_ANSWER=ground_truth)
-    
+
     data = {
-        "model": "Qwen/Qwen2.5-32B-Instruct",
+        "model": "openai/gpt-oss-120b",
         "messages": [{"role": "user", "content": prompt}],
     }
     response = requests.post(url, json=data)
@@ -423,7 +413,7 @@ def llm_check_answer(model_output: str, ground_truth: str, question: str) -> boo
 def compute_score(model_output: str,
                   ground_truth: str,
                   extra_info: dict) -> bool:
-    question = extra_info["question"]
+    question = extra_info["original_question"]
     model_output = str(model_output)
     ground_truth = str(ground_truth)
 
@@ -447,5 +437,4 @@ def compute_score(model_output: str,
     if is_matched and not is_correct:
         # use llm to check if the answer is correct
         is_correct = llm_check_answer(extracted_model_output, ground_truth, question)
-
     return is_correct, 1, extracted_model_output

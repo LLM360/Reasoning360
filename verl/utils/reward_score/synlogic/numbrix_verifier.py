@@ -11,54 +11,56 @@ class NumbrixVerifier(Verifier):
     """
     def verify(self, data: Data, test_solution: str):
         try:
-            # 提取答案网格
-            test_grid = self.extract_answer(test_solution)
-            if not test_grid:
-                return False
-            
-            # 获取原始谜题和网格大小
-            original_grid = data.metadata["grid"]
-            n = len(original_grid)
-            n_squared = n * n
-            
-            # 检查网格大小是否正确
-            if len(test_grid) != n or any(len(row) != n for row in test_grid):
-                return False
-            
-            # 检查是否包含所有数字 1 到 n²
-            flattened_grid = [cell for row in test_grid for cell in row]
-            if sorted(flattened_grid) != list(range(1, n_squared + 1)):
-                return False
-            
-            # 检查是否保留了原始提示数字
-            for i in range(n):
-                for j in range(n):
-                    if original_grid[i][j] != "X" and test_grid[i][j] != original_grid[i][j]:
-                        return False
-            
-            # 检查连续数字是否正交相邻
-            for num in range(1, n_squared):
-                # 找到当前数字的位置
-                current_pos = None
-                next_pos = None
+            def _verify_with_timeout():
+                # 提取答案网格
+                test_grid = self.extract_answer(test_solution)
+                if not test_grid:
+                    return False
+                
+                # 获取原始谜题和网格大小
+                original_grid = data.metadata["grid"]
+                n = len(original_grid)
+                n_squared = n * n
+                
+                # 检查网格大小是否正确
+                if len(test_grid) != n or any(len(row) != n for row in test_grid):
+                    return False
+                
+                # 检查是否包含所有数字 1 到 n²
+                flattened_grid = [cell for row in test_grid for cell in row]
+                if sorted(flattened_grid) != list(range(1, n_squared + 1)):
+                    return False
+                
+                # 检查是否保留了原始提示数字
                 for i in range(n):
                     for j in range(n):
-                        if test_grid[i][j] == num:
-                            current_pos = (i, j)
-                        elif test_grid[i][j] == num + 1:
-                            next_pos = (i, j)
+                        if original_grid[i][j] != "X" and test_grid[i][j] != original_grid[i][j]:
+                            return False
                 
-                if current_pos is None or next_pos is None:
-                    return False
+                # 检查连续数字是否正交相邻
+                for num in range(1, n_squared):
+                    # 找到当前数字的位置
+                    current_pos = None
+                    next_pos = None
+                    for i in range(n):
+                        for j in range(n):
+                            if test_grid[i][j] == num:
+                                current_pos = (i, j)
+                            elif test_grid[i][j] == num + 1:
+                                next_pos = (i, j)
+                    
+                    if current_pos is None or next_pos is None:
+                        return False
+                    
+                    # 检查是否正交相邻（曼哈顿距离为1）
+                    i1, j1 = current_pos
+                    i2, j2 = next_pos
+                    manhattan_distance = abs(i1 - i2) + abs(j1 - j2)
+                    if manhattan_distance != 1:
+                        return False
                 
-                # 检查是否正交相邻（曼哈顿距离为1）
-                i1, j1 = current_pos
-                i2, j2 = next_pos
-                manhattan_distance = abs(i1 - i2) + abs(j1 - j2)
-                if manhattan_distance != 1:
-                    return False
-            
-            return True
+                return True
+            return _verify_with_timeout()
         except Exception as e:
             print(f"Verification error (Numbrix): {e}")
             return False

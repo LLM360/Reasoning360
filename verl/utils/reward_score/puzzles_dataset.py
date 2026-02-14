@@ -2,23 +2,6 @@ import re
 import random
 import ast
 import operator
-import signal
-import contextlib
-
-class TimeoutException(Exception):
-    pass
-
-@contextlib.contextmanager
-def time_limit(seconds: float):
-    def signal_handler(signum, frame):
-        raise TimeoutException("Timed out!")
-
-    signal.setitimer(signal.ITIMER_REAL, seconds)
-    signal.signal(signal.SIGALRM, signal_handler)
-    try:
-        yield
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
 
 def extract_solution(solution_str):
 
@@ -92,32 +75,31 @@ def compute_score(solution_str, ground_truth, extra_info: any = None, method='st
         method: the method to extract the solution
         timeout: maximum time in seconds to allow for computation
     """
+    def _compute_with_timeout():
+        target = ground_truth.tolist() if not isinstance(ground_truth,list) else ground_truth
+        predicted_arrangement = extract_solution(solution_str=solution_str)
+        
+        if predicted_arrangement is None:
+            return 0.0
+
+        # Evaluate equation
+        try:
+            if isinstance(predicted_arrangement, list) and isinstance(target, list):            
+                edit_distance = compute_edit_distance(predicted_arrangement, target)
+                max_possible_dist = max(len(predicted_arrangement), len(target))
+            result = predicted_arrangement == target
+            if result:
+                return 1.0
+            elif method != 'strict':
+                return max(1.0 - (edit_distance / max_possible_dist))
+            else:
+                return 0.0
+        except Exception as e:
+            return 0.0
+    
+    score = 0.0
     try:
-        with time_limit(timeout):
-            target = ground_truth.tolist() if not isinstance(ground_truth,list) else ground_truth
-            predicted_arrangement = extract_solution(solution_str=solution_str)
-            
-            if predicted_arrangement is None:
-                score = 0.0
-
-            # Evaluate equation
-            try:
-                if isinstance(predicted_arrangement, list) and isinstance(target, list):            
-                    edit_distance = compute_edit_distance(predicted_arrangement, target)
-                    max_possible_dist = max(len(predicted_arrangement), len(target))
-                result = predicted_arrangement == target
-                if result:
-                    score = 1.0
-                elif method != 'strict':
-                    score = max(1.0 - (edit_distance / max_possible_dist))
-                else:
-                    score = 0.0
-            except Exception as e:
-                score = 0.0
-
-    except TimeoutException:
-        print("Computation timed out in puzzles_dataset")
-        score = 0.0
+        score = _compute_with_timeout()
     except Exception as e:
         print(f"Error in compute_score in puzzles_dataset: {e}")
         score = 0.0

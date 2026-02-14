@@ -139,8 +139,13 @@ def compute_score(model_output: str, ground_truth: str, extra_info: any = None) 
     """
     Compute score dict for evaluation harness.
     """
-    correct, _ = check_accuracy(str(model_output), str(ground_truth), any_order=False)
-    return {"score": correct, "acc": correct}
+
+    try:
+        correct, _ = check_accuracy(str(model_output), str(ground_truth), any_order=False)
+        return {"score": correct, "acc": correct}
+    except Exception as e:
+        print(f"Error in compute_score in codeio: {e}")
+        return {"score": False, "acc": False}
 
 
 # --------------------------- test --------------------------- #

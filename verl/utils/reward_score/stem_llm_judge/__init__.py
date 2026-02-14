@@ -3,13 +3,15 @@ Minimal STEM judge: every answer is graded by an external LLM.
 
 Prerequisite:
   - Set env var STEM_LLM_JUDGE_URL to an OpenAI-compatible /v1/chat/completions.
+  - Supports multiple endpoints for load balancing - separate URLs with commas:
+        export STEM_LLM_JUDGE_URL="http://host1:8000,http://host2:8000,http://host3:8000"
   - Launch the service with your preferred model beforehand, e.g.
 
         vllm serve TIGER-Lab/general-verifier
-        export STEM_LLM_JUDGE_URL=http://127.0.0.1:8000/v1/chat/completions
+        export STEM_LLM_JUDGE_URL=http://127.0.0.1:8000
 """
 
-import os, re, requests
+import os, re, random, requests
 from typing import Tuple
 
 # # ------------ Prompt template ------------------------------------------------
@@ -35,9 +37,17 @@ from typing import Tuple
 
 # ------------ Core LLM call --------------------------------------------------
 def _llm_judge(question: str, student: str, reference: str, verbose: bool = False) -> bool:
-    url_base = os.getenv("STEM_LLM_JUDGE_URL")
-    if not url_base:
+    url_base_str = os.getenv("STEM_LLM_JUDGE_URL")
+    if not url_base_str:
         raise EnvironmentError("STEM_LLM_JUDGE_URL not set")
+
+    # Support multiple endpoints separated by commas for load balancing
+    endpoints = [url.strip() for url in url_base_str.split(",") if url.strip()]
+    if not endpoints:
+        raise EnvironmentError("STEM_LLM_JUDGE_URL contains no valid endpoints")
+
+    # Randomly select an endpoint for load balancing
+    url_base = random.choice(endpoints)
     url = url_base.rstrip("/") + "/v1/chat/completions"
 
     # prompt = JUDGE_TEMPLATE.format(
