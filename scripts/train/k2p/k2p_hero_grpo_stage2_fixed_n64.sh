@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=grpo-stage1-k2pRL-mainMathOnly
-#SBATCH --nodes=32
-#SBATCH --ntasks=32
+#SBATCH --job-name=grpo-stage2-k2pRL-dataMix2-n64-fixed
+#SBATCH --nodes=64
+#SBATCH --ntasks=64
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=96
@@ -11,6 +11,7 @@
 #SBATCH --exclusive
 #SBATCH --time=720:00:00
 #SBATCH --partition=higherprio
+#SBATCH --exclude=azure-uk-hpc-H200-instance-337 
 
 # commenting out... SBATCH --exclude=azure-uk-hpc-H200-instance-[043-060,249,347-410]
 # job name: grpo-stage2-k2pRL-easy50k-7domains
@@ -18,11 +19,14 @@
 
 # =================== Frequently Used Variables ===================
 RESUME_CKPT_DIR_NAME=""  # Fill in the checkpoint directory name to resume from, otherwise from scratch
-export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-004:8000" # Fill in the llm-as-judge hosted URL, currently used only in 'STEM' domain
-export MATH_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-284:8000" # Fill in the OmniMATH llm-as-judge hosted URL, only used to score OmniMATH dataset if not empty
+# export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-004:8000" # Fill in the llm-as-judge hosted URL, currently used only in 'STEM' domain
+# export MATH_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-284:8000" # Fill in the OmniMATH llm-as-judge hosted URL, only used to score OmniMATH dataset if not empty
+export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-036:8000,http://azure-uk-hpc-H200-instance-061:8000,http://azure-uk-hpc-H200-instance-062:8000,http://azure-uk-hpc-H200-instance-175:8000" # Fill in the llm-as-judge hosted URL, currently used only in 'STEM' domain
+export MATH_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-058:8000,http://azure-uk-hpc-H200-instance-176:8000,http://azure-uk-hpc-H200-instance-387:8000,http://azure-uk-hpc-H200-instance-388:8000" # Fill in the OmniMATH llm-as-judge hosted URL, only used to score OmniMATH dataset if not empty
 
 # =================== Cluster Environment ===================
-export CONDA_BIN_PATH=/lustrefs/users/taylor.killian/miniconda3/envs/sync-rl/bin/
+# export CONDA_BIN_PATH=/lustrefs/users/taylor.killian/miniconda3/envs/sync-rl/bin/
+export CONDA_BIN_PATH=/lustrefs/users/taylor.killian/miniconda3/envs/sync-rl//bin/
 export ROCR_VISIBLE_DEVICES=None
 export NCCL_TIMEOUT_SECONDS=4800000
 export OMPI_MCA_coll_hcoll_enable=0 \
@@ -65,7 +69,7 @@ export VLLM_USE_V1=1
 # =================== Data Mixture ===================
 
 # Training Data Configuration
-DATA_MIX_DIR="/lustrefs/users/varad.pimpalkhute/data/k2/final/data_mix_1"
+DATA_MIX_DIR="/lustrefs/users/varad.pimpalkhute/data/k2/final/data_mix_2"
 train_file_list=()
 id_val_file_list=()
 
@@ -74,34 +78,34 @@ iq400_path="/lustrefs/users/taylor.killian/Reasoning360/data/guru_data/iq400_pro
 # List of datasets to include (filename only)
 # Comment out lines to exclude specific datasets
 dataset_names=(
+    "codegen__deduped_leetcode2k_2.4k.parquet"
+    "codegen__deduped_livecodebench_599.parquet"
+    "codegen__deduped_primeintellect_9.6k.parquet"
+    "codegen__deduped_taco_11.1k.parquet"
+    "ifbench__fixed_85.6k.parquet"
+    "simulation__codeio_fixed_12.1k.parquet"
+    "logic__arcagi1_297.parquet"
+    "logic__arcagi2_653.parquet"
+    "logic__barc_3.4k.parquet"
+    "logic__graph_logical_dataset_1.4k.parquet"
+    "logic__ordering_puzzle_dataset_2.9k.parquet"
+    "logic__reasoning_gym_40.6k.parquet"
+    "logic__synlogic_12.1k.parquet"
+    "logic__zebra_puzzle_dataset_5.0k.parquet"
     "math__combined_118.2k.part1.parquet"
     "math__combined_118.2k.part2.parquet"
-    "omni_math_4.43k_dedup.parquet"
+    "omni_math_4.43k.parquet"
+    "stem__nemotron_13.3k.parquet"
+    "stem__web_31.7k.parquet"
+    "table__hitab_7.4k.parquet"
+    "table__multihier_2.9k.parquet"
 )
-    # "stem__nemotron_13.3k.parquet"
-    # "stem__web_31.7k.parquet"
-    # "table__hitab_7.4k.parquet"
-    # "table__multihier_2.9k.parquet"
-# "codegen__deduped_leetcode2k_2.4k.parquet"
-#     "codegen__deduped_livecodebench_599.parquet"
-#     "codegen__deduped_primeintellect_9.6k.parquet"
-#     "codegen__deduped_taco_11.1k.parquet"
-#     "ifbench__fixed_85.6k.parquet"
-#     "simulation__codeio_fixed_12.1k.parquet"
-#     "logic__arcagi1_297.parquet"
-#     "logic__arcagi2_653.parquet"
-#     "logic__barc_3.4k.parquet"
-#     "logic__graph_logical_dataset_1.4k.parquet"
-#     "logic__ordering_puzzle_dataset_2.9k.parquet"
-#     "logic__reasoning_gym_40.6k.parquet"
-#     "logic__synlogic_12.1k.parquet"
-#     "logic__zebra_puzzle_dataset_5.0k.parquet"
 
 echo "Collecting training files from ${DATA_MIX_DIR}..."
 
 # Search for each dataset in all subdirectories "impossible_questions" "131k_context_questions" "main_questions" "easy_questions"
 for dataset in "${dataset_names[@]}"; do
-    for subdir in "main_questions"; do
+    for subdir in "main_questions" "131k_context_questions" "impossible_questions"; do
         file_path="${DATA_MIX_DIR}/${subdir}/${dataset}"
         if [ -f "$file_path" ]; then
             echo "Adding: $file_path"
@@ -169,13 +173,13 @@ if_bench_test_path=${TEST_DATA_DIR}/ifbench_800.parquet
 # test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${humaneval_test_path}','${mbpp_test_path}','${livecodebench_test_path}','${nemotron_test_path}','${gpqa_diamond_test_path}','${supergpqa_test_path}']"
 
 # Full data mixture (uncomment to use)
-test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}']"
-# test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${humaneval_test_path}','${mbpp_test_path}','${livecodebench_test_path}','${zebralogic_test_path}','${reasoninggym_test_path}','${arcagi1_test_path}','${multihier_test_path}','${hitab_test_path}','${nemotron_test_path}','${gpqa_diamond_test_path}','${supergpqa_test_path}','${if_test_path}','${if_bench_test_path}']" # ,'${iq400_path}', '${synlogic_test_path}',
+test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${humaneval_test_path}','${mbpp_test_path}','${livecodebench_test_path}','${zebralogic_test_path}','${arcagi1_test_path}','${multihier_test_path}','${hitab_test_path}','${nemotron_test_path}','${gpqa_diamond_test_path}','${supergpqa_test_path}','${if_test_path}','${if_bench_test_path}']" # ,'${iq400_path}', '${synlogic_test_path}', '${reasoninggym_test_path}'
 
 
 # =================== Model ===================
 # BASE_MODEL=/lustrefs/users/runner/workspace/checkpoints/huggingface/sft/mid4_rope_sft_reasoning_am_251117/checkpoints/checkpoint_0002250  # AM-Think SFT
-BASE_MODEL=/lustrefs/users/varad.pimpalkhute/data_process/K2-Plus-Oss-Instruct-mid4 # Final Instruct SFT (after stg4_iter 10k)
+# BASE_MODEL=/lustrefs/users/varad.pimpalkhute/data_process/K2-Plus-Oss-Instruct-mid4 # Final Instruct SFT (after stg4_iter 10k)
+BASE_MODEL=/lustrefs/users/taylor.killian/Reasoning360/checkpoints/k2plus_rl/grpo-k2p-newFiltered-32k-mainQs-finalInstruct-406955/global_step_330/actor/huggingface
 # BASE_MODEL=/lustrefs/users/varad.pimpalkhute/data_process/K2-Plus-Instruct-mid4 # Instruct SFT, after stg4_iter 7k
 # BASE_MODEL=/lustrefs/users/taylor.killian/Reasoning360/checkpoints/k2plus_rl/grpo-k2p-newFiltered-32k-mainQs-finalInstruct-406955/global_step_330/actor/huggingface
 
@@ -232,7 +236,7 @@ clip_ratio_low=0.2
 clip_ratio_high=0.28
 
 max_prompt_length=$((1024 * 4))
-max_response_length=$((1024 * 32))
+max_response_length=$((1024 * 64))
 enable_overlong_buffer=False
 overlong_buffer_len=$((1024 * 12))
 overlong_penalty_factor=1.0
@@ -245,7 +249,7 @@ filter_groups_metric=acc
 max_num_gen_batches=10
 train_prompt_bsz=256  # on-policy model update batchsize: train_prompt_bsz * rollout.n
 gen_prompt_bsz=$((train_prompt_bsz * 1))
-n_resp_per_prompt=16
+n_resp_per_prompt=64
 train_prompt_mini_bsz=256  # model grad update batchsize
 
 # Algorithm
@@ -255,9 +259,9 @@ top_p=1.0
 top_k=-1 # 0 for HF rollout, -1 for vLLM rollout
 
 # Training config
-sp_size=16  # Reduced from 32 to reduce memory pressure
+sp_size=16  # Disable sequence parallelism
 gen_tp=4
-gen_max_num_seqs=1024  # Reduced from 1024 to reduce memory pressure
+gen_max_num_seqs=1024
 infer_micro_batch_size=null
 train_micro_batch_size=null
 use_dynamic_bsz=True
@@ -291,9 +295,9 @@ offload=True
     actor_rollout_ref.actor.clip_ratio_high=${clip_ratio_high} \
     actor_rollout_ref.actor.clip_ratio_c=10.0 \
     actor_rollout_ref.actor.use_dynamic_bsz=${use_dynamic_bsz} \
-    actor_rollout_ref.actor.ppo_max_token_len_per_gpu=${actor_ppo_max_token_len} \
+    actor_rollout_ref.actor.ppo_max_token_len_per_gpu=60000 \
     actor_rollout_ref.actor.strategy="fsdp2" \
-    actor_rollout_ref.actor.optim.lr= 5e-7 \
+    actor_rollout_ref.actor.optim.lr=5e-7 \
     actor_rollout_ref.actor.optim.lr_warmup_steps=10 \
     actor_rollout_ref.actor.optim.weight_decay=0.1 \
     actor_rollout_ref.actor.optim.warmup_style=constant \
@@ -319,7 +323,7 @@ offload=True
     actor_rollout_ref.rollout.n=${n_resp_per_prompt} \
     actor_rollout_ref.rollout.log_prob_use_dynamic_bsz=${use_dynamic_bsz} \
     actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=${infer_ppo_max_token_len} \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.7 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.8 \
     actor_rollout_ref.rollout.log_prob_micro_batch_size=${infer_micro_batch_size} \
     actor_rollout_ref.rollout.tensor_model_parallel_size=${gen_tp} \
     actor_rollout_ref.rollout.enable_chunked_prefill=True \
@@ -350,11 +354,11 @@ offload=True
     reward_model.overlong_buffer.enable=${enable_overlong_buffer} \
     reward_model.overlong_buffer.len=${overlong_buffer_len} \
     reward_model.overlong_buffer.penalty_factor=${overlong_penalty_factor} \
-    +reward_model.reward_kwargs.num_processes=64 \
+    +reward_model.reward_kwargs.num_processes=128 \
     trainer.logger=['console','wandb'] \
     trainer.project_name=${WANDB_PROJECT} \
     trainer.experiment_name=${WANDB_EXPERIMENT_NAME} \
-    trainer.val_before_train=False \
+    trainer.val_before_train=True \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=$worker_num \
     trainer.save_freq=5 \

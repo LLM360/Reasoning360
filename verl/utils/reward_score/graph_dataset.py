@@ -3,8 +3,6 @@ import random
 import ast
 import operator
 
-from verl.utils.py_functional import timeout_limit
-
 
 def extract_solution(solution_str):
 
@@ -31,7 +29,6 @@ def compute_score(
         timeout: maximum time in seconds to allow for computation
     """
 
-    @timeout_limit(seconds=timeout)
     def _compute_with_timeout():
         if not isinstance(ground_truth, str):
             ground_truth_str = str(ground_truth)
@@ -56,9 +53,6 @@ def compute_score(
 
     try:
         score = _compute_with_timeout()
-    except TimeoutError:
-        print("Computation timed out in graph_dataset")
-        score = 0.0
     except Exception as e:
         print(f"Error in compute_score in graph_dataset: {e}")
         score = 0.0

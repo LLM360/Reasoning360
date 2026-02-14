@@ -1,7 +1,14 @@
 import reasoning_gym
 import json
 import re
-from verl.utils.py_functional import timeout_limit
+import gc
+from functools import lru_cache
+
+
+@lru_cache(maxsize=64)
+def _get_cached_scorer(task):
+    """Cache scorer objects to avoid recreating them for every sample."""
+    return reasoning_gym.get_score_answer_fn(task)
 
 def compute_score(solution_str, ground_truth, extra_info=None, item=None):
     """
@@ -16,7 +23,6 @@ def compute_score(solution_str, ground_truth, extra_info=None, item=None):
     Returns:
         dict: {"score": float, "acc": float}
     """
-    @timeout_limit(seconds=10)
     def _compute_score_with_timeout():
         task = None
         entry = None
@@ -60,8 +66,8 @@ def compute_score(solution_str, ground_truth, extra_info=None, item=None):
         if not task:
             raise ValueError("task must be provided in extra_info, item, or ground_truth dict.")
 
-        # 4. Get scoring function
-        scorer = reasoning_gym.get_score_answer_fn(task)
+        # 4. Get scoring function (cached to avoid recreating for every sample)
+        scorer = _get_cached_scorer(task)
 
         # 5. Get entry
         if entry is None:
@@ -84,30 +90,19 @@ def compute_score(solution_str, ground_truth, extra_info=None, item=None):
 
         # 6. Extract clean answer from solution_str
         clean_answer = extract_answer_from_solution(solution_str)
-        
-        # 7. Scoring with task-specific fixes
-        debug_log_path = "reasoning_gym_debug.log"
+
+        # 7. Scoring with task-specific fixes (debug logging removed for memory efficiency)
         try:
-            with open(debug_log_path, "a", encoding="utf-8") as f:
-                f.write("[DEBUG] solution_str: {}\n".format(solution_str))
-                f.write("[DEBUG] clean_answer: {}\n".format(clean_answer))
-                f.write("[DEBUG] ground_truth: {}\n".format(ground_truth))
-                f.write("[DEBUG] task: {}\n".format(task))
-                f.write("[DEBUG] metadata: {}\n".format(json.dumps(entry.get("metadata", {}), ensure_ascii=False, indent=2)))
-                
-                # Get raw score from reasoning_gym using clean answer
-                raw_score = scorer(answer=clean_answer, entry=entry)
-                
-                # Apply task-specific corrections for known issues
-                corrected_score = apply_task_specific_corrections(task, solution_str, ground_truth, raw_score)
-                
-                f.write("[DEBUG] raw_score: {}\n".format(raw_score))
-                f.write("[DEBUG] corrected_score: {}\n".format(corrected_score))
-                
+            # Get raw score from reasoning_gym using clean answer
+            raw_score = scorer(answer=clean_answer, entry=entry)
+
+            # Apply task-specific corrections for known issues
+            corrected_score = apply_task_specific_corrections(task, solution_str, ground_truth, raw_score)
+
             return {"score": float(corrected_score), "acc": float(corrected_score)}
         except Exception as e:
-            with open(debug_log_path, "a", encoding="utf-8") as f:
-                f.write(f"Error in reasoning gym scoring: {e}\n")
+            # Only print errors, don't write to file
+            print(f"Error in reasoning gym scoring: {e}")
             return {"score": 0.0, "acc": 0.0}
 
     try:

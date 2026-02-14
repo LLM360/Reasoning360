@@ -3,7 +3,6 @@ import numpy as np
 from .data import Data
 from .verifier import Verifier
 import re
-from verl.utils.py_functional import timeout_limit
 
 class TimeSequenceVerifier(Verifier):
     """
@@ -18,7 +17,6 @@ class TimeSequenceVerifier(Verifier):
         @return: 回答是否正确的布尔值
         """
         try:
-            @timeout_limit(seconds=10)
             def _verify_with_timeout():
                 test_answer = self.extract_answer(test_solution)
                 # 解析元数据

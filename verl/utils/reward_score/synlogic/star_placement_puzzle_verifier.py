@@ -3,7 +3,6 @@ from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
 import re
 import json
 import ast
-from verl.utils.py_functional import timeout_limit
 
 class StarPlacementPuzzleVerifier(Verifier):
     """
@@ -18,7 +17,6 @@ class StarPlacementPuzzleVerifier(Verifier):
         @return: 回答是否正确的布尔值
         """
         try:
-            @timeout_limit(seconds=10)
             def _verify_with_timeout():
                 star_coords = self.extract_answer(test_solution)
                 # 获取游戏元数据

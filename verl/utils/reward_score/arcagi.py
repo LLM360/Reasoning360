@@ -1,7 +1,6 @@
 import re
 import ast
 import numpy as np
-from verl.utils.py_functional import timeout_limit
 
 
 def extract_solution(solution_str):
@@ -94,20 +93,13 @@ def compare_solutions_with_padding(generated_output, correct_output, pad_value=-
 def compute_score(
     model_output: str, ground_truth: np.ndarray, extra_info: any = None
 ) -> float:
-    @timeout_limit(seconds=10)
-    def _compute_score_with_timeout():
+    try:
         model_output_str = str(model_output)
         final_answer = extract_solution(model_output_str)
         is_correct, correct_percentage = compare_solutions_with_padding(
             final_answer, ground_truth
         )
         return {"score": is_correct, "acc": is_correct}
-
-    try:
-        return _compute_score_with_timeout()
-    except TimeoutError:
-        print("Computation timed out in arcagi")
-        return {"score": 0.0, "acc": 0.0}
     except Exception as e:
         print(f"Error in compute_score in arcagi: {e}")
         return {"score": 0.0, "acc": 0.0}

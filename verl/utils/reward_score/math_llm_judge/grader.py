@@ -92,7 +92,6 @@ This logic is largely copied from the Hendrycks' MATH release (math_equivalence)
 - https://github.com/openai/prm800k
 """
 
-import contextlib
 import re
 import math
 from math import isclose
@@ -304,18 +303,16 @@ def math_equal(prediction: Union[bool, float, str],
             except Exception:
                 pass
 
-    return symbolic_equal(prediction, reference, tolerance, timeout)
+    return symbolic_equal(prediction, reference, tolerance)
 
 
-def symbolic_equal(a, b, tolerance, timeout=10.0):
+@timeout_limit(seconds=10)
+def symbolic_equal(a, b, tolerance):
 
     def _parse(s):
         for f in [parse_expr, parse_latex]:
             try:
-                @timeout_limit(seconds=timeout)
-                def _parse_with_timeout():
-                    return f(s)
-                return _parse_with_timeout()
+                return f(s)
             except Exception:
                 pass
         return s
@@ -324,19 +321,13 @@ def symbolic_equal(a, b, tolerance, timeout=10.0):
     b = _parse(b)
 
     try:
-        @timeout_limit(seconds=timeout)
-        def _simplify_with_timeout():
-            return simplify(a - b) == 0
-        if _simplify_with_timeout():
+        if simplify(a - b) == 0:
             return True
     except Exception:
         pass
 
     try:
-        @timeout_limit(seconds=timeout)
-        def _numeric_equal_with_timeout():
-            return isclose(N(a), N(b), rel_tol=tolerance)
-        if _numeric_equal_with_timeout():
+        if isclose(N(a), N(b), rel_tol=tolerance):
             return True
     except Exception:
         pass

@@ -3,7 +3,6 @@ from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
 import re
 import ast
 import numpy as np
-from verl.utils.py_functional import timeout_limit
 
 class NumbrixVerifier(Verifier):
     """
@@ -12,7 +11,6 @@ class NumbrixVerifier(Verifier):
     """
     def verify(self, data: Data, test_solution: str):
         try:
-            @timeout_limit(seconds=10)
             def _verify_with_timeout():
                 # 提取答案网格
                 test_grid = self.extract_answer(test_solution)

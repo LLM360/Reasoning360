@@ -102,9 +102,6 @@ from sympy import N, simplify
 from sympy.parsing.latex import parse_latex
 from sympy.parsing.sympy_parser import parse_expr
 
-# verl related
-from verl.utils.py_functional import timeout_limit
-
 
 def is_digit(s):
     try:
@@ -325,11 +322,7 @@ def symbolic_equal(a, b, tolerance, timeout=10.0):
     def _parse(s):
         for f in [parse_expr, parse_latex]:
             try:
-                with timeout_limit(seconds=timeout):
-                    return f(s)
-            except TimeoutError:
-                print(f"Parsing timed out for {s}")
-                continue
+                return f(s)
             except Exception:
                 continue
         return s
@@ -338,22 +331,14 @@ def symbolic_equal(a, b, tolerance, timeout=10.0):
     b = _parse(b)
 
     try:
-        with timeout_limit(seconds=timeout):
-            if simplify(a - b) == 0:
-                return True
-    except TimeoutError:
-        print(f"Simplification timed out for {a} - {b}")
-        pass
+        if simplify(a - b) == 0:
+            return True
     except Exception:
         pass
 
     try:
-        with timeout_limit(seconds=timeout):
-            if isclose(N(a), N(b), rel_tol=tolerance):
-                return True
-    except TimeoutError:
-        print(f"Numerical evaluation timed out for {a}, {b}")
-        pass
+        if isclose(N(a), N(b), rel_tol=tolerance):
+            return True
     except Exception:
         pass
     return False

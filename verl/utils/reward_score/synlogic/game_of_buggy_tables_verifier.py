@@ -1,7 +1,6 @@
 from .data import Data
 from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
 import re
-from verl.utils.py_functional import timeout_limit
 
 class BuggyTableVerifier(Verifier):
     """
@@ -28,7 +27,6 @@ class BuggyTableVerifier(Verifier):
         @return: bool indicating whether the answer is correct
         """
         try:
-            @timeout_limit(seconds=10)
             def _verify_with_timeout():
                 # Extract the expected answer from the Data object
                 expected_answer = data.answer if data and hasattr(data, 'answer') else ""

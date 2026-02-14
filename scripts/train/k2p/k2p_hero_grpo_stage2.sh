@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=grpo-stage1-k2pRL-mainMathOnly
-#SBATCH --nodes=32
-#SBATCH --ntasks=32
+#SBATCH --job-name=grpo-stage2-k2pRL-dataMix2
+#SBATCH --nodes=64
+#SBATCH --ntasks=64
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=96
@@ -11,20 +11,25 @@
 #SBATCH --exclusive
 #SBATCH --time=720:00:00
 #SBATCH --partition=higherprio
+#SBATCH --exclude=azure-uk-hpc-H200-instance-337 
 
 # commenting out... SBATCH --exclude=azure-uk-hpc-H200-instance-[043-060,249,347-410]
 # job name: grpo-stage2-k2pRL-easy50k-7domains
 # job name: grpo-k2p-newFiltered-64k-fullData-finalInstruct
 
 # =================== Frequently Used Variables ===================
-RESUME_CKPT_DIR_NAME=""  # Fill in the checkpoint directory name to resume from, otherwise from scratch
-export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-004:8000" # Fill in the llm-as-judge hosted URL, currently used only in 'STEM' domain
-export MATH_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-284:8000" # Fill in the OmniMATH llm-as-judge hosted URL, only used to score OmniMATH dataset if not empty
+RESUME_CKPT_DIR_NAME="grpo-stage2-k2pRL-dataMix2-417843"  # Fill in the checkpoint directory name to resume from, otherwise from scratch
+# export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-004:8000" # Fill in the llm-as-judge hosted URL, currently used only in 'STEM' domain
+# export MATH_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-284:8000" # Fill in the OmniMATH llm-as-judge hosted URL, only used to score OmniMATH dataset if not empty
+export STEM_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-036:8000" # Fill in the llm-as-judge hosted URL, currently used only in 'STEM' domain
+export MATH_LLM_JUDGE_URL="http://azure-uk-hpc-H200-instance-058:8000" # Fill in the OmniMATH llm-as-judge hosted URL, only used to score OmniMATH dataset if not empty
 
 # =================== Cluster Environment ===================
-export CONDA_BIN_PATH=/lustrefs/users/taylor.killian/miniconda3/envs/sync-rl/bin/
+# export CONDA_BIN_PATH=/lustrefs/users/taylor.killian/miniconda3/envs/sync-rl/bin/
+export CONDA_BIN_PATH=/lustrefs/users/taylor.killian/miniconda3/envs/sync-rl//bin/
 export ROCR_VISIBLE_DEVICES=None
 export NCCL_TIMEOUT_SECONDS=4800000
+export RAY_memory_usage_threshold=0.95  # Increase Ray memory threshold before killing workers
 export OMPI_MCA_coll_hcoll_enable=0 \
 TORCH_NCCL_ENABLE_MONITORING=0 \
 CUDA_DEVICE_ORDER=PCI_BUS_ID \
@@ -65,7 +70,7 @@ export VLLM_USE_V1=1
 # =================== Data Mixture ===================
 
 # Training Data Configuration
-DATA_MIX_DIR="/lustrefs/users/varad.pimpalkhute/data/k2/final/data_mix_1"
+DATA_MIX_DIR="/lustrefs/users/varad.pimpalkhute/data/k2/final/data_mix_2"
 train_file_list=()
 id_val_file_list=()
 
@@ -74,34 +79,34 @@ iq400_path="/lustrefs/users/taylor.killian/Reasoning360/data/guru_data/iq400_pro
 # List of datasets to include (filename only)
 # Comment out lines to exclude specific datasets
 dataset_names=(
+    "codegen__deduped_leetcode2k_2.4k.parquet"
+    "codegen__deduped_livecodebench_599.parquet"
+    "codegen__deduped_primeintellect_9.6k.parquet"
+    "codegen__deduped_taco_11.1k.parquet"
+    "ifbench__fixed_85.6k.parquet"
+    "simulation__codeio_fixed_12.1k.parquet"
+    "logic__arcagi1_297.parquet"
+    "logic__arcagi2_653.parquet"
+    "logic__barc_3.4k.parquet"
+    "logic__graph_logical_dataset_1.4k.parquet"
+    "logic__ordering_puzzle_dataset_2.9k.parquet"
+    "logic__reasoning_gym_40.6k.parquet"
+    "logic__synlogic_12.1k.parquet"
+    "logic__zebra_puzzle_dataset_5.0k.parquet"
     "math__combined_118.2k.part1.parquet"
     "math__combined_118.2k.part2.parquet"
-    "omni_math_4.43k_dedup.parquet"
+    "omni_math_4.43k.parquet"
+    "stem__nemotron_13.3k.parquet"
+    "stem__web_31.7k.parquet"
+    "table__hitab_7.4k.parquet"
+    "table__multihier_2.9k.parquet"
 )
-    # "stem__nemotron_13.3k.parquet"
-    # "stem__web_31.7k.parquet"
-    # "table__hitab_7.4k.parquet"
-    # "table__multihier_2.9k.parquet"
-# "codegen__deduped_leetcode2k_2.4k.parquet"
-#     "codegen__deduped_livecodebench_599.parquet"
-#     "codegen__deduped_primeintellect_9.6k.parquet"
-#     "codegen__deduped_taco_11.1k.parquet"
-#     "ifbench__fixed_85.6k.parquet"
-#     "simulation__codeio_fixed_12.1k.parquet"
-#     "logic__arcagi1_297.parquet"
-#     "logic__arcagi2_653.parquet"
-#     "logic__barc_3.4k.parquet"
-#     "logic__graph_logical_dataset_1.4k.parquet"
-#     "logic__ordering_puzzle_dataset_2.9k.parquet"
-#     "logic__reasoning_gym_40.6k.parquet"
-#     "logic__synlogic_12.1k.parquet"
-#     "logic__zebra_puzzle_dataset_5.0k.parquet"
 
 echo "Collecting training files from ${DATA_MIX_DIR}..."
 
 # Search for each dataset in all subdirectories "impossible_questions" "131k_context_questions" "main_questions" "easy_questions"
 for dataset in "${dataset_names[@]}"; do
-    for subdir in "main_questions"; do
+    for subdir in "main_questions" "131k_context_questions" "impossible_questions"; do
         file_path="${DATA_MIX_DIR}/${subdir}/${dataset}"
         if [ -f "$file_path" ]; then
             echo "Adding: $file_path"
@@ -169,13 +174,13 @@ if_bench_test_path=${TEST_DATA_DIR}/ifbench_800.parquet
 # test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${humaneval_test_path}','${mbpp_test_path}','${livecodebench_test_path}','${nemotron_test_path}','${gpqa_diamond_test_path}','${supergpqa_test_path}']"
 
 # Full data mixture (uncomment to use)
-test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}']"
-# test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${humaneval_test_path}','${mbpp_test_path}','${livecodebench_test_path}','${zebralogic_test_path}','${reasoninggym_test_path}','${arcagi1_test_path}','${multihier_test_path}','${hitab_test_path}','${nemotron_test_path}','${gpqa_diamond_test_path}','${supergpqa_test_path}','${if_test_path}','${if_bench_test_path}']" # ,'${iq400_path}', '${synlogic_test_path}',
+test_files="['${math_test_path}','${aime_test_path}','${aime25_test_path2}','${amc_test_path}','${humaneval_test_path}','${mbpp_test_path}','${livecodebench_test_path}','${zebralogic_test_path}','${arcagi1_test_path}','${multihier_test_path}','${hitab_test_path}','${nemotron_test_path}','${gpqa_diamond_test_path}','${supergpqa_test_path}','${if_test_path}','${if_bench_test_path}']" # ,'${iq400_path}', '${synlogic_test_path}', '${reasoninggym_test_path}'
 
 
 # =================== Model ===================
 # BASE_MODEL=/lustrefs/users/runner/workspace/checkpoints/huggingface/sft/mid4_rope_sft_reasoning_am_251117/checkpoints/checkpoint_0002250  # AM-Think SFT
-BASE_MODEL=/lustrefs/users/varad.pimpalkhute/data_process/K2-Plus-Oss-Instruct-mid4 # Final Instruct SFT (after stg4_iter 10k)
+# BASE_MODEL=/lustrefs/users/varad.pimpalkhute/data_process/K2-Plus-Oss-Instruct-mid4 # Final Instruct SFT (after stg4_iter 10k)
+BASE_MODEL=/lustrefs/users/taylor.killian/Reasoning360/checkpoints/k2plus_rl/grpo-k2p-newFiltered-32k-mainQs-finalInstruct-406955/global_step_330/actor/huggingface
 # BASE_MODEL=/lustrefs/users/varad.pimpalkhute/data_process/K2-Plus-Instruct-mid4 # Instruct SFT, after stg4_iter 7k
 # BASE_MODEL=/lustrefs/users/taylor.killian/Reasoning360/checkpoints/k2plus_rl/grpo-k2p-newFiltered-32k-mainQs-finalInstruct-406955/global_step_330/actor/huggingface
 
@@ -232,7 +237,7 @@ clip_ratio_low=0.2
 clip_ratio_high=0.28
 
 max_prompt_length=$((1024 * 4))
-max_response_length=$((1024 * 32))
+max_response_length=$((1024 * 64))
 enable_overlong_buffer=False
 overlong_buffer_len=$((1024 * 12))
 overlong_penalty_factor=1.0
@@ -255,9 +260,9 @@ top_p=1.0
 top_k=-1 # 0 for HF rollout, -1 for vLLM rollout
 
 # Training config
-sp_size=16  # Reduced from 32 to reduce memory pressure
+sp_size=16  # Disable sequence parallelism
 gen_tp=4
-gen_max_num_seqs=1024  # Reduced from 1024 to reduce memory pressure
+gen_max_num_seqs=1024
 infer_micro_batch_size=null
 train_micro_batch_size=null
 use_dynamic_bsz=True
@@ -293,7 +298,7 @@ offload=True
     actor_rollout_ref.actor.use_dynamic_bsz=${use_dynamic_bsz} \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=${actor_ppo_max_token_len} \
     actor_rollout_ref.actor.strategy="fsdp2" \
-    actor_rollout_ref.actor.optim.lr= 5e-7 \
+    actor_rollout_ref.actor.optim.lr=5e-7 \
     actor_rollout_ref.actor.optim.lr_warmup_steps=10 \
     actor_rollout_ref.actor.optim.weight_decay=0.1 \
     actor_rollout_ref.actor.optim.warmup_style=constant \
@@ -326,7 +331,7 @@ offload=True
     actor_rollout_ref.rollout.max_num_batched_tokens=${infer_ppo_max_token_len} \
     actor_rollout_ref.rollout.max_num_seqs=${gen_max_num_seqs} \
     actor_rollout_ref.rollout.disable_log_stats=False \
-    actor_rollout_ref.rollout.enforce_eager=False \
+    actor_rollout_ref.rollout.enforce_eager=True \
     actor_rollout_ref.rollout.enable_prefix_caching=True \
     actor_rollout_ref.rollout.temperature=${temperature} \
     actor_rollout_ref.rollout.top_p=${top_p} \

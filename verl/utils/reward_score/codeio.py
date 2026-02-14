@@ -2,7 +2,6 @@ import json
 import ast
 import re
 from typing import Dict, Any, Tuple, List
-from verl.utils.py_functional import timeout_limit
 
 def normalize(obj: Any) -> Any:
     """
@@ -140,16 +139,10 @@ def compute_score(model_output: str, ground_truth: str, extra_info: any = None) 
     """
     Compute score dict for evaluation harness.
     """
-    @timeout_limit(seconds=10)
-    def _compute_score_with_timeout():
-        correct, _ = check_accuracy(str(model_output), str(ground_truth), any_order=False)
-        return {"score": correct, "acc": correct}
 
     try:
-        return _compute_score_with_timeout()
-    except TimeoutError:
-        print("Computation timed out in codeio")
-        return {"score": False, "acc": False}
+        correct, _ = check_accuracy(str(model_output), str(ground_truth), any_order=False)
+        return {"score": correct, "acc": correct}
     except Exception as e:
         print(f"Error in compute_score in codeio: {e}")
         return {"score": False, "acc": False}

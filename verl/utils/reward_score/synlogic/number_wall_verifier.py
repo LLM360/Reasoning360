@@ -3,7 +3,6 @@ from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
 import re
 import json
 from collections import deque
-from verl.utils.py_functional import timeout_limit
 
 class NumberWallVerifier(Verifier):
     """
@@ -12,7 +11,6 @@ class NumberWallVerifier(Verifier):
     """
     def verify(self, data: Data, test_solution: str, **kwargs):
         try:
-            @timeout_limit(seconds=10)
             def _verify_with_timeout():
                 # 提取答案网格
                 solution_grid = self.extract_answer(test_solution)

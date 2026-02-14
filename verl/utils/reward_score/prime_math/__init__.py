@@ -24,7 +24,7 @@ import math
 import re
 
 import sympy
-from pylatexenc import latex2text
+# from pylatexenc import latex2text
 from sympy.parsing import sympy_parser
 
 from verl.utils.py_functional import timeout_limit

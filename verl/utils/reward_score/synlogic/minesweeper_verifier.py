@@ -3,7 +3,6 @@ from .verifier import Verifier, THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
 import re
 import json
 from typing import List, Tuple
-from verl.utils.py_functional import timeout_limit
 
 
 class MinesweeperVerifier(Verifier):
@@ -13,7 +12,6 @@ class MinesweeperVerifier(Verifier):
     """
     def verify(self, data: Data, test_solution: str, **kwargs):
         try:
-            @timeout_limit(seconds=10)
             def _verify_with_timeout():
                 # 从解答中提取地雷坐标
                 predicted_mines = self.extract_answer(test_solution)

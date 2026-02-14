@@ -3,7 +3,6 @@ from .verifier import Verifier
 import re
 import ast
 from typing import List, Set, Tuple, Dict
-from verl.utils.py_functional import timeout_limit
 
 
 class CampsiteVerifier(Verifier):
@@ -12,7 +11,6 @@ class CampsiteVerifier(Verifier):
     """
     def verify(self, data: Data, test_solution: str):
         try:
-            @timeout_limit(seconds=10)
             def _verify_with_timeout():
                 test_answer = self.extract_answer(test_solution)
                 original_grid = data.metadata["grid"]

@@ -1,7 +1,6 @@
 import re
 from .data import Data
 from .verifier import Verifier
-from verl.utils.py_functional import timeout_limit
 
 class WordSortingVerifier(Verifier):
     """
@@ -14,7 +13,6 @@ class WordSortingVerifier(Verifier):
 
     def verify(self, data: Data, test_answer: str):
         try:
-            @timeout_limit(seconds=10)
             def _verify_with_timeout():
                 ground_truth = self.str2list(data.answer)
                 parsed_answer = self.str2list(self.extract_answer(test_answer))

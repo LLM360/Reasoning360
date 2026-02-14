@@ -40,7 +40,7 @@ import os
 import math
 
 import sympy
-from pylatexenc import latex2text
+# from pylatexenc import latex2text
 from sympy.parsing import sympy_parser
 import requests
 from verl.utils.py_functional import timeout_limit
@@ -57,8 +57,6 @@ BAD_REGEXES = ["\^[0-9]+\^", "\^[0-9][0-9]+"]
 TUPLE_CHARS = "()[]"
 
 
-
-
 def _sympy_parse(expr: str):
     """Parses an expression with sympy."""
     py_expr = expr.replace("^", "**")
@@ -73,7 +71,7 @@ def _parse_latex(expr: str) -> str:
     expr = expr.replace("\\tfrac", "\\frac")
     expr = expr.replace("\\dfrac", "\\frac")
     expr = expr.replace("\\frac", " \\frac")  # Play nice with mixed numbers.
-    expr = latex2text.LatexNodes2Text().latex_to_text(expr)
+    # expr = latex2text.LatexNodes2Text().latex_to_text(expr)
 
     # Replace the specific characters that this parser uses.
     expr = expr.replace("√", "sqrt")
@@ -375,15 +373,27 @@ def match_answer(response):
 
 def llm_check_answer(model_output: str, ground_truth: str, question: str) -> bool:
     # use llm to check if the answer is correct
+    # Supports multiple endpoints for load balancing - separate URLs with commas
+    # e.g., MATH_LLM_JUDGE_URL="http://host1:8000,http://host2:8000,http://host3:8000"
 
-    # url = "http://176.56.200.81:30000/v1/chat/completions"
-    url_base = os.getenv("MATH_LLM_JUDGE_URL")
-    if not url_base:
+    import os
+    import random
+
+    url_base_str = os.getenv("MATH_LLM_JUDGE_URL")
+    if not url_base_str:
         raise ValueError("MATH_LLM_JUDGE_URL is not set")
+
+    # Support multiple endpoints separated by commas
+    endpoints = [url.strip() for url in url_base_str.split(",") if url.strip()]
+    if not endpoints:
+        raise ValueError("MATH_LLM_JUDGE_URL contains no valid endpoints")
+
+    # Randomly select an endpoint for load balancing
+    url_base = random.choice(endpoints)
     url = url_base.rstrip("/") + "/v1/chat/completions"
-    
+
     prompt = input_template.format(QUESTION=question, STUDENT_ANSWER=model_output, REFERENCE_ANSWER=ground_truth)
-    
+
     data = {
         "model": "openai/gpt-oss-120b",
         "messages": [{"role": "user", "content": prompt}],

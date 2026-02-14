@@ -1,6 +1,5 @@
 from verl.utils.reward_score.ifeval import instructions_registry
 import numpy as np
-from verl.utils.py_functional import timeout_limit
 
 def compute_score(solution_str, ground_truth, extra_info):
     """The scoring function for IFEval.
@@ -14,8 +13,7 @@ def compute_score(solution_str, ground_truth, extra_info):
         format_score: the score for the format
         score: the score for the correct answer
     """
-    @timeout_limit(seconds=60)
-    def _compute_score_with_timeout():
+    try:
         if "</think>" in solution_str:
             answer = solution_str.split("</think>")[1]
         else:
@@ -49,12 +47,6 @@ def compute_score(solution_str, ground_truth, extra_info):
             "score": all(is_following_list),
             "acc": all(is_following_list),
         }
-    
-    try:
-        return _compute_score_with_timeout()
-    except TimeoutError:
-        print("Computation timed out in ifbench")
-        return {"score": 0.0, "acc": False}
     except Exception as e:
         print(f"Error in compute_score in ifbench: {e}")
         return {"score": 0.0, "acc": False}

@@ -13,6 +13,8 @@
 # limitations under the License.
 # from . import gsm8k, math, prime_math, prime_code
 
+import time
+
 from verl.utils.import_utils import deprecated
 
 
@@ -40,6 +42,8 @@ def default_compute_score(
     Raises:
         NotImplementedError: If the reward function is not implemented for the given data source.
     """
+    start_time = time.perf_counter()
+
     # Handle extra_info format robustly
     reward_metric = None
     if extra_info and isinstance(extra_info, dict):
@@ -209,12 +213,28 @@ def default_compute_score(
     else:
         raise NotImplementedError(f"Reward function is not implemented for {data_source=}")
 
+    # Calculate elapsed time
+    elapsed = time.perf_counter() - start_time
+
+    # Log slow samples (>1 second)
+    if elapsed > 10.0:
+        print(f"[SLOW REWARD] {data_source}: {elapsed:.2f}s")
+
+    # Return result with timing metadata
+    # Always ensure "score" and "acc" keys are present for consistency
     if isinstance(res, dict):
+        res["_reward_time"] = elapsed
+        res["_data_source"] = data_source
+        # Ensure "acc" is present if not already
+        if "acc" not in res:
+            res["acc"] = res.get("score", 0.0)
         return res
     elif isinstance(res, int | float | bool):
-        return float(res)
+        score = float(res)
+        return {"score": score, "acc": score, "_reward_time": elapsed, "_data_source": data_source}
     else:
-        return float(res[0])
+        score = float(res[0])
+        return {"score": score, "acc": score, "_reward_time": elapsed, "_data_source": data_source}
 
 
 @deprecated("verl.utils.reward_score.default_compute_score")

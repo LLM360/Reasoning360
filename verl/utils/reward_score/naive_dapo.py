@@ -18,7 +18,7 @@ from typing import Optional
 import math
 
 import sympy
-from pylatexenc import latex2text
+# from pylatexenc import latex2text
 from sympy.parsing import sympy_parser
 from verl.utils.py_functional import timeout_limit
 
@@ -393,10 +393,8 @@ def grade_answer(given_answer: str, ground_truth: str) -> tuple[bool, str]:
                 # if the ground truth answer is an integer, we require the given answer to be a strict match (no sympy.simplify)
                 is_correct = False
             else:
-                try:
-                    is_correct = are_equal_under_sympy(ground_truth_elem, given_elem)
-                except TimeoutError:
-                    is_correct = False
+                is_correct = are_equal_under_sympy(ground_truth_elem, given_elem)
+                # is_correct = False
             if not is_correct:
                 break
 
@@ -477,11 +475,7 @@ def compute_score(solution_str: str, ground_truth: str, extra_info: dict) -> flo
             if "\\pi" in extracted_model_output or "\\pi" in ground_truth:
                 equivs = []
                 for pi in [math.pi, 3.14]:
-                    equivs.append(
-                        math_equal(
-                            extracted_model_output, ground_truth, timeout=True, pi=pi
-                        )
-                    )
+                    equivs.append(math_equal(extracted_model_output, ground_truth, timeout=True, pi=pi))
                     correct = any(equivs)
             else:
                 correct = math_equal(extracted_model_output, ground_truth, timeout=True)
