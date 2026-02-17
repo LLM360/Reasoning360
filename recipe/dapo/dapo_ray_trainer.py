@@ -43,7 +43,7 @@ from verl.trainer.ppo.ray_trainer import (
 )
 from verl.utils.profiler import marked_timer
 from verl.utils.rollout_skip import RolloutSkip
-
+from verl.utils.pass_rate_weighted_sampler import PassRateWeightedSampler
 
 class RayDAPOTrainer(RayPPOTrainer):
     """
@@ -68,11 +68,18 @@ class RayDAPOTrainer(RayPPOTrainer):
             config=OmegaConf.to_container(self.config, resolve=True),
         )
 
-        self.global_steps = 0
+        self.global_steps = 0 
         self.gen_steps = 0
-
         # load checkpoint before doing anything
         self._load_checkpoint()
+
+        # Extract pass rate tracker from sampler if using curriculum learning
+        # The PassRateWeightedSampler owns the tracker internally but we need to manually update it during training
+        # Currently, we only support PassRateWeightedSampler for curriculum learning
+        self.pass_rate_tracker = None
+        self.data_sampler = self.train_dataloader.sampler # train_dataloader is created in `RayPPOTrainer._create_dataloader()` and always has a sampler
+        if isinstance(self.data_sampler, PassRateWeightedSampler):
+            self.pass_rate_tracker = self.data_sampler.pass_rate_tracker
 
         # perform validation before training
         # currently, we only support validation using the reward_function.
@@ -135,7 +142,6 @@ class RayDAPOTrainer(RayPPOTrainer):
                         non_tensor_batch_keys=["raw_prompt_ids"],
                     )
                 gen_batch = gen_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
-
                 is_last_step = self.global_steps >= self.total_training_steps
 
                 with marked_timer("step", timing_raw):
@@ -189,7 +195,6 @@ class RayDAPOTrainer(RayPPOTrainer):
                             reward_extra_infos_dict = {}
 
                         new_batch.batch["token_level_scores"] = reward_tensor
-
                         if reward_extra_infos_dict:
                             new_batch.non_tensor_batch.update(
                                 {k: np.array(v) for k, v in reward_extra_infos_dict.items()}
@@ -205,6 +210,47 @@ class RayDAPOTrainer(RayPPOTrainer):
                             )  # TODO: This will be cleared if we use multiple genenration batches
                         else:
                             new_batch.batch["token_level_rewards"] = new_batch.batch["token_level_scores"]
+
+                    # === Curriculum Learning: Update pass rate tracker for weighted resampling ===
+                    # When using PassRateWeightedSampler, track per-sample success rates to enable dynamic curriculum learning. 
+                    # The sampler uses these pass rates to adjust sampling probabilities in the next epoch.
+
+                    # Note: make updating the pass rate tracker as a utility function later
+                    # 1. if sampler is an instance of PassRateWeightedSampler, self.pass_rate_tracker is not None
+                    # 2. `dataset_index` field is added to the RL datatset to identify samples
+                    if "dataset_index" in new_batch.non_tensor_batch and self.pass_rate_tracker is not None:
+                        dataset_indices = new_batch.non_tensor_batch["dataset_index"]
+                        # Sum token-level rewards to get sequence-level reward
+                        seq_rewards = new_batch.batch["token_level_rewards"].sum(dim=-1).cpu().numpy()
+                        # Success is 1 if sequence reward > 0, else 0
+                        successes = (seq_rewards > 0).astype(float)
+                        
+                        # Deduplicate: batch was repeated n times (interleaved), so we need to aggregate
+                        unique_indices, inverse_indices = np.unique(dataset_indices, return_inverse=True)
+                        
+                        assert len(unique_indices) > 0, "No unique samples found in batch. Check data pipeline configuration."
+                        # Aggregate successes: take mean across rollouts for each sample
+                        aggregated_successes = np.zeros(len(unique_indices), dtype=float)
+                        for i, _ in enumerate(unique_indices):
+                            mask = inverse_indices == i # boolean array to indicate positions of unique index i
+                            aggregated_successes[i] = np.mean(successes[mask]) # take average success across rollouts for sample i
+                        
+                        pass_rates = self.pass_rate_tracker.get_pass_rates()
+                        
+                        # Log curriculum metrics BEFORE updating tracker
+                        # Track improvement of hardest samples (across all samples, not just attempted)
+                        metrics['curriculum/hardest_10pct_pass_rate'] = float(np.percentile(pass_rates, 10))
+                        metrics['curriculum/hardest_25pct_pass_rate'] = float(np.percentile(pass_rates, 25))
+                        metrics['curriculum/hardest_50pct_pass_rate'] = float(np.percentile(pass_rates, 50))
+                        metrics['curriculum/hardest_75pct_pass_rate'] = float(np.percentile(pass_rates, 75))
+                        
+                        # Batch-level statistics
+                        metrics['curriculum/min_batch_pass_rate'] = float(np.min(aggregated_successes))
+                        metrics['curriculum/mean_batch_pass_rate'] = float(np.mean(aggregated_successes))
+                        metrics['curriculum/effective_batch_size'] = np.sum(aggregated_successes > 0)/len(unique_indices)
+                        
+                        # Update tracker with current batch results
+                        self.pass_rate_tracker.update(sample_indices=unique_indices.astype(int), batch_pass_rate=aggregated_successes)
 
                     if not self.config.algorithm.filter_groups.enable:
                         batch = new_batch
@@ -280,7 +326,6 @@ class RayDAPOTrainer(RayPPOTrainer):
                     # === Updating ===
 
                     batch.batch["response_mask"] = compute_response_mask(batch)
-
                     # Balance the number of valid tokens across DP ranks.
                     # NOTE: This usually changes the order of data in the `batch`,
                     # which won't affect the advantage calculation (since it's based on uid),
@@ -342,6 +387,7 @@ class RayDAPOTrainer(RayPPOTrainer):
                             actor_output = self.actor_rollout_wg.update_actor(batch)
                         actor_output_metrics = reduce_metrics(actor_output.meta_info["metrics"])
                         metrics.update(actor_output_metrics)
+                        print("in critic warmup loop")
                     
                     # Log rollout generations if enabled
                     rollout_data_dir = self.config.trainer.get("rollout_data_dir", None)
@@ -429,6 +475,31 @@ class RayDAPOTrainer(RayPPOTrainer):
                 num_prompt_in_batch = 0
                 num_total_prompts = 0
                 num_gen_batches = 0
+
+                # Add curriculum learning metrics to W&B
+                if isinstance(self.data_sampler, PassRateWeightedSampler):
+                    # Add 3D plot data for weight and count distributions (percentile-based)
+                    try:
+                        import wandb
+                        import pandas as pd
+
+                        weight_3d_data = self.data_sampler.get_wandb_3d_plot_data(metric_type='weight')
+                        count_3d_data = self.data_sampler.get_wandb_3d_plot_data(metric_type='count')
+                        
+                        # Add step to each data point for 3D visualization
+                        for point in weight_3d_data:
+                            point['step'] = self.global_steps
+                        for point in count_3d_data:
+                            point['step'] = self.global_steps
+                        
+                        metrics['curriculum/weight_distribution_3d'] = wandb.Table(
+                            dataframe=pd.DataFrame(weight_3d_data)
+                        ) if weight_3d_data else None
+                        metrics['curriculum/count_distribution_3d'] = wandb.Table(
+                            dataframe=pd.DataFrame(count_3d_data)
+                        ) if count_3d_data else None
+                    except ImportError:
+                        pass  # wandb or pandas not available
 
                 # TODO: make a canonical logger that supports various backend
                 logger.log(data=metrics, step=self.global_steps)

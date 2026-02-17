@@ -1,0 +1,33 @@
+hydra:
+  searchpath:
+    - file://verl/trainer/config
+
+defaults:
+  - ppo_trainer
+  - _self_
+
+# parameters added to enable PassRateWeightedSampler with DAPO; override parameters in verl/trainer/config/data/legacy_data.yaml
+data:
+  gen_batch_size: ${data.train_batch_size}
+  dataloader_num_workers: 0 # Recommended to set to 0 when using curriculum learning samplers (e.g., PassRateWeightedSampler) to prevent data caching before batches are reordered.
+  sampler:
+    pass_rate_temperature: 1.0 # temperature parameter for PassRateWeightedSampler, controls sharpness of weighting distribution
+    use_ema: False # whether to use EMA smoothed pass rates for weighting
+    ema_alpha: 0.1 # alpha parameter for EMA smoothing of pass rates
+
+reward_model:
+  reward_manager: dapo
+  overlong_buffer: 
+    enable: False # We try to avoid forgetting to set enable
+    len: 0
+    penalty_factor: 0.0
+    log: False
+
+algorithm:
+  filter_groups:
+    _target_: verl.trainer.config.FilterGroupsConfig
+    enable: False # We try to avoid forgetting to set enable
+    metric: null # acc / score / seq_reward / seq_final_reward / ...
+    max_num_gen_batches: 0 # Non-positive values mean no upper limit
+
+
