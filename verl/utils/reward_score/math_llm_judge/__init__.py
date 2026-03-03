@@ -398,14 +398,15 @@ def llm_check_answer(model_output: str, ground_truth: str, question: str) -> boo
     # use llm to check if the answer is correct
 
     # url = "http://176.56.200.81:30000/v1/chat/completions"
-    url = os.getenv("MATH_LLM_JUDGE_URL")
-    if not url:
+    url_base = os.getenv("MATH_LLM_JUDGE_URL")
+    if not url_base:
         raise ValueError("MATH_LLM_JUDGE_URL is not set")
+    url = url_base.rstrip("/") + "/v1/chat/completions"
     
     prompt = input_template.format(QUESTION=question, STUDENT_ANSWER=model_output, REFERENCE_ANSWER=ground_truth)
     
     data = {
-        "model": "Qwen/Qwen2.5-32B-Instruct",
+        "model": "openai/gpt-oss-120b",
         "messages": [{"role": "user", "content": prompt}],
     }
     response = requests.post(url, json=data)
@@ -423,7 +424,7 @@ def llm_check_answer(model_output: str, ground_truth: str, question: str) -> boo
 def compute_score(model_output: str,
                   ground_truth: str,
                   extra_info: dict) -> bool:
-    question = extra_info["question"]
+    question = extra_info["original_question"]
     model_output = str(model_output)
     ground_truth = str(ground_truth)
 
@@ -447,5 +448,4 @@ def compute_score(model_output: str,
     if is_matched and not is_correct:
         # use llm to check if the answer is correct
         is_correct = llm_check_answer(extracted_model_output, ground_truth, question)
-
     return is_correct, 1, extracted_model_output

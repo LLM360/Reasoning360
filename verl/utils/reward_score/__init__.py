@@ -16,7 +16,15 @@
 from verl.utils.import_utils import deprecated
 
 
-def default_compute_score(data_source, solution_str, ground_truth, extra_info=None, sandbox_fusion_url=None, concurrent_semaphore=None):
+def default_compute_score(
+    data_source,
+    solution_str,
+    ground_truth,
+    extra_info=None,
+    sandbox_fusion_url=None,
+    concurrent_semaphore=None,
+    memory_limit_mb=None,
+):
     """Compute the score for a given solution based on the data source.
 
     Args:
@@ -39,6 +47,9 @@ def default_compute_score(data_source, solution_str, ground_truth, extra_info=No
 
     # math
     if data_source.startswith("math"):
+        # # TODO: remove this after testing
+        # # added by @nightlessbaron for infra tests
+        # reward_metric = "math_dapo"
         if reward_metric == "prime_math":
             from . import prime_math
             res = prime_math.compute_score(solution_str, ground_truth)
@@ -47,6 +58,9 @@ def default_compute_score(data_source, solution_str, ground_truth, extra_info=No
             res = math_llm_judge.compute_score(
                 solution_str, ground_truth, extra_info=extra_info
             )
+        elif reward_metric == "math_dapo":
+            from . import math_dapo
+            res = math_dapo.compute_score(solution_str, ground_truth)
         else:
             # Default
             from . import naive_dapo
@@ -105,6 +119,13 @@ def default_compute_score(data_source, solution_str, ground_truth, extra_info=No
     elif data_source in ["ood__ifbench"]:
         from . import ifbench
         res = ifbench.compute_score(solution_str, ground_truth, extra_info=extra_info)
+    elif data_source in ["deepmath", "DeepMath", "zwhe99/DeepMath-103K"]:
+        from . import deepmath
+        res = deepmath.compute_score(solution_str, ground_truth, extra_info=extra_info)
+    elif data_source in ["stem_nemotron", "nemotron_stem"]:
+        from . import nemotron_stem
+        res = nemotron_stem.compute_score(solution_str, ground_truth, extra_info=extra_info)
+
     # NOTE: above is added by Reasoning360
     elif data_source == "openai/gsm8k":
         from . import gsm8k
@@ -141,7 +162,9 @@ def default_compute_score(data_source, solution_str, ground_truth, extra_info=No
             from . import sandbox_fusion
 
             # Pass the URL directly, ground_truth likely contains test cases here
-            res = sandbox_fusion.compute_score(sandbox_fusion_url, concurrent_semaphore, solution_str, ground_truth, continuous=True)
+            res = sandbox_fusion.compute_score(
+                sandbox_fusion_url, concurrent_semaphore, memory_limit_mb, solution_str, ground_truth, continuous=True
+            )
         else:
             # If no sandbox URL is provided, fall back to prime_code or raise error
             from . import prime_code
@@ -152,27 +175,64 @@ def default_compute_score(data_source, solution_str, ground_truth, extra_info=No
         from . import geo3k
 
         res = geo3k.compute_score(solution_str, ground_truth)
-    elif data_source in ["searchR1_nq", "searchR1_triviaqa", "searchR1_popqa", "searchR1_hotpotqa", "searchR1_2wikimultihopqa", "searchR1_musique", "searchR1_bamboogle"]:
+    elif data_source in [
+        "searchR1_nq",
+        "searchR1_triviaqa",
+        "searchR1_popqa",
+        "searchR1_hotpotqa",
+        "searchR1_2wikimultihopqa",
+        "searchR1_musique",
+        "searchR1_bamboogle",
+    ]:
         from . import search_r1_like_qa_em
 
         res = search_r1_like_qa_em.compute_score(solution_str, ground_truth)
+
+    elif data_source.startswith("synlogic"):
+        from .synlogic.synlogic import verifier_classes
+        from .synlogic.data import Data
+        
+        form_solution = solution_str.strip().split('</think>')[-1].strip()
+        # with open("solution_str_Qwen3-4B.txt_maze", "a") as f:
+        #     f.write("data_source: " + data_source + '\n')
+        #     f.write("solution_str: " + solution_str + '\n')
+        #     f.write("form_solution: " + form_solution + '\n')
+        #     f.write('-'*32 + '\n')
+        data = Data.from_json_str(extra_info["game_data_str"])
+        verifier = verifier_classes[data_source.replace("synlogic_", "")]()
+        res = verifier.verify(data, form_solution)
+        if res:
+            res = 1.0
+        else:
+            res = 0.0
+    
     else:
         raise NotImplementedError(f"Reward function is not implemented for {data_source=}")
 
     if isinstance(res, dict):
         return res
-    elif isinstance(res, (int, float, bool)):
+    elif isinstance(res, int | float | bool):
         return float(res)
     else:
         return float(res[0])
 
 
 @deprecated("verl.utils.reward_score.default_compute_score")
-def _default_compute_score(data_source, solution_str, ground_truth, extra_info=None, sandbox_fusion_url=None, concurrent_semaphore=None):
+def _default_compute_score(
+    data_source,
+    solution_str,
+    ground_truth,
+    extra_info=None,
+    sandbox_fusion_url=None,
+    concurrent_semaphore=None,
+    memory_limit_mb=None,
+):
     """
     Legacy function API to be deprecated. Please use `default_compute_score` instead.
     """
-    return default_compute_score(data_source, solution_str, ground_truth, extra_info, sandbox_fusion_url, concurrent_semaphore)
+    return default_compute_score(
+        data_source, solution_str, ground_truth, extra_info, sandbox_fusion_url, concurrent_semaphore, memory_limit_mb
+    )
 
 
 __all__ = ["default_compute_score"]

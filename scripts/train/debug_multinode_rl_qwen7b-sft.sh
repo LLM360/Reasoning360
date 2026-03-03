@@ -44,69 +44,65 @@ export HYDRA_FULL_ERROR=1
 export VLLM_USE_V1=0
 
 # =================== Data Mixture ===================
-# SHARED_DATA_PATH=./data
 SHARED_DATA_PATH=/mnt/sharefs/users/chengqian.gao/guru
-TRAIN_DATA_DIR=${SHARED_DATA_PATH}/train
 TEST_DATA_DIR=${SHARED_DATA_PATH}/offline_eval
 
-# Math (train)
-math_train_path=${TRAIN_DATA_DIR}/math__combined_5k.parquet
 # Math (test)
 math_test_path=${TEST_DATA_DIR}/math__math_500.parquet
 aime_test_path=${TEST_DATA_DIR}/math__aime_repeated_8x_240.parquet
-amc_test_path=${TEST_DATA_DIR}/math__amc_repeated_4x_332.parquet
-
-# Code (train)
-leetcode_train_path=${TRAIN_DATA_DIR}/codegen__leetcode2k_1.3k.parquet
-livecodebench_train_path=${TRAIN_DATA_DIR}/codegen__livecodebench_440.parquet
-primeintellect_train_path=${TRAIN_DATA_DIR}/codegen__primeintellect_7.5k.parquet
-taco_train_path=${TRAIN_DATA_DIR}/codegen__taco_8.8k.parquet
-# Code (test)
-humaneval_test_path=${TEST_DATA_DIR}/codegen__humaneval_164.parquet
-mbpp_test_path=${TEST_DATA_DIR}/codegen__mbpp_500.parquet
-livecodebench_test_path=${TEST_DATA_DIR}/codegen__livecodebench_279.parquet
-
-# Logic (train)
-arcagi1_train_path=${TRAIN_DATA_DIR}/logic__arcagi1_111.parquet
-arcagi2_train_path=${TRAIN_DATA_DIR}/logic__arcagi2_190.parquet
-barc_train_path=${TRAIN_DATA_DIR}/logic__barc_1.6k.parquet
-graph_train_path=${TRAIN_DATA_DIR}/logic__graph_logical_1.2k.parquet
-ordering_train_path=${TRAIN_DATA_DIR}/logic__ordering_puzzle_1.9k.parquet
-zebra_train_path=${TRAIN_DATA_DIR}/logic__zebra_puzzle_1.3k.parquet
-# Logic (test)
-zebralogic_test_path=${TEST_DATA_DIR}/logic__zebra_puzzle_dataset_200.parquet
-ordering_puzzle_test_path=${TEST_DATA_DIR}/logic__ordering_puzzle_dataset_150.parquet
-
-# Simulation (train)
-codeio_train_path=${TRAIN_DATA_DIR}/simulation__codeio_3.7k.parquet
-# Simulation (test)
-codeio_test_path=${TEST_DATA_DIR}/simulation__codeio_200.parquet
-arcagi1_test_path=${TEST_DATA_DIR}/logic__arcagi1_400.parquet
-
-# Table (train)
-hitab_train_path=${TRAIN_DATA_DIR}/table__hitab_4.3k.parquet
-multihier_train_path=${TRAIN_DATA_DIR}/table__multihier_1.5k.parquet
-# Table (test)
-multihier_test_path=${TEST_DATA_DIR}/table__multihier_336.parquet
-hitab_test_path=${TEST_DATA_DIR}/table__hitab_1k.parquet
-
-# Stem (train)
-webinstruct_train_path=${TRAIN_DATA_DIR}/stem__web_3.6k.parquet
-# Stem (test)
-gpqa_diamond_test_path=${TEST_DATA_DIR}/stem__gpqa_diamond_198.parquet
-supergpqa_test_path=${TEST_DATA_DIR}/stem__supergpqa_1k.parquet
-
-# OOD (test) - Out of distribution evaluation
-ifeval_test_path=${TEST_DATA_DIR}/ood__ifeval_541.parquet
-livebench_data_test_path=${TEST_DATA_DIR}/ood__livebench_data_analysis_150.parquet
-livebench_lang_test_path=${TEST_DATA_DIR}/ood__livebench_language_140.parquet
-livebench_reasoning_test_path=${TEST_DATA_DIR}/ood__livebench_reasoning_150.parquet
-
-# All training files across all domains
-train_files="['${math_train_path}']"
 
 # All test files across all domains
 test_files="['${math_test_path}', '${aime_test_path}']"
+
+# Training Data Configuration
+DATA_MIX_DIR="/lustrefs/users/varad.pimpalkhute/data/k2/final/data_mix_1"
+train_file_list=()
+
+# List of datasets to include (filename only)
+# Comment out lines to exclude specific datasets
+dataset_names=(
+    "codegen__deduped_leetcode2k_2.4k.parquet"
+    "codegen__deduped_livecodebench_599.parquet"
+    "codegen__deduped_primeintellect_9.6k.parquet"
+    "codegen__deduped_taco_11.1k.parquet"
+    "ifbench__fixed_85.6k.parquet"
+    "logic__arcagi1_297.parquet"
+    "logic__arcagi2_653.parquet"
+    "logic__barc_3.4k.parquet"
+    "logic__graph_logical_dataset_1.4k.parquet"
+    "logic__ordering_puzzle_dataset_2.9k.parquet"
+    "logic__reasoning_gym_40.6k.parquet"
+    "logic__synlogic_12.1k.parquet"
+    "logic__zebra_puzzle_dataset_5.0k.parquet"
+    "math__combined_118.2k.part1.parquet"
+    "math__combined_118.2k.part2.parquet"
+    "omni_math_4.43k.parquet"
+    "simulation__codeio_fixed_12.1k.parquet"
+    "stem__nemotron_13.3k.parquet"
+    "stem__web_31.7k.parquet"
+    "table__hitab_7.4k.parquet"
+    "table__multihier_2.9k.parquet"
+)
+
+echo "Collecting training files from ${DATA_MIX_DIR}..."
+
+# Search for each dataset in all subdirectories
+for dataset in "${dataset_names[@]}"; do
+    for subdir in "impossible_questions" "131k_context_questions" "main_questions"; do
+        file_path="${DATA_MIX_DIR}/${subdir}/${dataset}"
+        if [ -f "$file_path" ]; then
+            echo "Adding: $file_path"
+            train_file_list+=("'$file_path'")
+        fi
+    done
+done
+
+# Join with comma to form Python list string
+IFS=,
+train_files="[${train_file_list[*]}]"
+unset IFS
+
+echo "Total training files found: ${#train_file_list[@]}"
 
 # =================== Model ===================
 # BASE_MODEL=deepseek-ai/DeepSeek-R1-Distill-Qwen-7B  # Note: This is the original Qwen32B-Base model. In training, we add 'think' system prompt to it (see README).

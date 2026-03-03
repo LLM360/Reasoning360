@@ -8,11 +8,17 @@ import argparse
 import json
 import os
 import time
+import logging
+
+# Suppress pylatexenc warnings
+logging.getLogger("pylatexenc").setLevel(logging.ERROR)
+
 from datetime import datetime, timedelta
 from multiprocessing import cpu_count
 from multiprocessing.pool import Pool
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple
+from math import comb
 
 from tqdm import tqdm
 import pandas as pd
@@ -29,7 +35,7 @@ def init_tokenizer(model_name: str = "deepseek-ai/DeepSeek-R1-0528"):
     global _tokenizer
     try:
         from transformers import AutoTokenizer
-        _tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+        _tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True, use_fast=False)
         print(f"Successfully initialized {model_name} tokenizer for length computation")
     except Exception as e:
         print(f"Warning: Failed to initialize tokenizer '{model_name}': {e}")
@@ -40,11 +46,8 @@ def compute_response_length(response: str) -> int:
     global _tokenizer
     if _tokenizer is None:
         return 0
-    try:
-        return len(_tokenizer.encode(response))
-    except Exception as e:
-        print(f"Warning: Failed to compute response length: {e}")
-        return 0
+    return len(response) // 4
+    # return len(_tokenizer.encode(response))
 
 def compute_length_stats(lengths: List[int]) -> Dict[str, float]:
     """Compute min, max, and average length statistics."""
@@ -55,6 +58,61 @@ def compute_length_stats(lengths: List[int]) -> Dict[str, float]:
         "max": max(lengths),
         "avg": sum(lengths) / len(lengths)
     }
+
+def compute_pass_at_k(n: int, c: int, k: int) -> float:
+    """
+    Compute pass@k metric using the unbiased estimator.
+    
+    pass@k estimates the probability that at least one of k samples passes.
+    Formula: pass@k = E[1 - C(n-c, k) / C(n, k)]
+    
+    Args:
+        n: Total number of samples
+        c: Number of correct samples
+        k: Number of samples to consider (k <= n)
+    
+    Returns:
+        pass@k probability (0.0 to 1.0)
+    """
+    if n == 0 or k == 0:
+        return 0.0
+    if c == 0:
+        return 0.0
+    if k > n:
+        k = n
+    
+    # pass@k = 1 - C(n-c, k) / C(n, k)
+    # If n-c < k, then C(n-c, k) = 0, so pass@k = 1.0
+    if n - c < k:
+        return 1.0
+    
+    try:
+        return 1.0 - (comb(n - c, k) / comb(n, k))
+    except (ValueError, OverflowError):
+        # Handle edge cases
+        return 0.0
+
+def compute_pass_at_k_for_samples(scores: List[float], threshold: float, k_values: List[int]) -> Dict[str, float]:
+    """
+    Compute pass@k for multiple k values given a list of scores.
+    
+    Args:
+        scores: List of scores for responses
+        threshold: Threshold for considering a response as "passed"
+        k_values: List of k values to compute pass@k for
+    
+    Returns:
+        Dictionary mapping "pass@k" to computed values
+    """
+    n = len(scores)
+    c = sum(1 for s in scores if s >= threshold)
+    
+    result = {}
+    for k in k_values:
+        if k <= n:
+            result[f"pass@{k}"] = compute_pass_at_k(n, c, k)
+    
+    return result
 
 def format_time(seconds: float) -> str:
     return str(timedelta(seconds=int(seconds)))
@@ -130,7 +188,13 @@ def read_parquet_file(file_path: str) -> pd.DataFrame:
     if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
         return pd.DataFrame()
     
-    dataset = Dataset.from_parquet(file_path)
+    try:
+        dataset = Dataset.from_parquet(file_path)
+    except:
+        print(f"Error reading parquet file: {file_path}")
+        print("Trying to read parquet file with polars")
+        import polars as pl
+        dataset = pl.read_parquet(file_path)
     return dataset.to_pandas()
 
 def write_parquet_file(file_path: str, data: pd.DataFrame):
@@ -140,11 +204,11 @@ def write_parquet_file(file_path: str, data: pd.DataFrame):
 
 def process_parquet_file(file_path: str, output_path: str, args, reward_pool: Optional[Pool]) -> Tuple[int, float]:
     """Process a single parquet file and compute rewards."""
-    print(f"Processing: {os.path.basename(file_path)}")
+    print(f"Processing: {os.path.basename(file_path)}", flush=True)
     
     df = read_parquet_file(file_path)
     if df.empty:
-        print(f"No valid data found in {file_path}")
+        print(f"No valid data found in {file_path}", flush=True)
         return 0, 0.0
     
     start_time = time.time()
@@ -185,7 +249,10 @@ def process_parquet_file(file_path: str, output_path: str, args, reward_pool: Op
             skipped["no_ground_truth"] += 1
             continue
         
-        ground_truth = reward_model_data.get("ground_truth", "")
+        if "logic__synlogic" in file_path:
+            ground_truth = "XYZ"
+        else:
+            ground_truth = reward_model_data.get("ground_truth", "")
         
         # Handle different ground_truth formats
         if ground_truth is None:
@@ -227,7 +294,7 @@ def process_parquet_file(file_path: str, output_path: str, args, reward_pool: Op
         print(f"No tasks to process in {os.path.basename(file_path)}")
         return 0, 0.0
     
-    print(f"Computing rewards for {len(tasks)} responses across {processed_rows} items...")
+    print(f"Computing rewards for {len(tasks)} responses across {processed_rows} items...", flush=True)
     
     # Initialize results
     detailed_by_sample: Dict[int, List[Optional[Dict]]] = {}
@@ -252,6 +319,7 @@ def process_parquet_file(file_path: str, output_path: str, args, reward_pool: Op
     detailed_scores_list = [None] * len(df)
     scores_list = [None] * len(df)
     pass_rate_list = [None] * len(df)
+    pass_at_k_list = [None] * len(df)
     response_lengths_list = [None] * len(df) if args.compute_response_length else None
     
     total_responses = 0
@@ -261,6 +329,13 @@ def process_parquet_file(file_path: str, output_path: str, args, reward_pool: Op
     # Length tracking
     all_response_lengths = []
     passed_response_lengths = []
+    
+    # Determine k values for pass@k based on available responses
+    valid_response_counts = [len(df.iloc[i].get(args.response_column_name, [])) 
+                            for i in range(len(df)) 
+                            if isinstance(df.iloc[i].get(args.response_column_name), (list, np.ndarray))]
+    max_responses = max(valid_response_counts) if valid_response_counts else 0
+    k_values = [k for k in [1, 2, 4, 8, 16, 32, 64, 128, 256] if k <= max_responses]
     
     for row_idx, detailed_list in detailed_by_sample.items():
         # Fill missing results
@@ -275,9 +350,13 @@ def process_parquet_file(file_path: str, output_path: str, args, reward_pool: Op
         pass_cnt = sum(s >= args.correct_reward_threshold for s in scores)
         question_pass_rate = pass_cnt / len(scores) if len(scores) > 0 else 0.0
         
+        # Compute pass@k for this sample
+        pass_at_k_values = compute_pass_at_k_for_samples(scores, args.correct_reward_threshold, k_values)
+        
         detailed_scores_list[row_idx] = detailed_list
         scores_list[row_idx] = scores
         pass_rate_list[row_idx] = question_pass_rate
+        pass_at_k_list[row_idx] = pass_at_k_values
         
         # Extract response lengths if computed
         if args.compute_response_length:
@@ -298,6 +377,7 @@ def process_parquet_file(file_path: str, output_path: str, args, reward_pool: Op
     df["detailed_scores"] = detailed_scores_list
     df["scores"] = scores_list
     df["pass_rate"] = pass_rate_list
+    df["pass_at_k"] = pass_at_k_list
     
     # Add response lengths if computed
     if args.compute_response_length:
@@ -321,6 +401,17 @@ def process_parquet_file(file_path: str, output_path: str, args, reward_pool: Op
     model_pass_rate = sum(question_pass_rates) / len(question_pass_rates) if len(question_pass_rates) > 0 else 0.0
     df["model_pass_rate"] = [{args.model_name: model_pass_rate} for _ in range(len(df))]
     
+    # Compute aggregate pass@k statistics across all samples
+    aggregate_pass_at_k = {f"pass@{k}": 0.0 for k in k_values}
+    valid_samples = [val for val in pass_at_k_list if val is not None]
+    if valid_samples:
+        for k in k_values:
+            key = f"pass@{k}"
+            values = [sample.get(key, 0.0) for sample in valid_samples if key in sample]
+            if values:
+                aggregate_pass_at_k[key] = sum(values) / len(values)
+    df["model_pass_at_k"] = [{args.model_name: aggregate_pass_at_k} for _ in range(len(df))]
+    
     # Save results
     write_parquet_file(output_path, df)
     
@@ -330,6 +421,27 @@ def process_parquet_file(file_path: str, output_path: str, args, reward_pool: Op
     print(f"Results: {len(df)} items, {processed_rows} processed, {sum(skipped.values())} skipped")
     print(f"Pass rate: {model_pass_rate:.2%} ({total_passed}/{total_responses})")
     
+    # Print pass@k statistics
+    if aggregate_pass_at_k:
+        # Sort by k value (extract integer from "pass@k")
+        sorted_items = sorted(aggregate_pass_at_k.items(), key=lambda x: int(x[0].split('@')[1]))
+        pass_at_k_str = ", ".join([f"{k}: {v:.2%}" for k, v in sorted_items])
+        print(f"Pass@k: {pass_at_k_str}")
+    
+    pass_rate_output_path = "/".join(output_path.split("/")[:-1]) + "/pass_rate.jsonl"
+    dataset_name = args.input_path.split("/")[-1]
+    with open(pass_rate_output_path, "a") as f:
+        f.write(json.dumps({
+            "model_name": args.model_name,
+            "dataset_name": dataset_name,
+            "pass_rate": model_pass_rate,
+            "total_responses": total_responses,
+            "total_passed": total_passed,
+            "processed_rows": processed_rows,
+            "pass_at_k": aggregate_pass_at_k,
+        }) + "\n")
+
+
     # Print response length statistics if computed
     if args.compute_response_length and all_response_lengths:
         all_stats = compute_length_stats(all_response_lengths)
