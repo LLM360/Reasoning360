@@ -31,7 +31,13 @@ def preprocess(text):
         return " "
     text = text.strip()
     text = text.replace(" [title]", ". ")
-    text = re.sub("\\[.*?\\]", "", text)
+    # NOTE: the upstream harness also does `re.sub("\\[.*?\\]", "", text)` here
+    # to strip citation-style "[1]" markers, but GPQA-Diamond's Answer fields
+    # are dominated by organic-chemistry/physics questions where "[...]" is
+    # load-bearing content (IUPAC ring-locants like spiro[4.5], SMILES
+    # stereocenters like [C@H], LaTeX like \left[...\right], or plain math
+    # grouping). Auditing all 198 questions found zero genuine citation
+    # markers and 12 corrupted answer choices from this line -- dropped it.
     text = text.replace("  ", " ")
     return text
 
