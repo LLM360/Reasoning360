@@ -87,9 +87,9 @@ Download the data and prepare them into `.parquet`, the expected default format 
 By defauly, training files will be put in `./data/train`. Online evaluation files will be put in `./data/online_eval`. Offline evaluation files will be put in `./data/offline_eval`.
 
 ### (2) [Optional] Customize chat template
-Run `tools/change_tokenizer_config.py` if you want to apply 'think'-aware chat template. Now only the 'Qwen' families are supported.
+Run `scripts/tools/change_tokenizer_config.py` if you want to apply 'think'-aware chat template. Now only the 'Qwen' families are supported.
 ```python
-python tools/change_tokenizer_config.py -i <input_model_directory> -o <output_model_directory>
+python scripts/tools/change_tokenizer_config.py -i <input_model_directory> -o <output_model_directory>
 ```
 
 ### (3) [Optional] SandboxFusion Code Execution
